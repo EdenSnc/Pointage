@@ -204,6 +204,7 @@ function ApiKeyModal({
               aria-label="Clé d'API Google Gemini"
               className="input"
               type="password"
+              autoComplete="new-password"
               placeholder="Collez votre clé API Gemini ici..."
               value={keyVal}
               onChange={(e) => setKeyVal(e.target.value)}
@@ -555,6 +556,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                 name="inlineGeminiKey"
                 aria-label="Clé API Gemini"
                 type="password"
+                autoComplete="new-password"
                 className="input"
                 placeholder="AIzaSy..."
                 value={tempApiKey}
@@ -744,6 +746,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                 <input
                   className="input"
                   type="password"
+                  autoComplete="new-password"
                   placeholder="AIzaSy..."
                   value={tempApiKey}
                   onChange={(e) => setTempApiKey(e.target.value)}
