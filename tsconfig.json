@@ -3,7 +3,8 @@
     "target": "ES2020",
     "module": "esnext",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
+    "types": ["vite/client", "vite-plugin-pwa/client"],
+
     "jsx": "react-jsx",
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
