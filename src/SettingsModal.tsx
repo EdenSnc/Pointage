@@ -7,6 +7,8 @@ import {
   IconHelp,
   IconSparkles,
   IconCheck,
+  IconSend,
+  IconMail,
 } from './icons';
 import { useDailyApiQuota } from './ai/quotaTracker';
 
@@ -28,11 +30,18 @@ export function SettingsModal({
   onOpenWalkthrough,
 }: SettingsModalProps) {
   const quota = useDailyApiQuota();
+  const [whatsappNumber, setWhatsappNumber] = React.useState(
+    () => localStorage.getItem('pointage_whatsapp_number') || '+213556264976'
+  );
+  const [reportEmail, setReportEmail] = React.useState(
+    () => localStorage.getItem('pointage_report_email') || ''
+  );
 
   if (!isOpen) return null;
 
   const litePct = Math.min(100, Math.round((quota.liteUsed / quota.liteLimit) * 100));
   const flashPct = Math.min(100, Math.round((quota.flashUsed / quota.flashLimit) * 100));
+
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -135,8 +144,55 @@ export function SettingsModal({
           </div>
         </div>
 
+        {/* Contact Configuration Section */}
+        <div className="card mb-3" style={{ background: 'var(--bg-surface)' }}>
+          <div className="flex items-center gap-2 mb-2">
+            <IconSend size={16} style={{ color: '#25D366' }} />
+            <div className="font-bold text-sm">Destinataires des Rapports</div>
+          </div>
+          <div className="text-xs text-muted mb-3">
+            Destinations où transmettre les synthèses d'expédition et d'écarts :
+          </div>
+
+          <div className="mb-3">
+            <label className="text-xs font-semibold text-muted block mb-1">
+              Numéro WhatsApp du Responsable
+            </label>
+            <input
+              type="text"
+              className="input input-sm"
+              placeholder="+213556264976"
+              value={whatsappNumber}
+              onChange={(e) => {
+                setWhatsappNumber(e.target.value);
+                localStorage.setItem('pointage_whatsapp_number', e.target.value);
+              }}
+            />
+            <div className="text-xs text-muted mt-1" style={{ fontSize: '0.7rem' }}>
+              Par défaut : <strong>+213556264976</strong> (Format international avec indicatif)
+            </div>
+          </div>
+
+          <div className="mb-1">
+            <label className="text-xs font-semibold text-muted block mb-1">
+              Email Facturation / Responsable (Optionnel)
+            </label>
+            <input
+              type="email"
+              className="input input-sm"
+              placeholder="facturation@mon-entreprise.com"
+              value={reportEmail}
+              onChange={(e) => {
+                setReportEmail(e.target.value);
+                localStorage.setItem('pointage_report_email', e.target.value);
+              }}
+            />
+          </div>
+        </div>
+
         {/* Configuration Actions */}
         <div className="flex flex-col gap-2">
+
           <button
             className="btn btn-secondary btn-full flex items-center justify-center gap-2"
             onClick={() => {

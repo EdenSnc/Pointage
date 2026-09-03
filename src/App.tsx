@@ -96,7 +96,9 @@ import {
   IconSettings,
   IconSend,
   IconBuilding,
+  IconMail,
 } from './icons';
+
 import { OnboardingWalkthrough } from './OnboardingWalkthrough';
 import { providerRegistry } from './ai/providerRegistry';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -2751,10 +2753,23 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
     return text;
   };
 
+  const whatsappNumber = localStorage.getItem('pointage_whatsapp_number') || '+213556264976';
+  const reportEmail = localStorage.getItem('pointage_report_email') || '';
+
   const handleShareWhatsApp = () => {
     const report = generateReport();
-    const url = `https://wa.me/?text=${encodeURIComponent(report)}`;
+    const cleanPhone = whatsappNumber.replace(/[^\d]/g, '');
+    const url = cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(report)}`
+      : `https://wa.me/?text=${encodeURIComponent(report)}`;
     window.open(url, '_blank');
+  };
+
+  const handleSendEmail = () => {
+    const report = generateReport();
+    const subject = encodeURIComponent(`Pointage Pro — Synthèse ${bill.billNumber} (${bill.client})`);
+    const body = encodeURIComponent(report);
+    window.location.href = `mailto:${reportEmail}?subject=${subject}&body=${body}`;
   };
 
   const handleCopyReport = () => {
@@ -2807,24 +2822,35 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           <ProgressRow label="Pointage" progress={point} />
         </div>
 
-        {/* WhatsApp & Supervisor Report Card */}
+        {/* Report Dispatch Card */}
         <div className="card mb-3" style={{ background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
           <div className="flex justify-between items-center mb-2">
             <div className="font-bold text-sm flex items-center gap-2" style={{ color: '#22c55e' }}>
-              <IconSend size={18} /> RAPPORT RESPONSABLE (WHATSAPP)
+              <IconSend size={18} /> TRANSMISSION RAPPORT ÉCARTS
             </div>
             <span className="badge badge-active" style={{ fontSize: '0.7rem' }}>Instantané</span>
           </div>
-          <p className="text-xs text-muted mb-3">
-            Transmettez immédiatement la synthèse des manquants, colis préparés et ruptures de stock à votre responsable par WhatsApp.
+          <p className="text-xs text-muted mb-2">
+            Transmettez la synthèse des manquants, colis préparés et ruptures au responsable ou au bureau :
           </p>
-          <div className="flex gap-2">
+          <div className="text-xs text-muted mb-3 flex flex-wrap items-center gap-2">
+            <span>Destinataire WhatsApp : <strong className="text-primary">{whatsappNumber}</strong></span>
+            {reportEmail && <span>• Email : <strong className="text-primary">{reportEmail}</strong></span>}
+          </div>
+          <div className="flex gap-2 flex-wrap">
             <button
-              className="btn btn-sm btn-full flex items-center justify-center gap-2"
-              style={{ background: '#25D366', color: '#fff', fontWeight: 700, border: 'none' }}
+              className="btn btn-sm flex-1 flex items-center justify-center gap-2"
+              style={{ background: '#25D366', color: '#fff', fontWeight: 700, border: 'none', minWidth: 150 }}
               onClick={handleShareWhatsApp}
             >
-              <IconSend size={15} /> Envoyer sur WhatsApp
+              <IconSend size={15} /> WhatsApp ({whatsappNumber})
+            </button>
+            <button
+              className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
+              onClick={handleSendEmail}
+              title={reportEmail ? `Envoyer par email à ${reportEmail}` : 'Envoyer par email'}
+            >
+              <IconMail size={15} /> Email
             </button>
             <button
               className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
@@ -2835,6 +2861,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
             </button>
           </div>
         </div>
+
 
         {extras.length > 0 && (
           <div className="card">
