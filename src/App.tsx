@@ -1220,6 +1220,15 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const [editReason, setEditReason] = useState<ChangeReason>('official_change');
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editFieldVal, setEditFieldVal] = useState('');
+  const [showQuantities, setShowQuantities] = useState(() => localStorage.getItem('pointage_show_quantities') === 'true');
+
+  const toggleShowQuantities = () => {
+    setShowQuantities(prev => {
+      const next = !prev;
+      localStorage.setItem('pointage_show_quantities', String(next));
+      return next;
+    });
+  };
 
   // Init pack sizes from line or profile
   useEffect(() => {
@@ -2295,8 +2304,7 @@ function SummaryScreen() {
   const audit = useBillAudit(billId);
   const containers = useBillContainers(billId);
 
-  const [showAll, setShowAll] = useState(false);
-  const [showAudit, setShowAudit] = useState(false);
+  const [summaryTab, setSummaryTab] = useState<'problems' | 'all' | 'cartons' | 'audit'>('problems');
 
   const eventsByLine = new Map<number, CountEvent[]>();
   for (const e of events) {
@@ -2318,7 +2326,7 @@ function SummaryScreen() {
            prepTotal !== loadTotal || prepTotal !== pointTotal;
   });
 
-  const displayLines = showAll ? lines : problemLines;
+  const displayLines = summaryTab === 'all' ? lines : problemLines;
 
   // Summary stats
   const totalLines = lines.length;
@@ -2380,28 +2388,118 @@ function SummaryScreen() {
           </div>
         )}
 
-        <div className="flex gap-2 mb-3">
+        {/* View Tabs */}
+        <div className="flex gap-1 mb-3 flex-wrap">
           <button
-            className={`btn btn-sm ${!showAll ? 'btn-warning' : 'btn-secondary'} flex items-center gap-1`}
-            onClick={() => setShowAll(false)}
+            className={`btn btn-sm ${summaryTab === 'problems' ? 'btn-warning' : 'btn-secondary'} flex items-center gap-1`}
+            onClick={() => setSummaryTab('problems')}
           >
             <IconWarning size={14} /> PROBLÈMES ({problemLines.length})
           </button>
           <button
-            className={`btn btn-sm ${showAll ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setShowAll(true)}
+            className={`btn btn-sm ${summaryTab === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setSummaryTab('all')}
           >
             TOUTES ({lines.length})
           </button>
           <button
-            className={`btn btn-sm ${showAudit ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
-            onClick={() => setShowAudit(!showAudit)}
+            className={`btn btn-sm ${summaryTab === 'cartons' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
+            onClick={() => setSummaryTab('cartons')}
+          >
+            <IconBox size={14} /> PAR CARTON ({containers.length})
+          </button>
+          <button
+            className={`btn btn-sm ${summaryTab === 'audit' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
+            onClick={() => setSummaryTab('audit')}
           >
             <IconClipboard size={14} /> AUDIT
           </button>
         </div>
 
-        {!showAudit && displayLines.map((line) => {
+        {/* PAR CARTON View */}
+        {summaryTab === 'cartons' && (
+          <div>
+            {containers.map((c) => {
+              const linesInCarton = lines
+                .map(line => {
+                  const evts = eventsByLine.get(line.id!) || [];
+                  const qty = evts
+                    .filter(e => e.stage === 'preparation' && !e.undone && e.containerId === c.id)
+                    .reduce((s, e) => s + e.quantity, 0);
+                  return { line, qty };
+                })
+                .filter(item => item.qty > 0);
+
+              const totalUnits = linesInCarton.reduce((s, item) => s + item.qty, 0);
+
+              return (
+                <div key={c.id} className="card mb-3">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="font-bold flex items-center gap-2">
+                      <span className="container-tag selected" style={{ fontSize: '0.9rem' }}>{c.label}</span>
+                      <span className="text-xs text-muted">
+                        {c.type === 'loose' ? 'Vrac / Dessus' : c.type === 'large' ? 'Grand Colis' : 'Carton Standard'}
+                      </span>
+                    </div>
+                    <span className="badge badge-active font-mono">{totalUnits} unités</span>
+                  </div>
+                  {linesInCarton.length === 0 ? (
+                    <div className="text-xs text-muted py-1">Carton vide</div>
+                  ) : (
+                    linesInCarton.map(({ line, qty }) => (
+                      <div key={line.id} className="flex justify-between items-center py-1 border-t text-sm">
+                        <div style={{ minWidth: 0, flex: 1, paddingRight: 8 }}>
+                          <span className="font-bold text-accent">N°{line.no}</span>
+                          {line.reference && <span className="text-xs text-muted"> • REF: {line.reference}</span>}
+                          <div className="truncate text-xs">{line.designation}</div>
+                        </div>
+                        <span className="font-bold text-base font-mono">{qty}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Unassigned / Hors carton */}
+            {(() => {
+              const linesOutside = lines
+                .map(line => {
+                  const evts = eventsByLine.get(line.id!) || [];
+                  const qty = evts
+                    .filter(e => e.stage === 'preparation' && !e.undone && !e.containerId)
+                    .reduce((s, e) => s + e.quantity, 0);
+                  return { line, qty };
+                })
+                .filter(item => item.qty > 0);
+
+              if (linesOutside.length === 0) return null;
+              const totalUnits = linesOutside.reduce((s, item) => s + item.qty, 0);
+
+              return (
+                <div className="card mb-3" style={{ borderColor: 'var(--warning-border)' }}>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="container-tag" style={{ background: 'var(--bg-surface)' }}>HORS CARTON / VRAC</span>
+                    <span className="badge badge-warning font-mono">{totalUnits} unités</span>
+                  </div>
+                  {linesOutside.map(({ line, qty }) => (
+                    <div key={line.id} className="flex justify-between items-center py-1 border-t text-sm">
+                      <div style={{ minWidth: 0, flex: 1, paddingRight: 8 }}>
+                        <span className="font-bold text-warning">N°{line.no}</span>
+                        {line.reference && <span className="text-xs text-muted"> • REF: {line.reference}</span>}
+                        <div className="truncate text-xs">{line.designation}</div>
+                      </div>
+                      <span className="font-bold text-base font-mono">{qty}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Lines View (Problems or All) */}
+        {(summaryTab === 'problems' || summaryTab === 'all') && displayLines.map((line) => {
           const evts = eventsByLine.get(line.id!) || [];
           const prepTotal = sumStageEvents(evts, 'preparation');
           const loadTotal = sumStageEvents(evts, 'chargement');
@@ -2459,7 +2557,7 @@ function SummaryScreen() {
           );
         })}
 
-        {showAudit && (
+        {summaryTab === 'audit' && (
           <div className="card">
             <div className="section-title" style={{ marginTop: 0 }}>JOURNAL D'AUDIT</div>
             {audit.sort((a, b) => b.timestamp.localeCompare(a.timestamp)).map((evt) => (
