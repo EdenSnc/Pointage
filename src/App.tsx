@@ -63,7 +63,9 @@ import type {
 
 import {
   BrandLogo,
+  BrandWordmark,
   IconScan,
+
   IconImport,
   IconDisk,
   IconClipboard,
@@ -313,11 +315,17 @@ function HomeScreen({
   return (
     <>
       <header className="app-header">
-        <div className="brand-container">
-          <div className="brand-glyph"><BrandLogo /></div>
-          <h1>POINTAGE</h1>
-          <span className="brand-pill">PRO</span>
+        <div className="brand-container" onClick={() => nav('/')} title="Pointage — Warehouse Bills Tracker">
+          <BrandLogo size={34} />
+          <div className="brand-text">
+            <div className="flex items-center gap-2">
+              <span className="brand-title">Pointage</span>
+              <span className="brand-pill">PRO</span>
+            </div>
+            <span className="brand-subtitle">Warehouse Bills Tracker</span>
+          </div>
         </div>
+
         <div className="header-meta">
           <button
             className="btn btn-xs btn-ghost btn-icon"
@@ -3217,19 +3225,16 @@ function BackupScreen({
         {/* Subtle Credits Card */}
         <div className="card mt-4" style={{ textAlign: 'center', padding: '20px 16px' }}>
           <div className="brand-container mb-2" style={{ justifyContent: 'center' }}>
-            <div className="brand-glyph" style={{ width: 26, height: 26 }}><BrandLogo /></div>
-            <h1 style={{ fontSize: '1rem', background: 'linear-gradient(135deg, #ffffff 40%, #a5c7ff 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              POINTAGE
-            </h1>
-            <span className="brand-pill">PRO</span>
+            <BrandWordmark size={32} />
           </div>
           <div className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-            Architecturé & Conçu par l'Utilisateur
+            Pointage Pro • Solution Logistique Entrepôt
           </div>
           <div className="text-xs text-muted mt-1">
-            Design Minimaliste Apple Glass • Architecture 100% Locale
+            Minimaliste • Intemporel • 100% Hors-Ligne
           </div>
         </div>
+
       </div>
     </>
   );

@@ -34,9 +34,9 @@ const STEPS: TourStep[] = [
   {
     route: '/',
     badge: 'Étape 1 sur 4 • Accueil',
-    title: 'Factures en Cours',
-    text: 'Vos bons de livraison sont centralisés ici. Touchez une facture pour commencer à pointer.',
-    icon: <BrandLogo size={28} />,
+    title: 'Pointage — Warehouse Bills',
+    text: 'Vos bons de livraison sont centralisés ici. Touchez une facture pour commencer à pointer vos colis.',
+    icon: <BrandLogo size={32} />,
   },
   {
     route: '/import',
@@ -55,11 +55,12 @@ const STEPS: TourStep[] = [
   {
     route: '/',
     badge: 'Étape 4 sur 4 • Autonome',
-    title: '100% Hors-Ligne',
-    text: 'Toutes vos données restent privées sur votre appareil. Configurez votre clé avec la clé 🔑 en haut.',
+    title: '100% Hors-Ligne & Quotas',
+    text: 'Vos données restent stockées localement. Suivez vos quotas gratuits Gemini depuis les Réglages.',
     icon: <IconKey size={26} />,
   },
 ];
+
 
 export function OnboardingWalkthrough({ isOpen, onClose }: WalkthroughProps) {
   const nav = useNavigate();

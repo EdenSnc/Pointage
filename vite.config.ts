@@ -9,11 +9,12 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'POINTAGE',
-        short_name: 'POINTAGE',
-        description: 'Gestion de bons de livraison en entrepôt',
-        theme_color: '#0f1117',
-        background_color: '#0f1117',
+        name: 'Pointage — Warehouse Bills Tracker',
+        short_name: 'Pointage',
+        description: 'Pointage — Warehouse Bills Tracker. Moteur local-first d’inspection et de gestion des bons de livraison en entrepôt.',
+        theme_color: '#121620',
+        background_color: '#0b0e14',
+
         display: 'standalone',
         orientation: 'portrait',
         start_url: './',

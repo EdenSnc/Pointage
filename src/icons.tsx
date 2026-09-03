@@ -6,18 +6,111 @@ interface IconProps {
   style?: React.CSSProperties;
 }
 
-export function BrandLogo({ size = 22, style }: IconProps) {
+export function BrandLogo({ size = 26, style, className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 512 512" fill="none" style={{ display: 'block', ...style }}>
-      <g transform="translate(256, 260)" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M0 -124 L114 -60 L0 4 L-114 -60 Z" fill="rgba(37, 99, 235, 0.28)" stroke="#60a5fa" strokeWidth="26" />
-        <path d="M-114 -60 L0 4 L0 128 L-114 64 Z" fill="rgba(37, 99, 235, 0.12)" stroke="#3b82f6" strokeWidth="26" />
-        <path d="M0 4 L114 -60 L114 64 L0 128 Z" fill="rgba(37, 99, 235, 0.18)" stroke="#2563eb" strokeWidth="26" />
-        <path d="M-46 15 L-12 50 L78 -40" stroke="#34d399" strokeWidth="34" />
-      </g>
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 512 512"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      style={{ display: 'block', flexShrink: 0, ...style }}
+    >
+      <defs>
+        <linearGradient id="pBodyGrad" x1="15%" y1="10%" x2="85%" y2="90%">
+          <stop offset="0%" stopColor="#252b3b" />
+          <stop offset="60%" stopColor="#161924" />
+          <stop offset="100%" stopColor="#0f1118" />
+        </linearGradient>
+        <linearGradient id="pJadeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#4ade80" />
+          <stop offset="100%" stopColor="#10b981" />
+        </linearGradient>
+        <linearGradient id="pCurlGrad" x1="10%" y1="10%" x2="90%" y2="90%">
+          <stop offset="0%" stopColor="#6ee7b7" />
+          <stop offset="45%" stopColor="#34d399" />
+          <stop offset="100%" stopColor="#0f766e" />
+        </linearGradient>
+        <filter id="pCurlShadow" x="-25%" y="-25%" width="150%" height="150%">
+          <feDropShadow dx="-4" dy="6" stdDeviation="7" floodColor="#000000" floodOpacity="0.45" />
+        </filter>
+      </defs>
+
+      {/* Outer Squircle Container / 'P' Letter Frame */}
+      <path
+        d="M 160 416 C 114 416 88 390 88 344 L 88 168 C 88 96 136 56 220 56 L 320 56 C 408 56 456 104 456 192 L 456 244 C 456 332 408 380 320 380 L 264 380 C 258 380 252 384 250 390 C 244 406 236 416 216 416 Z"
+        fill="url(#pBodyGrad)"
+      />
+
+      {/* Inner White Paper Document */}
+      <path
+        d="M 160 416 L 160 178 C 160 138 184 114 224 114 L 324 114 C 348 114 366 132 366 156 L 366 266 C 366 278 358 296 344 314 L 254 410 C 248 416 238 416 230 416 Z"
+        fill="#FFFFFF"
+      />
+
+      {/* Text Lines on Document */}
+      {/* Top Bar: Deep Charcoal */}
+      <rect x="200" y="192" width="112" height="22" rx="11" fill="#1b1e26" />
+      {/* Bottom Bar: Radiant Emerald Jade Pill */}
+      <rect x="200" y="234" width="62" height="22" rx="11" fill="url(#pJadeGrad)" />
+
+      {/* Folded Corner (Curl / Peel) */}
+      <path
+        d="M 366 266 C 366 312 338 350 286 372 C 264 382 246 398 234 416 C 248 382 278 350 316 332 C 346 320 362 296 366 266 Z"
+        fill="url(#pCurlGrad)"
+        filter="url(#pCurlShadow)"
+      />
     </svg>
   );
 }
+
+export function BrandWordmark({
+  size = 28,
+  showSubtitle = true,
+  style,
+}: {
+  size?: number;
+  showSubtitle?: boolean;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, ...style }}>
+      <BrandLogo size={size} />
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <span
+          style={{
+            fontFamily: 'var(--font)',
+            fontSize: `${size * 0.76}px`,
+            fontWeight: 800,
+            letterSpacing: '-0.02em',
+            color: 'var(--text-primary)',
+            lineHeight: 1.05,
+          }}
+        >
+          Pointage
+        </span>
+        {showSubtitle && (
+          <span
+            style={{
+              fontFamily: 'var(--font)',
+              fontSize: `${Math.max(8.5, size * 0.28)}px`,
+              fontWeight: 700,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: 'var(--brand-sage)',
+              lineHeight: 1,
+              marginTop: 3,
+            }}
+          >
+            Warehouse Bills Tracker
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 export function IconScan({ size = 18, className, style }: IconProps) {
   return (

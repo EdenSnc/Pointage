@@ -34,11 +34,21 @@
   --text-secondary: #cbd5e1;      /* Light silver slate (never blends) */
   --text-muted: #94a3b8;          /* Clear readable slate (never dark/invisible) */
 
-  /* Complementary Warehouse Accents */
-  --accent: #3b82f6;
-  --accent-glow: rgba(59, 130, 246, 0.35);
-  --accent-light: #60a5fa;
-  --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  /* Brand Identity Tokens — Pointage Official Jade & Obsidian */
+  --brand-obsidian: #121620;
+  --brand-jade: #2ea885;
+  --brand-jade-light: #34d399;
+  --brand-jade-dark: #0f766e;
+  --brand-sage: #7c9088;
+  --brand-paper: #ffffff;
+
+  /* Primary Brand Accent — Signature Emerald Jade */
+  --accent: #10b981;
+  --accent-glow: rgba(16, 185, 129, 0.35);
+  --accent-light: #34d399;
+  --accent-dark: #059669;
+  --accent-gradient: linear-gradient(135deg, #10b981 0%, #0d9488 100%);
+
   
   --success: #10b981;
   --success-glow: rgba(16, 185, 129, 0.3);
@@ -96,10 +106,20 @@
   --text-secondary: #334155;      /* Dark slate */
   --text-muted: #64748b;          /* Legible muted */
 
-  --accent: #1d4ed8;
-  --accent-glow: rgba(29, 78, 216, 0.2);
-  --accent-light: #2563eb;
-  --accent-gradient: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  /* Light Theme Brand Tokens */
+  --brand-obsidian: #161922;
+  --brand-jade: #059669;
+  --brand-jade-light: #10b981;
+  --brand-jade-dark: #047857;
+  --brand-sage: #5b8276;
+  --brand-paper: #ffffff;
+
+  --accent: #059669;
+  --accent-glow: rgba(5, 150, 105, 0.25);
+  --accent-light: #10b981;
+  --accent-dark: #047857;
+  --accent-gradient: linear-gradient(135deg, #059669 0%, #0f766e 100%);
+
 
   --success: #059669;
   --success-glow: rgba(5, 150, 105, 0.2);
@@ -353,44 +373,53 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+  cursor: pointer;
+  user-select: none;
 }
 
 .brand-glyph {
-  width: 28px;
-  height: 28px;
-  border-radius: 9px;
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 14px rgba(41, 121, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.4);
-  color: #fff;
-  font-size: 0.9rem;
-  font-weight: 800;
   flex-shrink: 0;
 }
 
-.app-header h1 {
-  font-size: 1.05rem;
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.brand-title {
+  font-size: 1.15rem;
   font-weight: 800;
-  letter-spacing: 2px;
-  background: linear-gradient(135deg, #ffffff 40%, #a5c7ff 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1.05;
+}
+
+.brand-subtitle {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
+  color: var(--brand-sage);
+  line-height: 1;
+  margin-top: 2px;
 }
 
 .brand-pill {
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.8px;
-  padding: 3px 8px;
+  padding: 2px 7px;
   border-radius: var(--radius-pill);
-  background: rgba(41, 121, 255, 0.15);
-  border: 1px solid rgba(41, 121, 255, 0.3);
-  color: #82b1ff;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: var(--accent-light);
   text-transform: uppercase;
 }
+
 
 .header-meta {
   margin-left: auto;
