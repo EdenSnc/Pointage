@@ -12,8 +12,8 @@ export default defineConfig({
         name: 'Pointage — Warehouse Bills Tracker',
         short_name: 'Pointage',
         description: 'Pointage — Warehouse Bills Tracker. Moteur local-first d’inspection et de gestion des bons de livraison en entrepôt.',
-        theme_color: '#121620',
-        background_color: '#0b0e14',
+        theme_color: '#ffffff',
+        background_color: '#ffffff',
 
         display: 'standalone',
         orientation: 'portrait',
@@ -41,7 +41,9 @@ export default defineConfig({
       workbox: {
         skipWaiting: true,
         clientsClaim: true,
+        cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+
 
         runtimeCaching: [
           {
