@@ -368,9 +368,10 @@ export async function createSpecialContainer(
 }
 
 export async function ensureSpecialContainers(billId: number): Promise<void> {
-  await createSpecialContainer(billId, 'VRAC / DESSUS', 'loose');
-  await createSpecialContainer(billId, 'GRAND / HORS CARTON', 'large');
+  await createSpecialContainer(billId, 'HORS CARTON', 'loose');
+  await createSpecialContainer(billId, 'GRAND COLIS', 'large');
 }
+
 
 export async function addExtra(
   sessionId: number,

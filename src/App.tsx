@@ -1961,7 +1961,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 }}
                 onClick={() => setSelectedContainer(null)}
               >
-                {selectedContainer === null ? '✓ ' : ''}📦 Hors Carton / Vrac
+                {selectedContainer === null ? '✓ ' : ''}📦 Hors Carton (À l'unité)
+
               </button>
               <button
                 className="container-tag"
@@ -2005,7 +2006,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   if (noContainer === 0) return null;
                   return (
                     <div className="flex justify-between text-sm py-1">
-                      <span className="text-muted">Hors Carton / Vrac</span>
+                      <span className="text-muted">Hors Carton (À l'unité)</span>
+
                       <span className="font-bold">{noContainer} unités</span>
                     </div>
                   );
@@ -2872,7 +2874,8 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
                     <div className="font-bold flex items-center gap-2">
                       <span className="container-tag selected" style={{ fontSize: '0.9rem' }}>{c.label}</span>
                       <span className="text-xs text-muted">
-                        {c.type === 'loose' ? 'Vrac / Dessus' : c.type === 'large' ? 'Grand Colis' : 'Carton Standard'}
+                        {c.type === 'loose' ? 'Hors Carton (À l\'unité)' : c.type === 'large' ? 'Grand Colis' : 'Carton Standard'}
+
                       </span>
                     </div>
                     <span className="badge badge-active font-mono">{totalUnits} unités</span>
@@ -2913,7 +2916,8 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
               return (
                 <div className="card mb-3" style={{ borderColor: 'var(--warning-border)' }}>
                   <div className="flex justify-between items-center mb-2">
-                    <span className="container-tag" style={{ background: 'var(--bg-surface)' }}>HORS CARTON / VRAC</span>
+                    <span className="container-tag" style={{ background: 'var(--bg-surface)' }}>HORS CARTON (À L'UNITÉ)</span>
+
                     <span className="badge badge-warning font-mono">{totalUnits} unités</span>
                   </div>
                   {linesOutside.map(({ line, qty }) => (
