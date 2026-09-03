@@ -298,12 +298,26 @@ function HomeScreen({
     getOrCreateSession();
   }, []);
 
-  const activeBills = bills.filter(b => b.status === 'active');
+  const [billFilter, setBillFilter] = useState<'active' | 'archived'>('active');
 
-  // Group active bills by client entity
+  const activeBills = bills.filter(b => b.status === 'active');
+  const archivedBills = bills.filter(b => b.status === 'completed');
+  const displayBills = billFilter === 'active' ? activeBills : archivedBills;
+
+  const handleArchiveBill = async (billId: number) => {
+    await db.bills.update(billId, { status: 'completed' });
+    showToast('Bon archivé dans l’historique', setToast);
+  };
+
+  const handleRestoreBill = async (billId: number) => {
+    await db.bills.update(billId, { status: 'active' });
+    showToast('Bon restauré dans les bons actifs', setToast);
+  };
+
+  // Group displayed bills by client entity
   const clientGroups = React.useMemo(() => {
     const map = new Map<string, Bill[]>();
-    for (const b of activeBills) {
+    for (const b of displayBills) {
       const key = (b.client || 'CLIENT DIVERS').trim().toUpperCase();
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(b);
@@ -312,7 +326,7 @@ function HomeScreen({
       client,
       bills: clientBills,
     }));
-  }, [activeBills]);
+  }, [displayBills]);
 
   return (
     <>
@@ -348,39 +362,69 @@ function HomeScreen({
             <IconSettings size={18} />
           </button>
           <span className="badge-status-dot">
-            {activeBills.length} BL{activeBills.length !== 1 ? 's' : ''}
+            {activeBills.length} Actif{activeBills.length !== 1 ? 's' : ''}
           </span>
         </div>
       </header>
 
       <div className="app-content">
-        {activeBills.length === 0 ? (
+        {/* BL Filter Tabs */}
+        <div className="flex gap-2 mb-3">
+          <button
+            className={`btn btn-sm ${billFilter === 'active' ? 'btn-primary' : 'btn-secondary'} flex-1 flex items-center justify-center gap-1`}
+            onClick={() => setBillFilter('active')}
+          >
+            <IconBox size={15} /> Bons Actifs ({activeBills.length})
+          </button>
+          <button
+            className={`btn btn-sm ${billFilter === 'archived' ? 'btn-primary' : 'btn-secondary'} flex-1 flex items-center justify-center gap-1`}
+            onClick={() => setBillFilter('archived')}
+          >
+            <IconClipboard size={15} /> Historique ({archivedBills.length})
+          </button>
+        </div>
+
+        {displayBills.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-state-icon"><IconBox size={46} /></div>
-            <p>Aucun bon de livraison actif</p>
-            <p className="text-sm text-muted mt-2">
-              Importez vos photos de bons ou créez un bon urgent
-            </p>
-            <div className="flex gap-2 justify-center mt-4">
-              <button className="btn btn-primary" onClick={() => nav('/import')}>
-                <IconImport size={18} /> IMPORTER DES BL
-              </button>
-              <button className="btn btn-secondary" onClick={() => setShowManualBillModal(true)}>
-                <IconPlus size={16} /> NOUVEAU BL
-              </button>
+            <div className="empty-state-icon">
+              {billFilter === 'active' ? <IconBox size={46} /> : <IconClipboard size={46} />}
             </div>
+            <p>
+              {billFilter === 'active'
+                ? 'Aucun bon de livraison actif'
+                : 'Aucun bon archivé dans l’historique'}
+            </p>
+            <p className="text-sm text-muted mt-2">
+              {billFilter === 'active'
+                ? 'Importez vos photos de bons ou créez un bon urgent'
+                : 'Dès qu’un bon est clôturé ou expédié, il apparaît dans cet historique.'}
+            </p>
+            {billFilter === 'active' && (
+              <div className="flex gap-2 justify-center mt-4">
+                <button className="btn btn-primary" onClick={() => nav('/import')}>
+                  <IconImport size={18} /> IMPORTER DES BL
+                </button>
+                <button className="btn btn-secondary" onClick={() => setShowManualBillModal(true)}>
+                  <IconPlus size={16} /> NOUVEAU BL
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <>
             <div className="flex justify-between items-center mb-2">
-              <div className="section-title" style={{ margin: 0 }}>BONS DE LIVRAISON ACTIFS</div>
-              <button
-                className="btn btn-xs btn-secondary flex items-center gap-1"
-                onClick={() => setShowManualBillModal(true)}
-                title="Créer un nouveau bon immédiatement"
-              >
-                <IconPlus size={14} /> NOUVEAU BL
-              </button>
+              <div className="section-title" style={{ margin: 0 }}>
+                {billFilter === 'active' ? 'BONS DE LIVRAISON ACTIFS' : 'HISTORIQUE DES BONS CLÔTURÉS'}
+              </div>
+              {billFilter === 'active' && (
+                <button
+                  className="btn btn-xs btn-secondary flex items-center gap-1"
+                  onClick={() => setShowManualBillModal(true)}
+                  title="Créer un nouveau bon immédiatement"
+                >
+                  <IconPlus size={14} /> NOUVEAU BL
+                </button>
+              )}
             </div>
 
             {clientGroups.map(group => {
@@ -390,6 +434,8 @@ function HomeScreen({
                     key={group.bills[0].id}
                     bill={group.bills[0]}
                     onClick={() => nav(`/bill/${group.bills[0].id}`)}
+                    onArchive={() => handleArchiveBill(group.bills[0].id!)}
+                    onRestore={() => handleRestoreBill(group.bills[0].id!)}
                   />
                 );
               }
@@ -399,11 +445,14 @@ function HomeScreen({
                   client={group.client}
                   bills={group.bills}
                   onSelectBill={(id) => nav(`/bill/${id}`)}
+                  onArchiveBill={handleArchiveBill}
+                  onRestoreBill={handleRestoreBill}
                 />
               );
             })}
           </>
         )}
+
 
         {/* Subtle Apple-style credits & Guide trigger */}
         <footer className="app-credits">
@@ -565,36 +614,55 @@ function ClientGroupCard({
   client,
   bills,
   onSelectBill,
+  onArchiveBill,
+  onRestoreBill,
 }: {
   client: string;
   bills: Bill[];
   onSelectBill: (id: number) => void;
+  onArchiveBill?: (id: number) => void;
+  onRestoreBill?: (id: number) => void;
 }) {
+
   const [expanded, setExpanded] = useState(true);
 
   return (
-    <div className="card mb-3" style={{ border: '1px solid rgba(59, 130, 246, 0.3)', background: 'rgba(15, 23, 42, 0.5)' }}>
+    <div className="client-group-block mb-3">
       <div
-        className="flex justify-between items-center cursor-pointer"
+        className="flex justify-between items-center cursor-pointer py-1 px-1 mb-2"
         onClick={() => setExpanded(!expanded)}
-        style={{ paddingBottom: expanded ? 8 : 0 }}
       >
         <div className="flex items-center gap-2">
-          <IconBuilding size={20} style={{ color: 'var(--accent)' }} />
+          <IconBuilding size={18} style={{ color: 'var(--accent)' }} />
           <div>
-            <div className="font-bold text-base" style={{ letterSpacing: '0.4px' }}>{client}</div>
-            <div className="text-xs text-muted">{bills.length} Bons groupés pour ce client</div>
+            <div className="font-bold text-sm" style={{ letterSpacing: '0.3px' }}>{client}</div>
+            <div className="text-xs text-muted">{bills.length} Bons pour ce client</div>
           </div>
         </div>
-        <span className="badge badge-active" style={{ fontSize: '0.72rem' }}>
+        <span
+          className="badge"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-primary)',
+            fontSize: '0.72rem',
+            cursor: 'pointer',
+          }}
+        >
           {expanded ? '▲ Replier' : `▼ ${bills.length} BLs`}
         </span>
       </div>
 
       {expanded && (
-        <div className="flex flex-col gap-2 mt-2 pt-2" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+        <div className="flex flex-col gap-2">
           {bills.map((b) => (
-            <BillCard key={b.id} bill={b} onClick={() => onSelectBill(b.id!)} />
+            <BillCard
+              key={b.id}
+              bill={b}
+              onClick={() => onSelectBill(b.id!)}
+              onArchive={onArchiveBill ? () => onArchiveBill(b.id!) : undefined}
+              onRestore={onRestoreBill ? () => onRestoreBill(b.id!) : undefined}
+            />
           ))}
         </div>
       )}
@@ -602,10 +670,18 @@ function ClientGroupCard({
   );
 }
 
-
-
 // ---- Bill Card ----
-function BillCard({ bill, onClick }: { bill: Bill; onClick: () => void }) {
+function BillCard({
+  bill,
+  onClick,
+  onArchive,
+  onRestore,
+}: {
+  bill: Bill;
+  onClick: () => void;
+  onArchive?: () => void;
+  onRestore?: () => void;
+}) {
   const lines = useBillLines(bill.id);
   const events = useBillEvents(bill.id);
 
@@ -627,7 +703,41 @@ function BillCard({ bill, onClick }: { bill: Bill; onClick: () => void }) {
           <div className="card-client">{bill.client}</div>
           <div className="card-bill-number">{bill.billNumber}</div>
         </div>
-        <span className="badge badge-active">{lines.length} lignes</span>
+        <div className="flex items-center gap-2">
+          {bill.status === 'completed' ? (
+            <span className="badge" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>
+              ARCHIVÉ
+            </span>
+          ) : (
+            <span className="badge badge-active">{lines.length} lignes</span>
+          )}
+          {onArchive && bill.status === 'active' && (
+            <button
+              className="btn btn-xs btn-ghost btn-icon"
+              title="Clôturer et archiver ce bon"
+              style={{ padding: 4 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onArchive();
+              }}
+            >
+              <IconCheck size={16} style={{ color: 'var(--accent)' }} />
+            </button>
+          )}
+          {onRestore && bill.status === 'completed' && (
+            <button
+              className="btn btn-xs btn-ghost btn-icon"
+              title="Restaurer dans les bons actifs"
+              style={{ padding: 4 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRestore();
+              }}
+            >
+              <IconUndo size={16} />
+            </button>
+          )}
+        </div>
       </div>
       <ProgressRow label="Préparation" progress={prep} />
       <ProgressRow label="Chargement" progress={load} />
@@ -635,6 +745,7 @@ function BillCard({ bill, onClick }: { bill: Bill; onClick: () => void }) {
     </div>
   );
 }
+
 
 function ProgressRow({ label, progress }: { label: string; progress: { done: number; total: number; percent: number } }) {
   return (
@@ -2862,8 +2973,46 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           </div>
         </div>
 
+        {/* BL Lifecycle & Archiving Card */}
+        <div className="card mb-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          <div className="flex justify-between items-center">
+            <div>
+              <div className="font-bold text-sm">
+                {bill.status === 'completed' ? 'Bon Clôturé & Archivé' : 'Statut : Bon Actif'}
+              </div>
+              <div className="text-xs text-muted">
+                {bill.status === 'completed'
+                  ? 'Ce bon est conservé dans l’historique.'
+                  : 'Visible sur l’écran d’accueil pour le travail d’entrepôt.'}
+              </div>
+            </div>
+            {bill.status === 'completed' ? (
+              <button
+                className="btn btn-sm btn-secondary flex items-center gap-1"
+                onClick={async () => {
+                  await db.bills.update(bill.id!, { status: 'active' });
+                  if (setToast) setToast('Bon réouvert et replacé dans les bons actifs');
+                }}
+              >
+                <IconUndo size={14} /> Restaurer
+              </button>
+            ) : (
+              <button
+                className="btn btn-sm btn-primary flex items-center gap-1"
+                onClick={async () => {
+                  await db.bills.update(bill.id!, { status: 'completed' });
+                  if (setToast) setToast(`Bon ${bill.billNumber} clôturé et archivé`);
+                  nav('/');
+                }}
+              >
+                <IconCheck size={14} /> Clôturer & Archiver
+              </button>
+            )}
+          </div>
+        </div>
 
         {extras.length > 0 && (
+
           <div className="card">
             <div className="section-title" style={{ marginTop: 0 }}>EXTRAS ({extras.length})</div>
             {extras.map((ex) => (
