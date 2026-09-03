@@ -222,7 +222,7 @@ function ApiKeyModal({
                   onClick={() => setModelVal(m.id)}
                   style={{ fontSize: '0.72rem' }}
                 >
-                  {m.id === 'gemini-2.5-flash-lite' ? 'Flash Lite 3.5' : m.id === 'gemini-2.5-flash' ? '3.8 Flash' : m.id.replace('gemini-', '')}
+                  {m.id === 'gemini-3.5-flash-lite' ? 'Flash Lite 3.5' : m.id === 'gemini-3.8-flash' ? '3.8 Flash' : m.id === 'gemini-3.5-flash' ? '3.5 Flash' : m.id.replace('gemini-', '')}
                 </button>
               ))}
             </div>
@@ -603,24 +603,24 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
               <span className="text-xs text-muted font-bold block mb-1">MOTEUR GEMINI :</span>
               <div className="seg-control">
                 <button
-                  className={`seg-btn ${selectedModel === 'gemini-2.5-flash-lite' ? 'active' : ''}`}
+                  className={`seg-btn ${selectedModel === 'gemini-3.5-flash-lite' ? 'active' : ''}`}
                   onClick={() => {
-                    setSelectedModel('gemini-2.5-flash-lite');
-                    providerRegistry.setSelectedModel('gemini', 'gemini-2.5-flash-lite');
+                    setSelectedModel('gemini-3.5-flash-lite');
+                    providerRegistry.setSelectedModel('gemini', 'gemini-3.5-flash-lite');
                   }}
                   style={{ fontSize: '0.74rem' }}
                 >
-                  ⚡ Flash Lite 3.5 (Rapide)
+                  ⚡ Flash Lite 3.5 (500/j)
                 </button>
                 <button
-                  className={`seg-btn ${selectedModel === 'gemini-2.5-flash' ? 'active' : ''}`}
+                  className={`seg-btn ${selectedModel === 'gemini-3.8-flash' ? 'active' : ''}`}
                   onClick={() => {
-                    setSelectedModel('gemini-2.5-flash');
-                    providerRegistry.setSelectedModel('gemini', 'gemini-2.5-flash');
+                    setSelectedModel('gemini-3.8-flash');
+                    providerRegistry.setSelectedModel('gemini', 'gemini-3.8-flash');
                   }}
                   style={{ fontSize: '0.74rem' }}
                 >
-                  🎯 3.8 Flash (BL Complexes)
+                  🎯 3.8 Flash (20/j • Difficile)
                 </button>
               </div>
             </div>

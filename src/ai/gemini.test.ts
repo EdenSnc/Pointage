@@ -22,8 +22,15 @@ describe('Modular LLM Provider Architecture', () => {
   });
 
   it('saves and retrieves selected model per provider', () => {
-    providerRegistry.setSelectedModel('gemini', 'gemini-1.5-flash');
-    expect(providerRegistry.getSelectedModel('gemini')).toBe('gemini-1.5-flash');
+    providerRegistry.setSelectedModel('gemini', 'gemini-3.8-flash');
+    expect(providerRegistry.getSelectedModel('gemini')).toBe('gemini-3.8-flash');
+  });
+
+  it('provides gemini-3.5-flash-lite as the default recommended model and gemini-3.8-flash for hard tasks', () => {
+    const active = providerRegistry.getActiveProvider();
+    const recommended = active.models.find((m) => m.recommended);
+    expect(recommended?.id).toBe('gemini-3.5-flash-lite');
+    expect(active.models.some((m) => m.id === 'gemini-3.8-flash')).toBe(true);
   });
 
   it('throws a descriptive error if extracting without an API key', async () => {

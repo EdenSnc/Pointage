@@ -99,16 +99,16 @@ export const geminiProvider: LLMProvider = {
   id: 'gemini',
   name: 'Google Gemini',
   models: [
-    { id: 'gemini-2.5-flash-lite', label: 'Flash Lite 3.5 (Rapide • Quotidien)', recommended: true },
-    { id: 'gemini-2.5-flash', label: 'Gemini 3.8 Flash (Haute Précision • BL Complexes)' },
-    { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (Standard)' },
-    { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash (Legacy)' },
+    { id: 'gemini-3.5-flash-lite', label: 'Flash Lite 3.5 (500 scans/jour • Rapide)', recommended: true },
+    { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash (20 scans/jour • BL Complexes)' },
+    { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash (Standard)' },
+    { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite (Secours)' },
   ],
 
   async extractFromImage(
     imageFile: File | Blob,
     apiKey: string,
-    modelId: string = 'gemini-2.5-flash-lite'
+    modelId: string = 'gemini-3.5-flash-lite'
   ): Promise<ExtractionResult> {
     if (!apiKey.trim()) {
       throw new Error('Veuillez renseigner votre clé API Google Gemini.');
@@ -151,6 +151,13 @@ export const geminiProvider: LLMProvider = {
     if (!response.ok) {
       const errJson = await response.json().catch(() => null);
       const errMsg = errJson?.error?.message || response.statusText;
+      if (response.status === 429) {
+        if (modelId === 'gemini-3.8-flash') {
+          throw new Error('Quota journalier atteint pour Gemini 3.8 Flash (max 20 scans/jour en gratuit). Basculez sur Flash Lite 3.5 (500 scans/jour) pour continuer.');
+        } else {
+          throw new Error('Trop de requêtes rapides (limite 15 scans/min). Veuillez patienter 10 secondes puis réessayez.');
+        }
+      }
       throw new Error(`Erreur API Gemini (${response.status}): ${errMsg}`);
     }
 
@@ -174,7 +181,7 @@ export const geminiProvider: LLMProvider = {
   async extractFromText(
     text: string,
     apiKey: string,
-    modelId: string = 'gemini-2.5-flash-lite'
+    modelId: string = 'gemini-3.5-flash-lite'
   ): Promise<ExtractionResult> {
     if (!apiKey.trim()) {
       throw new Error('Veuillez renseigner votre clé API Google Gemini.');
@@ -209,6 +216,13 @@ export const geminiProvider: LLMProvider = {
     if (!response.ok) {
       const errJson = await response.json().catch(() => null);
       const errMsg = errJson?.error?.message || response.statusText;
+      if (response.status === 429) {
+        if (modelId === 'gemini-3.8-flash') {
+          throw new Error('Quota journalier atteint pour Gemini 3.8 Flash (max 20 scans/jour en gratuit). Basculez sur Flash Lite 3.5 (500 scans/jour) pour continuer.');
+        } else {
+          throw new Error('Trop de requêtes rapides (limite 15 scans/min). Veuillez patienter 10 secondes puis réessayez.');
+        }
+      }
       throw new Error(`Erreur API Gemini (${response.status}): ${errMsg}`);
     }
 

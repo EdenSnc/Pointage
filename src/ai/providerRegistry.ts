@@ -80,7 +80,7 @@ class ProviderRegistry {
     const saved = safeGet(`${MODEL_PREFIX}${providerId}`);
     if (saved) return saved;
     const defaultModel = provider?.models.find((m) => m.recommended)?.id || provider?.models[0]?.id;
-    return defaultModel || 'gemini-2.5-flash-lite';
+    return defaultModel || 'gemini-3.5-flash-lite';
   }
 
   setSelectedModel(providerId: string, modelId: string) {
