@@ -35,7 +35,7 @@ export interface LLMProvider {
   name: string;
   models: { id: string; label: string; recommended?: boolean }[];
   extractFromImage(
-    imageFile: File | Blob,
+    imageFile: File | Blob | (File | Blob)[],
     apiKey: string,
     modelId?: string
   ): Promise<ExtractionResult>;

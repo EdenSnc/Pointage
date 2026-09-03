@@ -442,6 +442,15 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractProgress, setExtractProgress] = useState('');
 
+  // Multi-Page Photo Staging State (3 pages per bill, multi-bills)
+  interface StagedPhoto {
+    id: string;
+    file: File;
+    previewUrl: string;
+    pageLabel: string;
+  }
+  const [stagedPhotos, setStagedPhotos] = useState<StagedPhoto[]>([]);
+
   // Import payload & preview state
   const [raw, setRaw] = useState('');
   const [showManualJSON, setShowManualJSON] = useState(false);
@@ -466,24 +475,54 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
+    const newPhotos: StagedPhoto[] = files.map((file, idx) => ({
+      id: `${Date.now()}-${Math.random()}-${idx}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+      pageLabel: `Page ${stagedPhotos.length + idx + 1}`,
+    }));
+
+    setStagedPhotos((prev) => [...prev, ...newPhotos]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleRemovePhoto = (id: string) => {
+    setStagedPhotos((prev) => {
+      const remaining = prev.filter((p) => p.id !== id);
+      return remaining.map((p, idx) => ({
+        ...p,
+        pageLabel: `Page ${idx + 1}`,
+      }));
+    });
+  };
+
+  const handleExtractAll = async () => {
+    if (stagedPhotos.length === 0) return;
     setIsExtracting(true);
-    setExtractProgress('Lecture du document avec Gemini Vision...');
+    setExtractProgress(
+      stagedPhotos.length > 1
+        ? `Extraction de ${stagedPhotos.length} pages avec Gemini...`
+        : 'Lecture du document avec Gemini...'
+    );
 
     try {
-      const result = await activeProvider.extractFromImage(file, apiKey, selectedModel);
+      const files = stagedPhotos.map((p) => p.file);
+      const result = await activeProvider.extractFromImage(files, apiKey, selectedModel);
       setPreview({ payload: result.payload, parseError: null });
       setIssues(validateImport(result.payload));
-      showToast('Bon de livraison extrait avec succès !', setToast);
+      showToast(
+        `${result.payload.bills?.length || 1} BL extrait(s) (${stagedPhotos.length} pages) avec succès !`,
+        setToast
+      );
     } catch (err) {
       showToast(`Erreur IA: ${(err as Error).message}`, setToast);
     } finally {
       setIsExtracting(false);
       setExtractProgress('');
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -521,12 +560,20 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
       </header>
 
       <div className="app-content">
-        {/* Hidden file input for camera / gallery */}
+        {/* Hidden file inputs for camera and gallery */}
         <input
           ref={fileInputRef}
           type="file"
           accept="image/*"
           capture="environment"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
+        <input
+          id="gallery-file-input"
+          type="file"
+          accept="image/*"
+          multiple
           style={{ display: 'none' }}
           onChange={handleFileChange}
         />
@@ -581,10 +628,10 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
             <div className="flex justify-between items-start mb-3">
               <div>
                 <div className="card-client flex items-center gap-2">
-                  <IconCamera size={20} style={{ color: 'var(--accent)' }} /> Numérisation Photo
+                  <IconCamera size={20} style={{ color: 'var(--accent)' }} /> Numérisation Photo & Multi-Pages
                 </div>
                 <div className="text-xs text-muted mt-1">
-                  Samsung Galaxy A54 50MP • Prise de vue directe
+                  Samsung Galaxy A54 50MP • Multi-pages & multi-BL
                 </div>
               </div>
               <button
@@ -627,22 +674,115 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
               </div>
             </div>
 
-            <button
-              className="btn btn-primary btn-full mt-2"
-              style={{ minHeight: 54, fontSize: '0.94rem', fontWeight: 800, letterSpacing: 0.3 }}
-              onClick={handleTriggerPhoto}
-              disabled={isExtracting}
-            >
-              {isExtracting ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} /> {extractProgress}
-                </span>
-              ) : (
-                <span className="flex items-center justify-center gap-2">
-                  <IconCamera size={22} /> PHOTOGRAPHIER LE BL
-                </span>
-              )}
-            </button>
+            {/* Staged photos strip if any pages were captured */}
+            {stagedPhotos.length > 0 ? (
+              <div className="mb-3">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-bold text-secondary">
+                    PAGES PRÊTES ({stagedPhotos.length}) :
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-xs btn-ghost text-danger"
+                    onClick={() => setStagedPhotos([])}
+                    style={{ fontSize: '0.72rem' }}
+                  >
+                    Effacer tout
+                  </button>
+                </div>
+
+                <div className="staged-photo-strip">
+                  {stagedPhotos.map((p) => (
+                    <div key={p.id} className="staged-photo-item">
+                      <img src={p.previewUrl} alt={p.pageLabel} className="staged-photo-img" />
+                      <span className="staged-photo-badge">{p.pageLabel}</span>
+                      <button
+                        type="button"
+                        className="staged-photo-remove"
+                        onClick={() => handleRemovePhoto(p.id)}
+                        title="Supprimer cette page"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-2 mb-2">
+                  <button
+                    type="button"
+                    className="btn btn-secondary flex-1"
+                    onClick={handleTriggerPhoto}
+                    disabled={isExtracting}
+                    style={{ minHeight: 44, fontSize: '0.82rem' }}
+                  >
+                    <IconCamera size={16} /> + Ajouter une Page
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => document.getElementById('gallery-file-input')?.click()}
+                    disabled={isExtracting}
+                    title="Choisir depuis la galerie"
+                    style={{ minHeight: 44, fontSize: '0.82rem' }}
+                  >
+                    Galerie
+                  </button>
+                </div>
+
+                <button
+                  className="btn btn-primary btn-full mt-2"
+                  style={{ minHeight: 54, fontSize: '0.94rem', fontWeight: 800, letterSpacing: 0.3 }}
+                  onClick={handleExtractAll}
+                  disabled={isExtracting}
+                >
+                  {isExtracting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} /> {extractProgress}
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center gap-2">
+                      ✨ NUMÉRISER LES {stagedPhotos.length} PAGES (1 APPEL API)
+                    </span>
+                  )}
+                </button>
+              </div>
+            ) : (
+              /* No photos staged yet: Initial triggers */
+              <div>
+                <button
+                  className="btn btn-primary btn-full mt-2"
+                  style={{ minHeight: 54, fontSize: '0.94rem', fontWeight: 800, letterSpacing: 0.3 }}
+                  onClick={handleTriggerPhoto}
+                  disabled={isExtracting}
+                >
+                  {isExtracting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} /> {extractProgress}
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center gap-2">
+                      <IconCamera size={22} /> PRENDRE EN PHOTO (PAGE 1)
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-full mt-2 text-xs"
+                  onClick={() => {
+                    if (!apiKey.trim()) {
+                      setShowKeyModal(true);
+                      return;
+                    }
+                    document.getElementById('gallery-file-input')?.click();
+                  }}
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  📁 Ou sélectionner plusieurs photos depuis la galerie
+                </button>
+              </div>
+            )}
           </div>
         )}
 

@@ -52,17 +52,30 @@ async function prepareImagePayload(file: File | Blob): Promise<{ base64: string;
     }
   }
 
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64 = result.split(',')[1];
-      if (base64) resolve({ base64, mimeType: file.type || 'image/jpeg' });
-      else reject(new Error('Échec de la lecture de l’image'));
-    };
-    reader.onerror = (err) => reject(err);
-    reader.readAsDataURL(file);
-  });
+  // Modern cross-platform ArrayBuffer / Buffer fallback (works seamlessly in Browser & Node)
+  if (typeof (file as any).arrayBuffer === 'function') {
+    const arrayBuf = await (file as any).arrayBuffer();
+    const base64 = typeof Buffer !== 'undefined'
+      ? Buffer.from(arrayBuf).toString('base64')
+      : btoa(String.fromCharCode(...new Uint8Array(arrayBuf)));
+    return { base64, mimeType: file.type || 'image/jpeg' };
+  }
+
+  if (typeof FileReader !== 'undefined') {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.split(',')[1];
+        if (base64) resolve({ base64, mimeType: file.type || 'image/jpeg' });
+        else reject(new Error('Échec de la lecture de l’image'));
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  throw new Error('Environnement non supporté pour la lecture d’image');
 }
 
 function sanitizeAndParseJSON(text: string): ImportPayload {
@@ -106,7 +119,7 @@ export const geminiProvider: LLMProvider = {
   ],
 
   async extractFromImage(
-    imageFile: File | Blob,
+    imageInput: File | Blob | (File | Blob)[],
     apiKey: string,
     modelId: string = 'gemini-3.5-flash-lite'
   ): Promise<ExtractionResult> {
@@ -114,7 +127,12 @@ export const geminiProvider: LLMProvider = {
       throw new Error('Veuillez renseigner votre clé API Google Gemini.');
     }
 
-    const { base64: base64Data, mimeType } = await prepareImagePayload(imageFile);
+    const files = Array.isArray(imageInput) ? imageInput : [imageInput];
+    if (files.length === 0) {
+      throw new Error('Aucune image fournie pour l’extraction.');
+    }
+
+    const imagePayloads = await Promise.all(files.map((f) => prepareImagePayload(f)));
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey.trim()}`;
 
@@ -126,13 +144,18 @@ export const geminiProvider: LLMProvider = {
         {
           role: 'user',
           parts: [
-            { text: 'Extraire les lignes de ce bon de livraison au format JSON spécifié.' },
             {
-              inlineData: {
-                mimeType,
-                data: base64Data,
-              },
+              text:
+                files.length > 1
+                  ? `Extraire toutes les lignes de ces ${files.length} pages de bons de livraison au format JSON spécifié. Assigner le numéro de page exact (1, 2, 3...) à chaque ligne et regrouper par facture.`
+                  : 'Extraire les lignes de ce bon de livraison au format JSON spécifié.',
             },
+            ...imagePayloads.map((img) => ({
+              inlineData: {
+                mimeType: img.mimeType,
+                data: img.base64,
+              },
+            })),
           ],
         },
       ],

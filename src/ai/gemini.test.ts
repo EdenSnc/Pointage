@@ -87,4 +87,58 @@ describe('Modular LLM Provider Architecture', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('handles multi-page / multi-bill extraction in a single API call', async () => {
+    const multiBillResponse = {
+      candidates: [
+        {
+          content: {
+            parts: [
+              {
+                text: JSON.stringify({
+                  bills: [
+                    {
+                      billNumber: 'BL-PAGE1-3',
+                      client: 'LIBRAIRIE ALPHA',
+                      lines: [
+                        { no: '1', page: 1, designation: 'CAHIER 96P', quantity: 50 },
+                        { no: '2', page: 2, designation: 'STYLO BLEU', quantity: 100 },
+                        { no: '3', page: 3, designation: 'CLASSEUR A4', quantity: 20 },
+                      ],
+                    },
+                    {
+                      billNumber: 'BL-BETA',
+                      client: 'PAPETERIE BETA',
+                      lines: [
+                        { no: '1', page: 1, designation: 'GOMME', quantity: 200 },
+                      ],
+                    },
+                  ],
+                }),
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => multiBillResponse,
+    }) as any;
+
+    try {
+      const dummyFile1 = new File(['fake-p1'], 'p1.jpg', { type: 'image/jpeg' });
+      const dummyFile2 = new File(['fake-p2'], 'p2.jpg', { type: 'image/jpeg' });
+      const result = await geminiProvider.extractFromImage([dummyFile1, dummyFile2], 'test-key');
+      expect(result.payload.bills.length).toBe(2);
+      expect(result.payload.bills[0].billNumber).toBe('BL-PAGE1-3');
+      expect(result.payload.bills[0].lines.length).toBe(3);
+      expect(result.payload.bills[0].lines[1].page).toBe(2);
+      expect(result.payload.bills[1].billNumber).toBe('BL-BETA');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
