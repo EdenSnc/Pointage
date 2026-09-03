@@ -80,10 +80,11 @@ describe('Modular LLM Provider Architecture', () => {
     try {
       const result = await geminiProvider.extractFromText('texte brut bl', 'dummy-key');
       expect(result.providerId).toBe('gemini');
-      expect(result.payload.bills.length).toBe(1);
-      expect(result.payload.bills[0].billNumber).toBe('BL-MOCK-2026');
-      expect(result.payload.bills[0].lines[0].quantity).toBe(25);
+      expect(result.payload.bills!.length).toBe(1);
+      expect(result.payload.bills![0].billNumber).toBe('BL-MOCK-2026');
+      expect(result.payload.bills![0].lines![0].quantity).toBe(25);
     } finally {
+
       globalThis.fetch = originalFetch;
     }
   });
@@ -132,12 +133,13 @@ describe('Modular LLM Provider Architecture', () => {
       const dummyFile1 = new File(['fake-p1'], 'p1.jpg', { type: 'image/jpeg' });
       const dummyFile2 = new File(['fake-p2'], 'p2.jpg', { type: 'image/jpeg' });
       const result = await geminiProvider.extractFromImage([dummyFile1, dummyFile2], 'test-key');
-      expect(result.payload.bills.length).toBe(2);
-      expect(result.payload.bills[0].billNumber).toBe('BL-PAGE1-3');
-      expect(result.payload.bills[0].lines.length).toBe(3);
-      expect(result.payload.bills[0].lines[1].page).toBe(2);
-      expect(result.payload.bills[1].billNumber).toBe('BL-BETA');
+      expect(result.payload.bills!.length).toBe(2);
+      expect(result.payload.bills![0].billNumber).toBe('BL-PAGE1-3');
+      expect(result.payload.bills![0].lines!.length).toBe(3);
+      expect(result.payload.bills![0].lines![1].page).toBe(2);
+      expect(result.payload.bills![1].billNumber).toBe('BL-BETA');
     } finally {
+
       globalThis.fetch = originalFetch;
     }
   });

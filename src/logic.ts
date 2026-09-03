@@ -82,13 +82,14 @@ export function calcDiscrepancy(
 
 /**
  * Calculate how many full packs and loose from a total.
+ * Safe against NaN, null, and negative values.
  */
 export function calcPackBreakdown(
   total: number,
   packSize: number | null
 ): { fullPacks: number; loose: number } {
-  if (!packSize || packSize <= 1) {
-    return { fullPacks: 0, loose: total };
+  if (!packSize || isNaN(packSize) || packSize <= 1 || isNaN(total) || total < 0) {
+    return { fullPacks: 0, loose: isNaN(total) ? 0 : Math.max(0, total) };
   }
   return {
     fullPacks: Math.floor(total / packSize),
@@ -97,10 +98,83 @@ export function calcPackBreakdown(
 }
 
 /**
+ * Round down quantity to nearest complete pack size.
+ * e.g. ordered 32, pack size 5 -> { servedQty: 30, missingQty: 2 }
+ * e.g. ordered 32, pack size 12 -> { servedQty: 24, missingQty: 8 }
+ */
+export function roundDownToPack(
+  orderedQty: number,
+  packSize: number | null
+): { servedQty: number; missingQty: number } {
+  if (!packSize || isNaN(packSize) || packSize <= 1 || isNaN(orderedQty) || orderedQty <= 0) {
+    return { servedQty: Math.max(0, orderedQty || 0), missingQty: 0 };
+  }
+  const fullPacks = Math.floor(orderedQty / packSize);
+  const servedQty = fullPacks * packSize;
+  const missingQty = orderedQty - servedQty;
+  return { servedQty, missingQty };
+}
+
+/**
  * Check if a line should block stage completion.
  */
 export function lineBlocksCompletion(line: OrderLine): boolean {
   return line.status === 'active' || line.status === 'not_found';
+}
+
+/**
+ * Evaluate problematic lines decoupled by stage.
+ * In Préparation: only check preparation issues (unprepared, short, over, out_of_stock, not_found).
+ * In Chargement: only check chargement vs preparation.
+ * In Pointage: only check pointage vs chargement / damaged / refused.
+ */
+export function getStageProblemLines(
+  lines: OrderLine[],
+  eventsByLine: Map<number, CountEvent[]>,
+  currentStage: Stage | 'auto' = 'auto'
+): OrderLine[] {
+  let targetStage: Stage = 'preparation';
+  if (currentStage === 'auto') {
+    let hasPointage = false;
+    let hasChargement = false;
+    for (const [_, evts] of eventsByLine) {
+      if (evts.some(e => e.stage === 'pointage' && !e.undone)) hasPointage = true;
+      if (evts.some(e => e.stage === 'chargement' && !e.undone)) hasChargement = true;
+    }
+    if (hasPointage) targetStage = 'pointage';
+    else if (hasChargement) targetStage = 'chargement';
+    else targetStage = 'preparation';
+  } else {
+    targetStage = currentStage;
+  }
+
+  return lines.filter((line) => {
+    if (line.status === 'out_of_stock' || line.status === 'not_found' || line.status === 'cancelled') {
+      return true;
+    }
+    const evts = eventsByLine.get(line.id!) || [];
+    const prepTotal = sumStageEvents(evts, 'preparation');
+    const loadTotal = sumStageEvents(evts, 'chargement');
+
+    if (targetStage === 'preparation') {
+      const disc = calcDiscrepancy(line, prepTotal);
+      return !disc.isExact || line.orderedQty !== line.originalOrderedQty;
+    }
+
+    if (targetStage === 'chargement') {
+      return loadTotal !== prepTotal;
+    }
+
+    if (targetStage === 'pointage') {
+      const totals = getStageTotals(evts, 'pointage');
+      const hasDamageOrRefusal = totals.byOutcome.damaged_accepted > 0 ||
+        totals.byOutcome.damaged_refused > 0 ||
+        totals.byOutcome.refused > 0;
+      return totals.total !== loadTotal || hasDamageOrRefusal;
+    }
+
+    return false;
+  });
 }
 
 /**
@@ -240,8 +314,19 @@ export function smartSearchScore(
       (line.originalEan && line.originalEan.replace(/[^a-z0-9]/gi, '').includes(cleanQ))
     ))
   ) return 7.5;
+
+  // 7.8. ITF-14 Carton barcode match (14-digit carton barcode matching 13-digit child EAN)
+  if (cleanQ.length === 14) {
+    const core12 = cleanQ.slice(1, 13);
+    const lineEan12 = (line.ean || line.originalEan || '').replace(/[^0-9]/g, '').slice(0, 12);
+    if (lineEan12 && lineEan12 === core12) {
+      return 4.2;
+    }
+  }
+
   // 8. partial designation match
   if (line.designation.toLowerCase().includes(q)) return 8;
 
   return -1;
 }
+

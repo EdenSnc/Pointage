@@ -40,9 +40,13 @@ import {
   calcDiscrepancy,
   calcBillProgress,
   getStageTotals,
+  calcPackBreakdown,
+  roundDownToPack,
+  getStageProblemLines,
 } from './logic';
 import { parseImportJSON, importBills, getOrCreateSession, validateImport } from './importer';
 import { exportBackup, importBackup, downloadBackup, shareBackup } from './backup';
+import type { BackupData } from './backup';
 import { copyExtractionPrompt } from './extractionPrompt';
 import type {
   Stage,
@@ -85,9 +89,17 @@ import {
   IconHelp,
   IconCamera,
   IconKey,
+  IconEye,
+  IconEyeOff,
+  IconSettings,
+  IconSend,
+  IconBuilding,
 } from './icons';
 import { OnboardingWalkthrough } from './OnboardingWalkthrough';
 import { providerRegistry } from './ai/providerRegistry';
+import { ErrorBoundary } from './ErrorBoundary';
+import { SettingsModal } from './SettingsModal';
+
 
 // ---- Toast ----
 let toastTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -124,35 +136,38 @@ export default function App() {
 
   return (
     <HashRouter>
-      <Routes>
-        <Route
-          path="/"
-          element={
-            <HomeScreen
-              setToast={setToast}
-              theme={theme}
-              toggleTheme={toggleTheme}
-              onOpenWalkthrough={() => setShowWalkthrough(true)}
-            />
-          }
-        />
-        <Route path="/import" element={<ImportScreen setToast={setToast} />} />
-        <Route path="/bill/:billId" element={<BillScreen setToast={setToast} />} />
-        <Route path="/bill/:billId/line/:lineId" element={<ProductScreen setToast={setToast} />} />
-        <Route path="/bill/:billId/summary" element={<SummaryScreen />} />
-        <Route path="/scan" element={<GlobalScanScreen setToast={setToast} />} />
-        <Route
-          path="/backup"
-          element={
-            <BackupScreen
-              setToast={setToast}
-              onOpenWalkthrough={() => setShowWalkthrough(true)}
-            />
-          }
-        />
-        <Route path="/history" element={<HistoryScreen />} />
-        <Route path="/bill/:billId/extras" element={<ExtrasScreen setToast={setToast} />} />
-      </Routes>
+      <ErrorBoundary>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <HomeScreen
+                setToast={setToast}
+                theme={theme}
+                toggleTheme={toggleTheme}
+                onOpenWalkthrough={() => setShowWalkthrough(true)}
+              />
+            }
+          />
+          <Route path="/import" element={<ImportScreen setToast={setToast} />} />
+          <Route path="/bill/:billId" element={<BillScreen setToast={setToast} />} />
+          <Route path="/bill/:billId/line/:lineId" element={<ProductScreen setToast={setToast} />} />
+          <Route path="/bill/:billId/summary" element={<SummaryScreen setToast={setToast} />} />
+
+          <Route path="/scan" element={<GlobalScanScreen setToast={setToast} />} />
+          <Route
+            path="/backup"
+            element={
+              <BackupScreen
+                setToast={setToast}
+                onOpenWalkthrough={() => setShowWalkthrough(true)}
+              />
+            }
+          />
+          <Route path="/history" element={<HistoryScreen />} />
+          <Route path="/bill/:billId/extras" element={<ExtrasScreen setToast={setToast} />} />
+        </Routes>
+      </ErrorBoundary>
       {toast && <div className="toast">{toast}</div>}
       <OnboardingWalkthrough
         isOpen={showWalkthrough}
@@ -160,6 +175,7 @@ export default function App() {
       />
     </HashRouter>
   );
+
 }
 
 // ---- Reusable API Key Configuration Modal ----
@@ -260,7 +276,9 @@ function HomeScreen({
   const nav = useNavigate();
   const session = useActiveSession();
   const bills = useSessionBills(session?.id);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showKeyModal, setShowKeyModal] = useState(false);
+  const [showManualBillModal, setShowManualBillModal] = useState(false);
   const [showQuantities, setShowQuantities] = useState(() => localStorage.getItem('pointage_show_quantities') === 'true');
 
   const toggleShowQuantities = () => {
@@ -273,9 +291,24 @@ function HomeScreen({
   };
 
   useEffect(() => {
-    // Ensure session exists
     getOrCreateSession();
   }, []);
+
+  const activeBills = bills.filter(b => b.status === 'active');
+
+  // Group active bills by client entity
+  const clientGroups = React.useMemo(() => {
+    const map = new Map<string, Bill[]>();
+    for (const b of activeBills) {
+      const key = (b.client || 'CLIENT DIVERS').trim().toUpperCase();
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(b);
+    }
+    return Array.from(map.entries()).map(([client, clientBills]) => ({
+      client,
+      bills: clientBills,
+    }));
+  }, [activeBills]);
 
   return (
     <>
@@ -290,67 +323,84 @@ function HomeScreen({
             className="btn btn-xs btn-ghost btn-icon"
             onClick={toggleShowQuantities}
             title={showQuantities ? 'Quantités visibles (Cliquer pour masquer)' : 'Quantités masquées (Cliquer pour afficher)'}
-            style={{ padding: 4 }}
+            style={{ padding: 6 }}
+            aria-label={showQuantities ? 'Masquer les quantités' : 'Afficher les quantités'}
           >
-            {showQuantities ? '👁️' : '👁️‍🗨️'}
+            {showQuantities ? <IconEye size={18} style={{ color: 'var(--accent)' }} /> : <IconEyeOff size={18} />}
           </button>
           <button
             className="btn btn-xs btn-ghost btn-icon"
-            onClick={() => setShowKeyModal(true)}
-            title="Configurer la Clé API Gemini"
-            style={{ padding: 4 }}
+            onClick={() => setShowSettingsModal(true)}
+            title="Paramètres, Quotas & Thème"
+            style={{ padding: 6 }}
+            aria-label="Paramètres"
           >
-            <IconKey size={17} />
-          </button>
-          <button
-            className="btn btn-xs btn-ghost btn-icon"
-            onClick={onOpenWalkthrough}
-            title="Guide d'utilisation interactif"
-            style={{ padding: 4 }}
-          >
-            <IconHelp size={17} />
-          </button>
-          <button
-            className="btn btn-xs btn-ghost btn-icon"
-            onClick={toggleTheme}
-            title={theme === 'dark' ? 'Passer au Mode Clair' : 'Passer au Mode Sombre'}
-            style={{ padding: 4 }}
-          >
-            {theme === 'dark' ? <IconSun size={17} /> : <IconMoon size={17} />}
+            <IconSettings size={18} />
           </button>
           <span className="badge-status-dot">
-            {bills.length} BL{bills.length !== 1 ? 's' : ''}
+            {activeBills.length} BL{activeBills.length !== 1 ? 's' : ''}
           </span>
         </div>
       </header>
 
       <div className="app-content">
-        {bills.length === 0 ? (
+        {activeBills.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon"><IconBox size={46} /></div>
-            <p>Aucune facture active</p>
+            <p>Aucun bon de livraison actif</p>
             <p className="text-sm text-muted mt-2">
-              Importez des bons de livraison pour commencer
+              Importez vos photos de bons ou créez un bon urgent
             </p>
-            <button className="btn btn-primary btn-lg mt-4" onClick={() => nav('/import')}>
-              <IconImport size={18} /> IMPORTER DES BL
-            </button>
+            <div className="flex gap-2 justify-center mt-4">
+              <button className="btn btn-primary" onClick={() => nav('/import')}>
+                <IconImport size={18} /> IMPORTER DES BL
+              </button>
+              <button className="btn btn-secondary" onClick={() => setShowManualBillModal(true)}>
+                <IconPlus size={16} /> NOUVEAU BL
+              </button>
+            </div>
           </div>
         ) : (
           <>
-            <div className="section-title">Factures actives</div>
-            {bills.filter(b => b.status === 'active').map((bill) => (
-              <BillCard key={bill.id} bill={bill} onClick={() => nav(`/bill/${bill.id}`)} />
-            ))}
+            <div className="flex justify-between items-center mb-2">
+              <div className="section-title" style={{ margin: 0 }}>BONS DE LIVRAISON ACTIFS</div>
+              <button
+                className="btn btn-xs btn-secondary flex items-center gap-1"
+                onClick={() => setShowManualBillModal(true)}
+                title="Créer un nouveau bon immédiatement"
+              >
+                <IconPlus size={14} /> NOUVEAU BL
+              </button>
+            </div>
+
+            {clientGroups.map(group => {
+              if (group.bills.length === 1) {
+                return (
+                  <BillCard
+                    key={group.bills[0].id}
+                    bill={group.bills[0]}
+                    onClick={() => nav(`/bill/${group.bills[0].id}`)}
+                  />
+                );
+              }
+              return (
+                <ClientGroupCard
+                  key={group.client}
+                  client={group.client}
+                  bills={group.bills}
+                  onSelectBill={(id) => nav(`/bill/${id}`)}
+                />
+              );
+            })}
           </>
         )}
 
         {/* Subtle Apple-style credits & Guide trigger */}
         <footer className="app-credits">
           <div className="credits-badge">
-            <span>POINTAGE PRO</span> • <span>ARCHITECTURÉ PAR L'UTILISATEUR</span>
+            <span>POINTAGE PRO</span> • <span>MOTEUR HORS-LIGNE LOCAL-FIRST</span>
           </div>
-          <div className="credits-sub">Moteur Entrepôt Local-First • 100% Hors-Ligne</div>
+          <div className="credits-sub">Algorithme d'Entrepôt Découplé • 100% Hors-Ligne</div>
           <div className="text-center mt-2">
             <button
               onClick={onOpenWalkthrough}
@@ -385,14 +435,163 @@ function HomeScreen({
         </button>
       </div>
 
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        theme={theme}
+        toggleTheme={toggleTheme}
+        onOpenKeyModal={() => setShowKeyModal(true)}
+        onOpenWalkthrough={onOpenWalkthrough}
+      />
+
       <ApiKeyModal
         isOpen={showKeyModal}
         onClose={() => setShowKeyModal(false)}
         setToast={setToast}
       />
+
+      <ManualBillModal
+        isOpen={showManualBillModal}
+        onClose={() => setShowManualBillModal(false)}
+        sessionId={session?.id}
+        setToast={setToast}
+      />
     </>
   );
 }
+
+// ---- Modal: Création Manuelle de Bon en Urgence ----
+function ManualBillModal({
+  isOpen,
+  onClose,
+  sessionId,
+  setToast,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  sessionId?: number;
+  setToast: (m: string) => void;
+}) {
+  const nav = useNavigate();
+  const [client, setClient] = useState('');
+  const [billNumber, setBillNumber] = useState('');
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sessionId) {
+      showToast('Session non prête', setToast);
+      return;
+    }
+    const finalClient = client.trim().toUpperCase() || 'CLIENT COMPTOIR';
+    const finalBillNumber = billNumber.trim().toUpperCase() || `BL-${Date.now().toString().slice(-4)}`;
+    const now = new Date().toISOString();
+
+    const id = await db.bills.add({
+      sessionId,
+      billNumber: finalBillNumber,
+      client: finalClient,
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    showToast(`Bon ${finalBillNumber} créé avec succès`, setToast);
+    onClose();
+    nav(`/bill/${id}`);
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+        <div className="flex justify-between items-center mb-3">
+          <div className="modal-title" style={{ margin: 0 }}>NOUVEAU BON IMMÉDIAT</div>
+          <button className="btn btn-ghost btn-xs btn-icon" onClick={onClose}><IconX size={18} /></button>
+        </div>
+        <p className="text-xs text-muted mb-3">
+          Créez un bon d'expédition sur le terrain sans attendre l'administration.
+        </p>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <div>
+            <label className="text-xs text-muted font-bold block mb-1">NOM DU CLIENT / ENSEIGNE</label>
+            <input
+              className="input"
+              type="text"
+              placeholder="Ex: AISSAOUI HICHAM"
+              value={client}
+              onChange={(e) => setClient(e.target.value)}
+              autoFocus
+              required
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-muted font-bold block mb-1">NUMÉRO DU BON (BL / BC)</label>
+            <input
+              className="input"
+              type="text"
+              placeholder="Ex: BC/OU126/03835"
+              value={billNumber}
+              onChange={(e) => setBillNumber(e.target.value)}
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end mt-2">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>ANNULER</button>
+            <button type="submit" className="btn btn-primary flex items-center gap-1">
+              <IconCheck size={16} /> CRÉER ET OUVRIR
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ---- Client Group Accordion Card ----
+function ClientGroupCard({
+  client,
+  bills,
+  onSelectBill,
+}: {
+  client: string;
+  bills: Bill[];
+  onSelectBill: (id: number) => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+
+  return (
+    <div className="card mb-3" style={{ border: '1px solid rgba(59, 130, 246, 0.3)', background: 'rgba(15, 23, 42, 0.5)' }}>
+      <div
+        className="flex justify-between items-center cursor-pointer"
+        onClick={() => setExpanded(!expanded)}
+        style={{ paddingBottom: expanded ? 8 : 0 }}
+      >
+        <div className="flex items-center gap-2">
+          <IconBuilding size={20} style={{ color: 'var(--accent)' }} />
+          <div>
+            <div className="font-bold text-base" style={{ letterSpacing: '0.4px' }}>{client}</div>
+            <div className="text-xs text-muted">{bills.length} Bons groupés pour ce client</div>
+          </div>
+        </div>
+        <span className="badge badge-active" style={{ fontSize: '0.72rem' }}>
+          {expanded ? '▲ Replier' : `▼ ${bills.length} BLs`}
+        </span>
+      </div>
+
+      {expanded && (
+        <div className="flex flex-col gap-2 mt-2 pt-2" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          {bills.map((b) => (
+            <BillCard key={b.id} bill={b} onClick={() => onSelectBill(b.id!)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 
 // ---- Bill Card ----
@@ -1319,8 +1518,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   };
 
   return (
-    <>
+    <ErrorBoundary fallbackTitle="Erreur d'affichage de la fiche produit">
       <header className="app-header">
+
         <button className="back-btn" onClick={() => nav(-1)} aria-label="Retour"><IconArrowLeft size={18} /></button>
         <div style={{ flex: 1 }}>
           <div className="flex items-center gap-2">
@@ -1376,8 +1576,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           )}
           {line.status !== 'active' && (
             <div className="mt-2">
-              <span className={`badge badge-${line.status === 'cancelled' ? 'cancelled' : 'not-found'}`}>
-                {line.status === 'cancelled' ? 'ANNULÉ' :
+              <span className={`badge badge-${line.status === 'out_of_stock' ? 'out-of-stock' : line.status === 'cancelled' ? 'cancelled' : 'not-found'}`}>
+                {line.status === 'out_of_stock' ? 'RUPTURE DÉFINITIVE' :
+                 line.status === 'cancelled' ? 'ANNULÉ' :
                  line.status === 'not_found' ? 'INTROUVABLE' :
                  'SUPPRIMÉ PAR RÉVISION'}
               </span>
@@ -1395,12 +1596,13 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className={`btn btn-xs ${showQuantities ? 'btn-primary' : 'btn-secondary'}`}
+                className={`btn btn-xs ${showQuantities ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
                 onClick={toggleShowQuantities}
                 style={{ fontSize: '0.72rem' }}
                 title="Afficher/masquer les quantités attendues"
               >
-                {showQuantities ? '👁️ Visible' : '👁️‍🗨️ Masqué'}
+                {showQuantities ? <IconEye size={13} /> : <IconEyeOff size={13} />}
+                {showQuantities ? 'Visible' : 'Masqué'}
               </button>
               <button className="btn btn-sm btn-secondary flex items-center gap-1" onClick={() => {
                 setEditingQty(true);
@@ -1514,7 +1716,12 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               inputMode="numeric"
               placeholder="—"
               value={outerPack ?? ''}
-              onChange={(e) => setOuterPack(e.target.value ? parseInt(e.target.value) : null)}
+              onChange={(e) => {
+                const val = e.target.value.trim();
+                if (!val) { setOuterPack(null); return; }
+                const v = parseInt(val, 10);
+                setOuterPack(!isNaN(v) && v > 0 ? v : null);
+              }}
               style={{ maxWidth: 100 }}
             />
             <span className="text-xs text-muted">unités</span>
@@ -1530,7 +1737,12 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               inputMode="numeric"
               placeholder="—"
               value={innerPack ?? ''}
-              onChange={(e) => setInnerPack(e.target.value ? parseInt(e.target.value) : null)}
+              onChange={(e) => {
+                const val = e.target.value.trim();
+                if (!val) { setInnerPack(null); return; }
+                const v = parseInt(val, 10);
+                setInnerPack(!isNaN(v) && v > 0 ? v : null);
+              }}
               style={{ maxWidth: 100 }}
             />
             <span className="text-xs text-muted">unités</span>
@@ -1616,45 +1828,71 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           {/* Quick preset chips for rapid warehouse counting */}
           <div className="flex gap-1 mt-3 flex-wrap">
             <button className="btn btn-xs btn-secondary" onClick={() => {
-              if (useDirectEntry) {
-                setDirectTotal(String((parseInt(directTotal) || 0) + 1));
-              } else {
-                setLoose(prev => prev + 1);
-              }
+              if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + 1));
+              else setLoose(prev => prev + 1);
             }}>+1</button>
             <button className="btn btn-xs btn-secondary" onClick={() => {
-              if (useDirectEntry) {
-                setDirectTotal(String((parseInt(directTotal) || 0) + 5));
-              } else {
-                setLoose(prev => prev + 5);
-              }
+              if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + 5));
+              else setLoose(prev => prev + 5);
             }}>+5</button>
             <button className="btn btn-xs btn-secondary" onClick={() => {
-              if (useDirectEntry) {
-                setDirectTotal(String((parseInt(directTotal) || 0) + 10));
-              } else {
-                setLoose(prev => prev + 10);
-              }
+              if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + 10));
+              else setLoose(prev => prev + 10);
             }}>+10</button>
             <button className="btn btn-xs btn-secondary" onClick={() => {
-              if (useDirectEntry) {
-                setDirectTotal(String((parseInt(directTotal) || 0) + 25));
-              } else {
-                setLoose(prev => prev + 25);
-              }
-            }}>+25</button>
+              if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + 12));
+              else setLoose(prev => prev + 12);
+            }}>+12</button>
+            {innerPack && innerPack > 1 && innerPack !== 5 && innerPack !== 10 && innerPack !== 12 && (
+              <button className="btn btn-xs btn-secondary" onClick={() => {
+                if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + innerPack));
+                else setLoose(prev => prev + innerPack);
+              }}>+{innerPack}</button>
+            )}
+            {outerPack && outerPack > 1 && (
+              <button className="btn btn-xs btn-secondary" onClick={() => {
+                if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + outerPack));
+                else setLoose(prev => prev + outerPack);
+              }}>+{outerPack}</button>
+            )}
             {disc.remaining > 0 && (
               <button className="btn btn-xs btn-primary flex items-center gap-1" onClick={() => {
-                if (useDirectEntry) {
-                  setDirectTotal(String(disc.remaining));
-                } else {
-                  setLoose(disc.remaining);
-                }
+                if (useDirectEntry) setDirectTotal(String(disc.remaining));
+                else setLoose(disc.remaining);
               }}>
                 <IconBolt size={13} /> SOLDE ({disc.remaining})
               </button>
             )}
           </div>
+
+          {/* Sealed pack 1-tap round down option */}
+          {(() => {
+            const packSize = innerPack || outerPack;
+            if (packSize && packSize > 1 && disc.remaining > 0 && disc.remaining % packSize !== 0) {
+              const rounded = roundDownToPack(disc.remaining, packSize);
+              if (rounded.servedQty > 0) {
+                return (
+                  <div className="mt-2 p-2" style={{ background: 'rgba(234, 179, 8, 0.1)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
+                    <div className="text-xs font-semibold mb-1" style={{ color: 'var(--warning)' }}>
+                      Colisage scellé ({packSize} pcs / carton)
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-warning btn-full flex items-center justify-center gap-1"
+                      onClick={() => {
+                        if (useDirectEntry) setDirectTotal(String(rounded.servedQty));
+                        else setLoose(rounded.servedQty);
+                        showToast(`Lot scellé : ${rounded.servedQty} servis (${rounded.missingQty} reliquat)`, setToast);
+                      }}
+                    >
+                      <IconBox size={14} /> Servir {rounded.servedQty} (Carton scellé • {rounded.missingQty} reliquat)
+                    </button>
+                  </div>
+                );
+              }
+            }
+            return null;
+          })()}
 
           {/* Batch preview */}
           {batchQty > 0 && (
@@ -1685,56 +1923,70 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
         {/* Transport */}
         {stage === 'preparation' ? (
           <div className="card">
-            <div className="section-title" style={{ marginTop: 0 }}>TRANSPORT</div>
-            <div className="flex flex-wrap gap-1 mb-2">
+            <div className="section-title" style={{ marginTop: 0 }}>CARTON DE RANGEMENT</div>
+            <div className="flex flex-wrap gap-2 mb-2">
               {containers.map((c) => (
                 <button
                   key={c.id}
                   className={`container-tag ${selectedContainer === c.id ? 'selected' : ''}`}
                   style={{
+                    padding: '6px 12px',
+                    borderRadius: 'var(--radius-pill)',
+                    fontWeight: 700,
                     borderColor: selectedContainer === c.id ? 'var(--accent)' : 'var(--border)',
-                    background: c.type === 'loose' ? 'var(--warning-bg)' : c.type === 'large' ? 'var(--over-bg)' : undefined,
+                    background: selectedContainer === c.id ? 'rgba(37, 99, 235, 0.2)' : undefined,
                     cursor: 'pointer',
                   }}
                   onClick={() => setSelectedContainer(selectedContainer === c.id ? null : c.id!)}
                 >
-                  {c.label}
+                  {selectedContainer === c.id ? '✓ ' : ''}{c.label}
                 </button>
               ))}
               <button
-                className="container-tag"
-                style={{ cursor: 'pointer', color: 'var(--accent)' }}
-                onClick={async () => {
-                  const c = await createTransportContainer(billId);
-                  setSelectedContainer(c.id!);
+                className={`container-tag ${selectedContainer === null ? 'selected' : ''}`}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 'var(--radius-pill)',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  borderColor: selectedContainer === null ? 'var(--warning)' : 'var(--border)',
                 }}
+                onClick={() => setSelectedContainer(null)}
               >
-                + CARTON
+                {selectedContainer === null ? '✓ ' : ''}📦 Hors Carton / Vrac
               </button>
               <button
                 className="container-tag"
-                style={{ cursor: 'pointer', color: 'var(--warning)' }}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 'var(--radius-pill)',
+                  cursor: 'pointer',
+                  color: 'var(--accent)',
+                  borderStyle: 'dashed',
+                }}
                 onClick={async () => {
-                  await ensureSpecialContainers(billId);
+                  const c = await createTransportContainer(billId);
+                  setSelectedContainer(c.id!);
+                  showToast(`${c.label} créé`, setToast);
                 }}
               >
-                + VRAC/GRAND
+                + Nouveau Carton
               </button>
             </div>
 
             {/* Show transport breakdown for this line */}
-            {events.filter(e => e.stage === 'preparation' && !e.undone && e.containerId).length > 0 && (
-              <div className="mt-2">
-                <div className="text-xs text-muted mb-1">RÉPARTITION:</div>
+            {events.filter(e => e.stage === 'preparation' && !e.undone).length > 0 && (
+              <div className="mt-2 pt-2" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                <div className="text-xs text-muted mb-1">RÉPARTITION DÉJÀ ENREGISTRÉE :</div>
                 {containers.map((c) => {
                   const qty = events
                     .filter(e => e.stage === 'preparation' && !e.undone && e.containerId === c.id)
                     .reduce((s, e) => s + e.quantity, 0);
                   if (qty === 0) return null;
                   return (
-                    <div key={c.id} className="flex justify-between text-sm">
-                      <span>{c.label}</span>
-                      <span className="font-bold">{qty}</span>
+                    <div key={c.id} className="flex justify-between text-sm py-1">
+                      <span className="font-semibold text-accent">{c.label}</span>
+                      <span className="font-bold">{qty} unités</span>
                     </div>
                   );
                 })}
@@ -1744,9 +1996,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                     .reduce((s, e) => s + e.quantity, 0);
                   if (noContainer === 0) return null;
                   return (
-                    <div className="flex justify-between text-sm">
-                      <span>SANS CARTON</span>
-                      <span className="font-bold">{noContainer}</span>
+                    <div className="flex justify-between text-sm py-1">
+                      <span className="text-muted">Hors Carton / Vrac</span>
+                      <span className="font-bold">{noContainer} unités</span>
                     </div>
                   );
                 })()}
@@ -1777,29 +2029,55 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
         )}
 
         {/* Actions */}
-        <div className="flex gap-2 mb-3">
-          {line.status === 'active' && (
-            <>
-              <button className="btn btn-sm btn-warning flex items-center justify-center gap-1" style={{ flex: 1 }}
-                onClick={() => handleStatusChange('not_found')}>
+        {line.status === 'active' && (
+          <div className="flex flex-col gap-2 mb-3">
+            <div className="flex gap-2">
+              <button
+                className="btn btn-sm flex items-center justify-center gap-1"
+                style={{ flex: 1, background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger)', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+                onClick={() => handleStatusChange('out_of_stock')}
+                title="Stock totalement épuisé dans l'entrepôt"
+              >
+                <IconBan size={15} /> RUPTURE DÉFINITIVE
+              </button>
+              <button
+                className="btn btn-sm btn-warning flex items-center justify-center gap-1"
+                style={{ flex: 1 }}
+                onClick={() => handleStatusChange('not_found')}
+                title="Article introuvable pour l'instant"
+              >
                 <IconSearch size={15} /> INTROUVABLE
               </button>
-              <button className="btn btn-sm btn-danger flex items-center justify-center gap-1" style={{ flex: 1 }}
-                onClick={() => handleStatusChange('cancelled')}>
+            </div>
+            <div className="flex gap-2">
+              <button
+                className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
+                style={{ flex: 1 }}
+                onClick={() => handleStatusChange('cancelled')}
+              >
                 <IconX size={15} /> ANNULER
               </button>
-            </>
-          )}
-          {line.status !== 'active' && (
-            <button className="btn btn-sm btn-primary flex items-center justify-center gap-1" style={{ flex: 1 }}
-              onClick={() => handleStatusChange('active')}>
-              <IconUndo size={15} /> RÉACTIVER
+              <button
+                className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
+                onClick={handleUndo}
+              >
+                <IconUndo size={15} /> UNDO
+              </button>
+            </div>
+          </div>
+        )}
+        {line.status !== 'active' && (
+          <div className="flex gap-2 mb-3">
+            <button
+              className="btn btn-sm btn-primary flex items-center justify-center gap-1"
+              style={{ flex: 1 }}
+              onClick={() => handleStatusChange('active')}
+            >
+              <IconUndo size={15} /> RÉACTIVER L'ARTICLE ({line.status === 'out_of_stock' ? 'RUPTURE' : line.status === 'not_found' ? 'INTROUVABLE' : 'ANNULÉ'})
             </button>
-          )}
-          <button className="btn btn-sm btn-secondary flex items-center gap-1" onClick={handleUndo}>
-            <IconUndo size={15} /> UNDO
-          </button>
-        </div>
+          </div>
+        )}
+
 
         {/* Count history */}
         {events.filter(e => e.stage === stage && !e.undone).length > 0 && (
@@ -1923,9 +2201,10 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           <IconCheck size={20} /> AJOUTER {batchQty > 0 ? batchQty : ''} {stage === 'preparation' ? 'PRÉPARÉ' : stage === 'chargement' ? 'CHARGÉ' : 'POINTÉ'}
         </button>
       </div>
-    </>
+    </ErrorBoundary>
   );
 }
+
 
 // ---- Stepper Component ----
 function Stepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
@@ -1987,7 +2266,20 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
     const startScanning = async () => {
       try {
         const { BrowserMultiFormatReader } = await import('@zxing/browser');
-        reader = new BrowserMultiFormatReader();
+        const { BarcodeFormat, DecodeHintType } = await import('@zxing/library');
+        const hints = new Map();
+        hints.set(DecodeHintType.TRY_HARDER, true);
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+          BarcodeFormat.EAN_13,
+          BarcodeFormat.EAN_8,
+          BarcodeFormat.ITF,
+          BarcodeFormat.CODE_128,
+          BarcodeFormat.CODE_39,
+          BarcodeFormat.UPC_A,
+          BarcodeFormat.UPC_E,
+        ]);
+        reader = new BrowserMultiFormatReader(hints);
+
 
         if (videoRef.current && !cancelled) {
           const controls = await reader.decodeFromConstraints(
@@ -2181,72 +2473,70 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         )}
 
-        {scanResult && matchedLines.length === 0 && !showAssociate && (
+        {scanResult && matchedLines.length === 0 && (
           <div>
-            <div className="text-sm text-muted">CODE-BARRES INCONNU</div>
-            <div className="font-bold text-lg mb-3">{scanResult}</div>
-            <div className="flex flex-col gap-2">
-              <button className="btn btn-primary btn-full flex items-center justify-center gap-2" onClick={() => setShowAssociate(true)}>
-                <IconLink size={16} /> ASSOCIER À UNE LIGNE
-              </button>
-              <button className="btn btn-secondary btn-full flex items-center justify-center gap-2" onClick={() => {
-                if (billIdParam) {
-                  nav(`/bill/${billIdParam}?search=${scanResult}`);
-                } else {
-                  nav(`/?search=${scanResult}`);
-                }
-              }}>
-                <IconSearch size={16} /> CHERCHER DANS BL
-              </button>
-              <button className="btn btn-secondary btn-full flex items-center justify-center gap-2" onClick={() => {
-                if (billIdParam) {
-                  nav(`/bill/${billIdParam}/extras?stage=${stageParam}&ean=${scanResult}`);
-                }
-              }}>
-                <IconPlus size={16} /> ENREGISTRER EXTRA
-              </button>
-              <button className="btn btn-secondary btn-full flex items-center justify-center gap-2" onClick={resetScan}>
-                <IconScan size={18} /> RESCANNER
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <div className="text-xs font-bold text-muted">CODE-BARRES INCONNU</div>
+                <div className="font-bold text-lg" style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
+                  {scanResult}
+                </div>
+              </div>
+              <button className="btn btn-xs btn-secondary flex items-center gap-1" onClick={resetScan}>
+                <IconScan size={14} /> Rescanner
               </button>
             </div>
-          </div>
-        )}
 
-        {/* Associate unknown code to line */}
-        {scanResult && showAssociate && (
-          <div>
-            <div className="text-sm text-muted">ASSOCIER: <strong>{scanResult}</strong></div>
+            <div className="text-xs text-secondary mb-2">
+              Touchez l'article de votre bon pour associer ce code immédiatement :
+            </div>
+
             <input
-              className="input mt-2 mb-2"
+              className="input mb-2"
               type="text"
-              placeholder="Chercher par N°, réf, désignation..."
+              placeholder="Filtrer par N°, réf, désignation..."
               value={associateSearch}
               onChange={(e) => setAssociateSearch(e.target.value)}
               autoFocus
             />
-            <div style={{ maxHeight: '40vh', overflow: 'auto' }}>
-              {associateLines.map((line) => {
+
+            <div style={{ maxHeight: '38vh', overflowY: 'auto' }} className="flex flex-col gap-1 mb-2">
+              {(associateSearch.trim()
+                ? searchLines(billIdParam ? allLines.filter(l => l.billId === Number(billIdParam)) : allLines, associateSearch, 'smart', billIdParam ? Number(billIdParam) : undefined).slice(0, 20)
+                : (billIdParam ? allLines.filter(l => l.billId === Number(billIdParam)) : allLines).slice(0, 20)
+              ).map((line) => {
                 const b = getBillForLine(line);
                 return (
-                  <div key={line.id} className="product-card" onClick={() => handleAssociate(line)}>
-                    <div className="flex items-center gap-2">
-                      <span className="line-no">N°{line.no}</span>
-                      <span className="text-xs text-muted">{b?.client}</span>
+                  <div
+                    key={line.id}
+                    className="product-card"
+                    onClick={() => handleAssociate(line)}
+                    style={{ padding: '8px 12px', cursor: 'pointer' }}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="line-no font-bold" style={{ fontSize: '0.95rem' }}>N°{line.no}</span>
+                      <span className="text-xs font-semibold text-accent">{b?.client}</span>
                     </div>
-                    <div className="text-sm truncate">{line.designation}</div>
-                    <div className="text-xs text-muted">{line.reference || ''} {line.ean ? `• ${line.ean}` : ''}</div>
+                    <div className="text-sm font-semibold truncate">{line.designation}</div>
+                    <div className="text-xs text-muted">
+                      {line.reference ? `RÉF: ${line.reference}` : 'Sans réf.'}
+                    </div>
                   </div>
                 );
               })}
-              {associateLines.length === 0 && (
-                <div className="text-sm text-muted" style={{ padding: 12 }}>Aucune ligne trouvée</div>
-              )}
             </div>
-            <button className="btn btn-secondary btn-full mt-2 flex items-center justify-center gap-1" onClick={() => setShowAssociate(false)}>
-              <IconArrowLeft size={16} /> RETOUR
-            </button>
+
+            {billIdParam && (
+              <button
+                className="btn btn-secondary btn-full flex items-center justify-center gap-2 mt-2"
+                onClick={() => nav(`/bill/${billIdParam}/extras?stage=${stageParam}&ean=${scanResult}`)}
+              >
+                <IconPlus size={16} /> Article absent du bon (Produit Hors-BL)
+              </button>
+            )}
           </div>
         )}
+
 
         {scanResult && matchedLines.length === 1 && !showAssociate && (
           <div>
@@ -2293,7 +2583,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
 // ============================================================
 // SUMMARY / PROBLEMS SCREEN
 // ============================================================
-function SummaryScreen() {
+function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   const nav = useNavigate();
   const { billId: billIdStr } = useParams();
   const billId = Number(billIdStr);
@@ -2305,6 +2595,7 @@ function SummaryScreen() {
   const containers = useBillContainers(billId);
 
   const [summaryTab, setSummaryTab] = useState<'problems' | 'all' | 'cartons' | 'audit'>('problems');
+  const [stageScope, setStageScope] = useState<Stage | 'auto'>('preparation');
 
   const eventsByLine = new Map<number, CountEvent[]>();
   for (const e of events) {
@@ -2315,17 +2606,8 @@ function SummaryScreen() {
 
   if (!bill) return <div className="app-content"><div className="spinner" /></div>;
 
-  const problemLines = lines.filter((line) => {
-    if (line.status !== 'active') return true;
-    const evts = eventsByLine.get(line.id!) || [];
-    const prepTotal = sumStageEvents(evts, 'preparation');
-    const loadTotal = sumStageEvents(evts, 'chargement');
-    const pointTotal = sumStageEvents(evts, 'pointage');
-    const disc = calcDiscrepancy(line, prepTotal);
-    return !disc.isExact || line.orderedQty !== line.originalOrderedQty ||
-           prepTotal !== loadTotal || prepTotal !== pointTotal;
-  });
-
+  // Use decoupled stage problem detection to avoid false alarms
+  const problemLines = getStageProblemLines(lines, eventsByLine, stageScope);
   const displayLines = summaryTab === 'all' ? lines : problemLines;
 
   // Summary stats
@@ -2333,10 +2615,94 @@ function SummaryScreen() {
   const activeLines = lines.filter(l => l.status === 'active').length;
   const cancelledLines = lines.filter(l => l.status === 'cancelled').length;
   const notFoundLines = lines.filter(l => l.status === 'not_found').length;
+  const outOfStockLines = lines.filter(l => l.status === 'out_of_stock').length;
 
   const prep = calcBillProgress(lines, eventsByLine, 'preparation');
   const load = calcBillProgress(lines, eventsByLine, 'chargement');
   const point = calcBillProgress(lines, eventsByLine, 'pointage');
+
+  // WhatsApp Discrepancy Report Generator
+  const generateReport = () => {
+    const stageProblems = getStageProblemLines(lines, eventsByLine, stageScope === 'auto' ? 'preparation' : stageScope);
+
+    const nowStr = new Date().toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    let text = `📦 *RAPPORT D'EXPÉDITION / ÉCARTS - POINTAGE PRO*\n`;
+    text += `📅 Date : ${nowStr}\n`;
+    text += `🏢 Client : *${bill.client}*\n`;
+    text += `📄 N° Bon : *${bill.billNumber}*\n`;
+    text += `------------------------------------\n`;
+    text += `📊 Avancement Préparation : ${prep.done}/${prep.total} (${prep.percent}%)\n`;
+    if (load.done > 0) text += `🚚 Chargement : ${load.done}/${load.total} (${load.percent}%)\n`;
+    text += `------------------------------------\n\n`;
+
+    if (stageProblems.length === 0) {
+      text += `✅ *Aucun écart signalé :* Toutes les lignes préparées sont conformes.\n\n`;
+    } else {
+      text += `⚠️ *ANOMALIES & ÉCARTS DÉTECTÉS (${stageProblems.length}) :*\n\n`;
+      stageProblems.forEach((p, idx) => {
+        const evts = eventsByLine.get(p.id!) || [];
+        const prepQty = sumStageEvents(evts, 'preparation');
+        text += `${idx + 1}. *N°${p.no}* - ${p.designation}\n`;
+        if (p.reference) text += `   Réf: ${p.reference}\n`;
+        if (p.status === 'out_of_stock') {
+          text += `   🔴 *RUPTURE DÉFINITIVE EN ENTREPÔT* (Attendu: ${p.orderedQty})\n`;
+        } else if (p.status === 'not_found') {
+          text += `   🟠 *ARTICLE INTROUVABLE* (Attendu: ${p.orderedQty})\n`;
+        } else if (p.status === 'cancelled') {
+          text += `   ⚪ *ARTICLE ANNULÉ*\n`;
+        } else if (prepQty < p.orderedQty) {
+          text += `   📉 *MANQUANT :* Préparé ${prepQty} / ${p.orderedQty} (Reliquat: -${p.orderedQty - prepQty})\n`;
+        } else if (prepQty > p.orderedQty) {
+          text += `   📈 *EXCÉDENT :* Préparé ${prepQty} / ${p.orderedQty} (+${prepQty - p.orderedQty})\n`;
+        }
+        if (p.orderedQty !== p.originalOrderedQty) {
+          text += `   ✏️ *MODIFIÉ :* Initialement ${p.originalOrderedQty}, ramené à ${p.orderedQty}\n`;
+        }
+        text += `\n`;
+      });
+    }
+
+    if (extras.length > 0) {
+      text += `➕ *ARTICLES HORS-BON AJOUTÉS (${extras.length}) :*\n`;
+      extras.forEach((ex) => {
+        text += `• ${ex.designation || ex.scannedEan || 'Extra'} : Qté ${ex.quantity}\n`;
+      });
+      text += `\n`;
+    }
+
+    if (containers.length > 0) {
+      text += `📦 *RÉPARTITION DES COLIS :*\n`;
+      containers.forEach((c) => {
+        const count = events
+          .filter((e) => e.stage === 'preparation' && !e.undone && e.containerId === c.id)
+          .reduce((s, e) => s + e.quantity, 0);
+        text += `• ${c.label} : ${count} unités\n`;
+      });
+      text += `\n`;
+    }
+
+    text += `_Transmis depuis l'application Pointage Pro._`;
+    return text;
+  };
+
+  const handleShareWhatsApp = () => {
+    const report = generateReport();
+    const url = `https://wa.me/?text=${encodeURIComponent(report)}`;
+    window.open(url, '_blank');
+  };
+
+  const handleCopyReport = () => {
+    const report = generateReport();
+    navigator.clipboard.writeText(report);
+    if (setToast) setToast('Rapport copié dans le presse-papier');
+  };
 
   return (
     <>
@@ -2358,22 +2724,57 @@ function SummaryScreen() {
             <span className="info-label">Actives</span>
             <span className="info-value">{activeLines}</span>
           </div>
+          {outOfStockLines > 0 && (
+            <div className="info-row">
+              <span className="info-label">Ruptures Définitives</span>
+              <span className="info-value" style={{ color: 'var(--danger)', fontWeight: 700 }}>{outOfStockLines}</span>
+            </div>
+          )}
+          {notFoundLines > 0 && (
+            <div className="info-row">
+              <span className="info-label">Introuvables</span>
+              <span className="info-value" style={{ color: 'var(--warning)', fontWeight: 700 }}>{notFoundLines}</span>
+            </div>
+          )}
           {cancelledLines > 0 && (
             <div className="info-row">
               <span className="info-label">Annulées</span>
               <span className="info-value" style={{ color: 'var(--text-muted)' }}>{cancelledLines}</span>
             </div>
           )}
-          {notFoundLines > 0 && (
-            <div className="info-row">
-              <span className="info-label">Introuvables</span>
-              <span className="info-value" style={{ color: 'var(--warning)' }}>{notFoundLines}</span>
-            </div>
-          )}
           <div className="divider" />
           <ProgressRow label="Préparation" progress={prep} />
           <ProgressRow label="Chargement" progress={load} />
           <ProgressRow label="Pointage" progress={point} />
+        </div>
+
+        {/* WhatsApp & Supervisor Report Card */}
+        <div className="card mb-3" style={{ background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
+          <div className="flex justify-between items-center mb-2">
+            <div className="font-bold text-sm flex items-center gap-2" style={{ color: '#22c55e' }}>
+              <IconSend size={18} /> RAPPORT RESPONSABLE (WHATSAPP)
+            </div>
+            <span className="badge badge-active" style={{ fontSize: '0.7rem' }}>Instantané</span>
+          </div>
+          <p className="text-xs text-muted mb-3">
+            Transmettez immédiatement la synthèse des manquants, colis préparés et ruptures de stock à votre responsable par WhatsApp.
+          </p>
+          <div className="flex gap-2">
+            <button
+              className="btn btn-sm btn-full flex items-center justify-center gap-2"
+              style={{ background: '#25D366', color: '#fff', fontWeight: 700, border: 'none' }}
+              onClick={handleShareWhatsApp}
+            >
+              <IconSend size={15} /> Envoyer sur WhatsApp
+            </button>
+            <button
+              className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
+              onClick={handleCopyReport}
+              title="Copier le texte du rapport"
+            >
+              <IconClipboard size={15} /> Copier
+            </button>
+          </div>
         </div>
 
         {extras.length > 0 && (
@@ -2389,7 +2790,7 @@ function SummaryScreen() {
         )}
 
         {/* View Tabs */}
-        <div className="flex gap-1 mb-3 flex-wrap">
+        <div className="flex gap-1 mb-2 flex-wrap">
           <button
             className={`btn btn-sm ${summaryTab === 'problems' ? 'btn-warning' : 'btn-secondary'} flex items-center gap-1`}
             onClick={() => setSummaryTab('problems')}
@@ -2415,6 +2816,31 @@ function SummaryScreen() {
             <IconClipboard size={14} /> AUDIT
           </button>
         </div>
+
+        {/* Stage Scope Selector for Problem Detection */}
+        {summaryTab === 'problems' && (
+          <div className="stage-tabs mb-3">
+            <button
+              className={`stage-tab ${stageScope === 'preparation' ? 'active' : ''}`}
+              onClick={() => setStageScope('preparation')}
+            >
+              Préparation ({getStageProblemLines(lines, eventsByLine, 'preparation').length})
+            </button>
+            <button
+              className={`stage-tab ${stageScope === 'chargement' ? 'active' : ''}`}
+              onClick={() => setStageScope('chargement')}
+            >
+              Chargement ({getStageProblemLines(lines, eventsByLine, 'chargement').length})
+            </button>
+            <button
+              className={`stage-tab ${stageScope === 'pointage' ? 'active' : ''}`}
+              onClick={() => setStageScope('pointage')}
+            >
+              Pointage ({getStageProblemLines(lines, eventsByLine, 'pointage').length})
+            </button>
+          </div>
+        )}
+
 
         {/* PAR CARTON View */}
         {summaryTab === 'cartons' && (

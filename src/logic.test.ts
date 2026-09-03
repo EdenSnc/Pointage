@@ -11,7 +11,10 @@ import {
   smartSearchScore,
   calcPackBreakdown,
   lineBlocksCompletion,
+  roundDownToPack,
+  getStageProblemLines,
 } from './logic';
+
 import type { CountEvent, OrderLine } from './types';
 
 function makeEvent(overrides: Partial<CountEvent> = {}): CountEvent {
@@ -278,4 +281,71 @@ describe('Status blocking rules', () => {
     expect(lineBlocksCompletion(makeLine({ status: 'removed_by_revision' }))).toBe(false);
   });
 });
+
+describe('Pack breakdown safety & sealed pack round down', () => {
+  it('handles null, NaN, and negative totals safely without throwing', () => {
+    expect(calcPackBreakdown(NaN, 12)).toEqual({ fullPacks: 0, loose: 0 });
+    expect(calcPackBreakdown(24, NaN)).toEqual({ fullPacks: 0, loose: 24 });
+    expect(calcPackBreakdown(-5, 10)).toEqual({ fullPacks: 0, loose: 0 });
+    expect(calcPackBreakdown(25, 5)).toEqual({ fullPacks: 5, loose: 0 });
+    expect(calcPackBreakdown(32, 5)).toEqual({ fullPacks: 6, loose: 2 });
+  });
+
+  it('rounds down to nearest sealed pack size (e.g. 32 with pack 5 -> 30 served, 2 missing)', () => {
+    const res5 = roundDownToPack(32, 5);
+    expect(res5).toEqual({ servedQty: 30, missingQty: 2 });
+
+    const res12 = roundDownToPack(32, 12);
+    expect(res12).toEqual({ servedQty: 24, missingQty: 8 });
+
+    const resNone = roundDownToPack(32, null);
+    expect(resNone).toEqual({ servedQty: 32, missingQty: 0 });
+  });
+
+  it('matches 14-digit ITF carton barcode to 13-digit child EAN with score 4.2', () => {
+    const line = makeLine({ ean: '6941782103293' });
+    // Carton ITF-14 has '1' prefix and check digit
+    expect(smartSearchScore(line, '16941782103293')).toBe(4.2);
+  });
+});
+
+describe('Stage-decoupled problem detection (getStageProblemLines)', () => {
+  it('in preparation stage: does NOT flag lines as problem just because chargement is 0', () => {
+    const line1 = makeLine({ id: 1, orderedQty: 24, originalOrderedQty: 24, status: 'active' });
+    const line2 = makeLine({ id: 2, orderedQty: 36, originalOrderedQty: 36, status: 'active' });
+    const line3 = makeLine({ id: 3, orderedQty: 10, originalOrderedQty: 10, status: 'out_of_stock' });
+
+    const eventsByLine = new Map<number, CountEvent[]>([
+      [1, [makeEvent({ orderLineId: 1, stage: 'preparation', quantity: 24 })]], // fully prepared, load=0, point=0
+      [2, [makeEvent({ orderLineId: 2, stage: 'preparation', quantity: 20 })]], // partially prepared (16 short)
+      [3, []], // out of stock
+    ]);
+
+    const problems = getStageProblemLines([line1, line2, line3], eventsByLine, 'preparation');
+    // line1 is 24/24 -> NOT a problem!
+    expect(problems.some(l => l.id === 1)).toBe(false);
+    // line2 is 20/36 -> problem in preparation!
+    expect(problems.some(l => l.id === 2)).toBe(true);
+    // line3 is out_of_stock -> problem!
+    expect(problems.some(l => l.id === 3)).toBe(true);
+    expect(problems).toHaveLength(2);
+  });
+
+  it('in chargement stage: flags line if loaded does not match prepared', () => {
+    const line1 = makeLine({ id: 1, orderedQty: 24, originalOrderedQty: 24, status: 'active' });
+
+    // Prepared 24, but only 20 loaded into truck
+    const eventsByLine = new Map<number, CountEvent[]>([
+      [1, [
+        makeEvent({ orderLineId: 1, stage: 'preparation', quantity: 24 }),
+        makeEvent({ orderLineId: 1, stage: 'chargement', quantity: 20 }),
+      ]],
+    ]);
+
+    const problems = getStageProblemLines([line1], eventsByLine, 'chargement');
+    expect(problems).toHaveLength(1);
+    expect(problems[0].id).toBe(1);
+  });
+});
+
 

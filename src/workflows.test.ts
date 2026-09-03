@@ -35,7 +35,8 @@ function makeLine(overrides: Partial<OrderLine> = {}): OrderLine {
     status: 'active',
     outerPackSize: 20,
     innerPackSize: 10,
-    warehouseZone: 'A-12',
+    warehouseZone: 'NORTH_WEST',
+
     packagesRaw: '2CT/10',
     referenceAliases: ['REF800', '800'],
     createdAt: new Date().toISOString(),

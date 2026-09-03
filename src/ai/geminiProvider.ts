@@ -1,6 +1,7 @@
 import type { LLMProvider, ExtractionResult } from './types';
 import type { ImportPayload } from '../types';
 import { optimizeDocumentImage } from './imageOptimizer';
+import { recordApiUsage } from './quotaTracker';
 
 const GEMINI_SYSTEM_INSTRUCTION = `Tu es un assistant expert en extraction optique de Bons de Livraison (BL) d'entrepôt.
 Analyse l'image ou le texte du bon de livraison et extrais toutes les lignes de produits sous forme de JSON strict.
@@ -55,11 +56,13 @@ async function prepareImagePayload(file: File | Blob): Promise<{ base64: string;
   // Modern cross-platform ArrayBuffer / Buffer fallback (works seamlessly in Browser & Node)
   if (typeof (file as any).arrayBuffer === 'function') {
     const arrayBuf = await (file as any).arrayBuffer();
-    const base64 = typeof Buffer !== 'undefined'
-      ? Buffer.from(arrayBuf).toString('base64')
+    const globalBuffer = (globalThis as any).Buffer;
+    const base64 = typeof globalBuffer !== 'undefined'
+      ? globalBuffer.from(arrayBuf).toString('base64')
       : btoa(String.fromCharCode(...new Uint8Array(arrayBuf)));
     return { base64, mimeType: file.type || 'image/jpeg' };
   }
+
 
   if (typeof FileReader !== 'undefined') {
     return new Promise((resolve, reject) => {
@@ -192,6 +195,7 @@ export const geminiProvider: LLMProvider = {
     }
 
     const payload = sanitizeAndParseJSON(candidateText);
+    recordApiUsage(modelId);
 
     return {
       payload,
@@ -199,6 +203,7 @@ export const geminiProvider: LLMProvider = {
       providerId: 'gemini',
       modelUsed: modelId,
     };
+
   },
 
   async extractFromText(
@@ -257,6 +262,7 @@ export const geminiProvider: LLMProvider = {
     }
 
     const payload = sanitizeAndParseJSON(candidateText);
+    recordApiUsage(modelId);
 
     return {
       payload,
@@ -264,5 +270,6 @@ export const geminiProvider: LLMProvider = {
       providerId: 'gemini',
       modelUsed: modelId,
     };
+
   },
 };

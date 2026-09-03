@@ -9,7 +9,10 @@ import type {
   ImportBillJSON,
   ImportLineJSON,
   Bill,
+  OrderLine,
+  AuditEvent,
 } from './types';
+
 
 export interface ImportIssue {
   billIndex: number;

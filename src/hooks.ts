@@ -303,10 +303,12 @@ export async function updateLineStatus(
   });
 
   let auditType: AuditEvent['type'] = 'status_changed';
-  if (status === 'cancelled') auditType = 'line_cancelled';
+  if (status === 'out_of_stock') auditType = 'line_out_of_stock';
+  else if (status === 'cancelled') auditType = 'line_cancelled';
   else if (status === 'not_found') auditType = 'line_not_found';
   else if (status === 'removed_by_revision') auditType = 'line_removed_by_revision';
   else if (status === 'active') auditType = 'line_reactivated';
+
 
   await db.auditEvents.add({
     billId: line.billId,

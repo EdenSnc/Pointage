@@ -6,7 +6,7 @@
 
 export type Stage = 'preparation' | 'chargement' | 'pointage';
 
-export type LineStatus = 'active' | 'cancelled' | 'not_found' | 'removed_by_revision';
+export type LineStatus = 'active' | 'cancelled' | 'not_found' | 'out_of_stock' | 'removed_by_revision';
 
 export type PointageOutcome = 'accepted' | 'damaged_accepted' | 'damaged_refused' | 'refused';
 
@@ -33,6 +33,7 @@ export type AuditEventType =
   | 'line_added'
   | 'line_cancelled'
   | 'line_not_found'
+  | 'line_out_of_stock'
   | 'line_reactivated'
   | 'identifier_override_added'
   | 'bill_reimported'
