@@ -1,24 +1,20 @@
 // ============================================================
-// POINTAGE — Apple-Inspired Interactive Onboarding Walkthrough
-// Designed for Warehouse Floor Operators & Managers
+// POINTAGE — Apple Minimalist In-App Interactive Tour
+// Guides the user around actual app screens with zero text spam
+// Tuned for low attention span & maximum whitespace
 // ============================================================
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   BrandLogo,
   IconScan,
-  IconImport,
-  IconDisk,
-  IconClipboard,
-  IconBox,
+  IconCamera,
   IconCheck,
   IconX,
-  IconBolt,
-  IconLayers,
-  IconShieldCheck,
   IconArrowLeft,
   IconArrowRight,
-  IconSparkles,
+  IconKey,
 } from './icons';
 
 interface WalkthroughProps {
@@ -26,227 +22,172 @@ interface WalkthroughProps {
   onClose: () => void;
 }
 
-interface Slide {
+interface TourStep {
+  route: string;
   badge: string;
   title: string;
-  subtitle: string;
-  description: string;
+  text: string;
   icon: React.ReactNode;
-  highlights: { label: string; detail: string }[];
 }
 
+const STEPS: TourStep[] = [
+  {
+    route: '/',
+    badge: 'Étape 1 sur 4 • Accueil',
+    title: 'Factures en Cours',
+    text: 'Vos bons de livraison sont centralisés ici. Touchez une facture pour commencer à pointer.',
+    icon: <BrandLogo size={28} />,
+  },
+  {
+    route: '/import',
+    badge: 'Étape 2 sur 4 • Photo IA',
+    title: 'Numérisation de BL',
+    text: 'Photographiez votre bon de livraison papier. L’IA Gemini extrait automatiquement toutes les lignes.',
+    icon: <IconCamera size={26} />,
+  },
+  {
+    route: '/scan',
+    badge: 'Étape 3 sur 4 • Code-Barres',
+    title: 'Scanner Laser & Caméra',
+    text: 'Scannez le code-barres d’un carton pour ouvrir directement son article sans chercher.',
+    icon: <IconScan size={26} />,
+  },
+  {
+    route: '/',
+    badge: 'Étape 4 sur 4 • Autonome',
+    title: '100% Hors-Ligne',
+    text: 'Toutes vos données restent privées sur votre appareil. Configurez votre clé avec la clé 🔑 en haut.',
+    icon: <IconKey size={26} />,
+  },
+];
+
 export function OnboardingWalkthrough({ isOpen, onClose }: WalkthroughProps) {
-  const [currentSlide, setCurrentSlide] = useState(0);
+  const nav = useNavigate();
+  const [currentStep, setCurrentStep] = useState(0);
 
-  const slides: Slide[] = [
-    {
-      badge: 'ARCHITECTURE LOCALE',
-      title: 'Bienvenue sur Pointage Pro',
-      subtitle: 'Moteur d\'entrepôt 100% autonome & local-first',
-      description:
-        'Conçu pour fonctionner sans interruption en zone blanche ou sous abri métallique. Toutes vos données sont stockées sur votre appareil.',
-      icon: <BrandLogo size={54} />,
-      highlights: [
-        { label: 'Zéro Latence', detail: 'Base de données locale IndexedDB instantanée' },
-        { label: '100% Hors-Ligne', detail: 'Aucun serveur ni connexion internet requis' },
-        { label: 'Ergonomie Sombre', detail: 'Noir charbon anti-éblouissement pour Galaxy A54' },
-      ],
-    },
-    {
-      badge: 'INGESTION RAPIDE',
-      title: 'Import & Ingestion des BL',
-      subtitle: 'Collez vos bons de livraison en JSON sans clé API',
-      description:
-        'Importez plusieurs factures simultanément. Transformez n\'importe quel document papier en JSON grâce à notre prompt IA gratuit.',
-      icon: <IconImport size={44} />,
-      highlights: [
-        { label: 'Zéro Clé API', detail: 'Aucun abonnement cloud ni configuration complexe' },
-        { label: 'Prompt IA Gratuit', detail: 'Copiez le prompt dans ChatGPT, Claude ou Gemini' },
-        { label: 'Multi-Factures', detail: 'Gestion de centaines de lignes avec détection d\'erreurs' },
-      ],
-    },
-    {
-      badge: 'FLUX OPÉRATIONNEL',
-      title: 'Les 3 Étapes Entrepôt',
-      subtitle: 'Préparation, Chargement & Pointage Qualité',
-      description:
-        'Un cycle d\'exploitation rigoureux assurant que chaque article préparé est vérifié au chargement puis validé à la réception.',
-      icon: <IconClipboard size={44} />,
-      highlights: [
-        { label: 'PRÉP', detail: 'Prélever et emballer les articles par carton ou vrac' },
-        { label: 'CHARG', detail: 'Vérifier la concordance avant départ transporteur' },
-        { label: 'POINTAGE', detail: 'Réception finale avec qualification des avaries' },
-      ],
-    },
-    {
-      badge: 'PRODUCTIVITÉ AU SOL',
-      title: 'Comptage & Colisage',
-      subtitle: 'Multiplicateurs de packs & validation en 1 tap',
-      description:
-        'Gagnez des heures de pointage. Définissez vos conditionnements cartons et saisissez le reliquat instantanément avec SOLDE.',
-      icon: <IconBox size={44} />,
-      highlights: [
-        { label: 'Arithmétique Colis', detail: 'Carton extérieur × sous-conditionnement intégré' },
-        { label: 'Bouton SOLDE', detail: 'Comptabilise le reste à pointer en une seule touche' },
-        { label: 'Boutons Rapides', detail: '+1, +5, +10, +25 pour un pointage sans clavier' },
-      ],
-    },
-    {
-      badge: 'LECTURE CODE-BARRES',
-      title: 'Scanner Laser & Caméra',
-      subtitle: 'Reconnaissance EAN & liaison des inconnus',
-      description:
-        'Pointez vos articles avec la caméra de votre smartphone ou un terminal durci. Tout code inconnu peut être relié à la volée.',
-      icon: <IconScan size={44} />,
-      highlights: [
-        { label: 'Reconnaissance Rapide', detail: 'Scan instantané EAN-13, EAN-8 et Code 128' },
-        { label: 'Alias Multiples', detail: 'Résolution des références composées (ex: 70380/84)' },
-        { label: 'Liaison Directe', detail: 'Associez un code inconnu à une ligne en 2 secondes' },
-      ],
-    },
-    {
-      badge: 'SÉCURITÉ & AUDIT',
-      title: 'Qualité & Sauvegarde',
-      subtitle: 'Traçabilité complète et export de sécurité',
-      description:
-        'Chaque modification est journalisée dans l\'audit. Exportez vos sauvegardes complètes en un clic vers vos fichiers ou Google Drive.',
-      icon: <IconShieldCheck size={44} />,
-      highlights: [
-        { label: 'Qualification Qualité', detail: 'Ventilation: Conforme, Avarié Accepté, Refusé' },
-        { label: 'Cartons Transport', detail: 'Affectation par Carton A, Carton B, Vrac, Dessus' },
-        { label: 'Sauvegarde 1-Clic', detail: 'Export/Restauration JSON pour préserver vos données' },
-      ],
-    },
-  ];
+  // Navigate to the target route as the step changes
+  useEffect(() => {
+    if (!isOpen) return;
+    const step = STEPS[currentStep];
+    if (step) {
+      nav(step.route);
+    }
+  }, [isOpen, currentStep, nav]);
 
-  // Handle keyboard navigation
+  // Keyboard shortcuts (Left, Right, Escape)
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowRight' && currentSlide < slides.length - 1) {
-        setCurrentSlide((s) => s + 1);
+      if (e.key === 'Escape') handleExit();
+      if (e.key === 'ArrowRight' && currentStep < STEPS.length - 1) {
+        setCurrentStep((s) => s + 1);
       }
-      if (e.key === 'ArrowLeft' && currentSlide > 0) {
-        setCurrentSlide((s) => s - 1);
+      if (e.key === 'ArrowLeft' && currentStep > 0) {
+        setCurrentStep((s) => s - 1);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, currentSlide, slides.length, onClose]);
+  }, [isOpen, currentStep]);
 
   if (!isOpen) return null;
 
-  const slide = slides[currentSlide];
-  const isLast = currentSlide === slides.length - 1;
+  const step = STEPS[currentStep];
+  const isLast = currentStep === STEPS.length - 1;
+
+  const handleExit = () => {
+    localStorage.setItem('pointage_onboarded', 'true');
+    nav('/');
+    onClose();
+  };
 
   const handleNext = () => {
     if (isLast) {
-      localStorage.setItem('pointage_onboarded', 'true');
-      onClose();
+      handleExit();
     } else {
-      setCurrentSlide((s) => s + 1);
+      setCurrentStep((s) => s + 1);
     }
   };
 
   const handlePrev = () => {
-    if (currentSlide > 0) {
-      setCurrentSlide((s) => s - 1);
+    if (currentStep > 0) {
+      setCurrentStep((s) => s - 1);
     }
   };
 
-  const handleSkip = () => {
-    localStorage.setItem('pointage_onboarded', 'true');
-    onClose();
-  };
-
   return (
-    <div className="onboarding-overlay" onClick={handleSkip} role="dialog" aria-modal="true">
-      <div className="onboarding-modal" onClick={(e) => e.stopPropagation()}>
-        {/* Top Header Bar */}
-        <div className="onboarding-header">
-          <div className="onboarding-brand">
-            <span className="onboarding-badge">{slide.badge}</span>
-            <span className="onboarding-step-counter">
-              {currentSlide + 1} / {slides.length}
-            </span>
-          </div>
+    <>
+      {/* Subtle non-blocking ambient overlay */}
+      <div className="tour-backdrop" onClick={handleExit} />
+
+      {/* Floating Apple Glass Tour Card */}
+      <div className="tour-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        {/* Top Header */}
+        <div className="tour-header">
+          <span className="tour-badge">{step.badge}</span>
           <button
-            className="onboarding-close-btn"
-            onClick={handleSkip}
-            aria-label="Fermer le guide"
+            className="tour-close-btn"
+            onClick={handleExit}
+            aria-label="Passer le guide"
+            title="Passer"
           >
-            <IconX size={16} />
+            <IconX size={15} />
           </button>
         </div>
 
-        {/* Slide Body with Smooth Key Re-render */}
-        <div key={currentSlide} className="onboarding-body animate-slide-in">
-          <div className="onboarding-icon-wrapper">
-            <div className="onboarding-icon-halo" />
-            <div className="onboarding-icon-content">{slide.icon}</div>
-          </div>
-
-          <h2 className="onboarding-title">{slide.title}</h2>
-          <h3 className="onboarding-subtitle">{slide.subtitle}</h3>
-          <p className="onboarding-desc">{slide.description}</p>
-
-          {/* Feature Highlights Grid */}
-          <div className="onboarding-highlights">
-            {slide.highlights.map((h, i) => (
-              <div key={i} className="onboarding-highlight-item">
-                <div className="onboarding-highlight-dot">
-                  <IconSparkles size={13} />
-                </div>
-                <div>
-                  <strong className="onboarding-highlight-label">{h.label}: </strong>
-                  <span className="onboarding-highlight-detail">{h.detail}</span>
-                </div>
-              </div>
-            ))}
+        {/* Spacious Body: Icon + Short Punchy Text */}
+        <div className="tour-body">
+          <div className="tour-icon-box">{step.icon}</div>
+          <div className="tour-content">
+            <h2 className="tour-title">{step.title}</h2>
+            <p className="tour-text">{step.text}</p>
           </div>
         </div>
 
-        {/* Apple-Style Navigation Footer */}
-        <div className="onboarding-footer">
-          {/* Dot Indicators */}
-          <div className="onboarding-dots">
-            {slides.map((_, idx) => (
+        {/* Footer: Dots + Actions */}
+        <div className="tour-footer">
+          {/* Progress Indicators */}
+          <div className="tour-dots">
+            {STEPS.map((_, idx) => (
               <button
                 key={idx}
-                className={`onboarding-dot ${idx === currentSlide ? 'active' : ''}`}
-                onClick={() => setCurrentSlide(idx)}
-                aria-label={`Aller au slide ${idx + 1}`}
+                className={`tour-dot ${idx === currentStep ? 'active' : ''}`}
+                onClick={() => setCurrentStep(idx)}
+                aria-label={`Étape ${idx + 1}`}
               />
             ))}
           </div>
 
-          {/* Action Buttons */}
-          <div className="onboarding-actions">
-            {currentSlide > 0 ? (
-              <button className="btn btn-secondary onboarding-btn" onClick={handlePrev}>
-                <IconArrowLeft size={16} /> PRÉCÉDENT
-              </button>
-            ) : (
-              <button className="btn btn-secondary onboarding-btn" onClick={handleSkip}>
-                PASSER
+          {/* Buttons */}
+          <div className="tour-actions">
+            {currentStep > 0 && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={handlePrev}
+                style={{ padding: '7px 12px', fontSize: '0.78rem' }}
+              >
+                <IconArrowLeft size={14} /> Retour
               </button>
             )}
 
-            <button className="btn btn-primary onboarding-btn flex-1" onClick={handleNext}>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleNext}
+              style={{ padding: '7px 16px', fontSize: '0.82rem', fontWeight: 800 }}
+            >
               {isLast ? (
                 <>
-                  <IconCheck size={18} /> DÉMARRER POINTAGE
+                  <IconCheck size={16} /> COMMENCER
                 </>
               ) : (
                 <>
-                  SUIVANT <IconArrowRight size={16} />
+                  Suivant <IconArrowRight size={14} />
                 </>
               )}
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
