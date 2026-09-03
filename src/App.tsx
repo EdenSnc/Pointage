@@ -377,8 +377,8 @@ function HomeScreen({
         <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => nav('/import')}>
           <IconImport size={18} /> IMPORT
         </button>
-        <button className="btn btn-secondary btn-icon" onClick={() => nav('/backup')} title="Sauvegarde">
-          <IconDisk size={18} />
+        <button className="btn btn-secondary btn-icon" onClick={() => nav('/backup')} title="Export & Secours (Fichier)">
+          <IconShare size={18} />
         </button>
         <button className="btn btn-secondary btn-icon" onClick={() => nav('/history')} title="Historique">
           <IconClipboard size={18} />
@@ -2631,17 +2631,30 @@ function BackupScreen({
     <>
       <header className="app-header">
         <button className="back-btn" onClick={() => nav(-1)} aria-label="Retour"><IconArrowLeft size={18} /></button>
-        <h1>SAUVEGARDE</h1>
+        <h1>EXPORT & SECOURS</h1>
       </header>
 
       <div className="app-content">
+        {/* Automatic saving assurance card */}
+        <div className="card" style={{ borderColor: 'var(--success)', background: 'rgba(16, 185, 129, 0.06)' }}>
+          <div className="flex items-center gap-2 font-bold mb-1" style={{ color: 'var(--success)' }}>
+            <IconCheck size={18} /> Enregistrement 100% Automatique & Continu
+          </div>
+          <p className="text-xs text-secondary" style={{ lineHeight: 1.5 }}>
+            Chaque scan, pointage, modification de quantité ou statut est instantanément enregistré dans la mémoire locale de votre téléphone (IndexedDB).
+          </p>
+          <p className="text-xs text-muted mt-1">
+            ✦ Vous n'avez jamais besoin d'enregistrer manuellement. Cet écran sert uniquement à <strong>télécharger un fichier de secours</strong> ou à <strong>transférer vos données</strong> vers un autre appareil.
+          </p>
+        </div>
+
         <div className="card">
-          <div className="section-title" style={{ marginTop: 0 }}>EXPORTER</div>
+          <div className="section-title" style={{ marginTop: 0 }}>EXPORTER (FICHIER JSON)</div>
           <button className="btn btn-primary btn-full btn-lg mb-2 flex items-center justify-center gap-2" onClick={handleExport} disabled={exporting}>
-            <IconDisk size={18} /> {exporting ? 'Export...' : 'EXPORTER SAUVEGARDE'}
+            <IconDisk size={18} /> {exporting ? 'Export...' : 'TÉLÉCHARGER LE FICHIER'}
           </button>
           <button className="btn btn-secondary btn-full flex items-center justify-center gap-2" onClick={handleShare}>
-            <IconShare size={18} /> PARTAGER (Google Drive, etc.)
+            <IconShare size={18} /> PARTAGER (Drive, WhatsApp, Email...)
           </button>
         </div>
 
