@@ -206,6 +206,9 @@ export function smartSearchScore(
   const q = query.trim().toLowerCase();
   if (!q) return -1;
 
+  // Normalized alphanumeric query (handles spaces, slashes, hyphens)
+  const cleanQ = q.replace(/[^a-z0-9]/gi, '');
+
   // 1. exact current reference
   if (line.reference?.toLowerCase() === q) return 1;
   // 2. exact original reference
@@ -220,8 +223,23 @@ export function smartSearchScore(
   if (line.originalEan?.toLowerCase() === q) return 5;
   // 6. reference aliases
   if (line.referenceAliases.some(a => a.toLowerCase() === q)) return 6;
-  // 7. partial reference match (contains query)
-  if (line.reference?.toLowerCase().includes(q) || line.originalReference?.toLowerCase().includes(q)) return 7;
+  // 7. partial reference match (contains query or clean alphanumeric substring)
+  if (
+    line.reference?.toLowerCase().includes(q) ||
+    line.originalReference?.toLowerCase().includes(q) ||
+    (cleanQ.length >= 2 && (
+      (line.reference && line.reference.toLowerCase().replace(/[^a-z0-9]/gi, '').includes(cleanQ)) ||
+      (line.originalReference && line.originalReference.toLowerCase().replace(/[^a-z0-9]/gi, '').includes(cleanQ))
+    ))
+  ) return 7;
+  // 7.5. partial barcode / EAN match (contains query or clean numeric substring, e.g. last 4 digits)
+  if (
+    (q.length >= 3 && (line.ean?.toLowerCase().includes(q) || line.originalEan?.toLowerCase().includes(q))) ||
+    (cleanQ.length >= 3 && (
+      (line.ean && line.ean.replace(/[^a-z0-9]/gi, '').includes(cleanQ)) ||
+      (line.originalEan && line.originalEan.replace(/[^a-z0-9]/gi, '').includes(cleanQ))
+    ))
+  ) return 7.5;
   // 8. partial designation match
   if (line.designation.toLowerCase().includes(q)) return 8;
 

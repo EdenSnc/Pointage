@@ -458,26 +458,40 @@ export function searchLines(
   const q = query.trim().toLowerCase();
   if (!q) return lines;
 
+  const cleanQ = q.replace(/[^a-z0-9]/gi, '');
+
   if (mode === 'no') {
     return lines.filter((l) => l.no === q);
   }
   if (mode === 'ref') {
     return lines.filter(
       (l) =>
-        l.reference?.toLowerCase() === q ||
-        l.originalReference?.toLowerCase() === q ||
-        l.referenceAliases.some((a) => a.toLowerCase() === q)
+        l.reference?.toLowerCase().includes(q) ||
+        l.originalReference?.toLowerCase().includes(q) ||
+        (cleanQ.length >= 2 && (
+          (l.reference && l.reference.toLowerCase().replace(/[^a-z0-9]/gi, '').includes(cleanQ)) ||
+          (l.originalReference && l.originalReference.toLowerCase().replace(/[^a-z0-9]/gi, '').includes(cleanQ))
+        )) ||
+        l.referenceAliases.some((a) => a.toLowerCase().includes(q))
     );
   }
   if (mode === 'ean') {
     // Also check overrides
     const overrideLineIds = (overrides || [])
-      .filter((o) => o.scannedValue.toLowerCase() === q && o.fieldType === 'ean')
+      .filter((o) => (
+        o.scannedValue.toLowerCase().includes(q) ||
+        (cleanQ.length >= 3 && o.scannedValue.replace(/[^a-z0-9]/gi, '').includes(cleanQ))
+      ) && o.fieldType === 'ean')
       .map((o) => o.orderLineId);
+
     return lines.filter(
       (l) =>
-        l.ean?.toLowerCase() === q ||
-        l.originalEan?.toLowerCase() === q ||
+        l.ean?.toLowerCase().includes(q) ||
+        l.originalEan?.toLowerCase().includes(q) ||
+        (cleanQ.length >= 3 && (
+          (l.ean && l.ean.replace(/[^a-z0-9]/gi, '').includes(cleanQ)) ||
+          (l.originalEan && l.originalEan.replace(/[^a-z0-9]/gi, '').includes(cleanQ))
+        )) ||
         overrideLineIds.includes(l.id!)
     );
   }

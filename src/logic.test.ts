@@ -247,6 +247,18 @@ describe('Smart search ranking and priority', () => {
 
     expect(scoreExactNo).toBeLessThan(scoreName);
   });
+
+  it('matches partial barcode (e.g. last 4 digits) with score 7.5', () => {
+    const line = makeLine({ ean: '6941782117149', reference: 'REF-250' });
+    expect(smartSearchScore(line, '17149')).toBe(7.5);
+    expect(smartSearchScore(line, '7821')).toBe(7.5);
+  });
+
+  it('matches partial reference with score 7', () => {
+    const line = makeLine({ reference: '70380/84' });
+    expect(smartSearchScore(line, '70380')).toBe(7);
+    expect(smartSearchScore(line, '84')).toBe(7);
+  });
 });
 
 describe('Status blocking rules', () => {

@@ -261,6 +261,16 @@ function HomeScreen({
   const session = useActiveSession();
   const bills = useSessionBills(session?.id);
   const [showKeyModal, setShowKeyModal] = useState(false);
+  const [showQuantities, setShowQuantities] = useState(() => localStorage.getItem('pointage_show_quantities') === 'true');
+
+  const toggleShowQuantities = () => {
+    setShowQuantities(prev => {
+      const next = !prev;
+      localStorage.setItem('pointage_show_quantities', String(next));
+      showToast(next ? 'Quantités visibles' : 'Quantités masquées (Mode aveugle)', setToast);
+      return next;
+    });
+  };
 
   useEffect(() => {
     // Ensure session exists
@@ -276,6 +286,14 @@ function HomeScreen({
           <span className="brand-pill">PRO</span>
         </div>
         <div className="header-meta">
+          <button
+            className="btn btn-xs btn-ghost btn-icon"
+            onClick={toggleShowQuantities}
+            title={showQuantities ? 'Quantités visibles (Cliquer pour masquer)' : 'Quantités masquées (Cliquer pour afficher)'}
+            style={{ padding: 4 }}
+          >
+            {showQuantities ? '👁️' : '👁️‍🗨️'}
+          </button>
           <button
             className="btn btn-xs btn-ghost btn-icon"
             onClick={() => setShowKeyModal(true)}
@@ -942,6 +960,15 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const [searchMode, setSearchMode] = useState<SearchMode>('smart');
   const [searchQuery, setSearchQuery] = useState('');
   const [showProblemsOnly, setShowProblemsOnly] = useState(false);
+  const [showQuantities, setShowQuantities] = useState(() => localStorage.getItem('pointage_show_quantities') === 'true');
+
+  const toggleShowQuantities = () => {
+    setShowQuantities(prev => {
+      const next = !prev;
+      localStorage.setItem('pointage_show_quantities', String(next));
+      return next;
+    });
+  };
 
   const eventsByLine = new Map<number, CountEvent[]>();
   for (const e of events) {
@@ -1035,7 +1062,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             name="searchQuery"
             aria-label="Rechercher"
             className="search-input"
-            placeholder={searchMode === 'no' ? 'Entrer N°...' : 'Rechercher...'}
+            placeholder={searchMode === 'no' ? 'Entrer N°...' : 'Rechercher (réf, code-barres partiel)...'}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             type={searchMode === 'no' ? 'number' : 'text'}
@@ -1050,14 +1077,23 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </button>
         </div>
 
-        {/* Filters */}
-        <div className="flex gap-2 mb-3">
-          <button
-            className={`btn btn-sm ${showProblemsOnly ? 'btn-warning' : 'btn-secondary'}`}
-            onClick={() => setShowProblemsOnly(!showProblemsOnly)}
-          >
-            <IconWarning size={14} /> {showProblemsOnly ? 'PROBLÈMES' : 'Problèmes'}
-          </button>
+        {/* Filters and Visibility Toggle */}
+        <div className="flex justify-between items-center mb-3">
+          <div className="flex gap-2">
+            <button
+              className={`btn btn-sm ${showProblemsOnly ? 'btn-warning' : 'btn-secondary'}`}
+              onClick={() => setShowProblemsOnly(!showProblemsOnly)}
+            >
+              <IconWarning size={14} /> {showProblemsOnly ? 'PROBLÈMES' : 'Problèmes'}
+            </button>
+            <button
+              className={`btn btn-sm ${showQuantities ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={toggleShowQuantities}
+              title={showQuantities ? 'Quantités visibles (Cliquer pour masquer)' : 'Quantités masquées (Cliquer pour afficher)'}
+            >
+              {showQuantities ? '👁️ Qtés Visibles' : '👁️‍🗨️ Qtés Masquées'}
+            </button>
+          </div>
           <span className="text-sm text-muted" style={{ alignSelf: 'center' }}>
             {displayLines.length}/{lines.length} lignes
           </span>
@@ -1092,10 +1128,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                     <span className="badge badge-exact flex items-center gap-1"><IconCheck size={11} /> EXACT</span>
                   )}
                   {line.status === 'active' && disc.isShort && (
-                    <span className="badge badge-short">{disc.remaining} MANQ</span>
+                    <span className="badge badge-short">{showQuantities ? `${disc.remaining} MANQ` : 'MANQUANT'}</span>
                   )}
                   {line.status === 'active' && disc.isOver && (
-                    <span className="badge badge-over">{disc.over} EXCÉD</span>
+                    <span className="badge badge-over">{showQuantities ? `${disc.over} EXCÉD` : 'EXCÉDENT'}</span>
                   )}
                 </div>
               </div>
@@ -1105,7 +1141,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
 
               <div className="line-qty-row">
                 <span className="qty-label">Attendu</span>
-                <span className="qty-value">{line.orderedQty}</span>
+                <span className="qty-value">{showQuantities ? line.orderedQty : '•••'}</span>
                 <span className="qty-label">
                   {stage === 'preparation' ? 'Préparé' : stage === 'chargement' ? 'Chargé' : 'Pointé'}
                 </span>
@@ -1291,26 +1327,31 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
       </header>
 
       <div className="app-content">
-        {/* Designation */}
+        {/* Product card */}
         <div className="card">
-          <div className="font-semibold" style={{ lineHeight: 1.3 }}>{line.designation}</div>
-          <div className="mt-2 text-sm text-muted">
-            {line.reference && <div>REF: {line.reference}</div>}
-            {line.ean && <div>EAN: {line.ean}</div>}
-            {line.packagesRaw && <div>Colis: {line.packagesRaw}</div>}
-          </div>
-          <div className="flex gap-1 mt-2 flex-wrap">
+          <div className="flex justify-between items-start">
+            <div>
+              <span className="line-no" style={{ fontSize: '1.2rem' }}>N°{line.no}</span>
+              {line.page != null && <span className="line-page" style={{ marginLeft: 8 }}>PAGE {line.page}</span>}
+              <div className="font-bold text-lg mt-1">{line.designation}</div>
+              <div className="text-sm text-secondary mt-1">
+                {line.reference ? `REF: ${line.reference}` : 'Sans réf.'}
+                {line.ean ? ` • EAN: ${line.ean}` : ''}
+              </div>
+              {line.packagesRaw && (
+                <div className="text-xs text-muted mt-1">Colisage document: {line.packagesRaw}</div>
+              )}
+            </div>
             <button className="btn btn-xs btn-ghost flex items-center gap-1" onClick={() => { setEditingField('designation'); setEditFieldVal(line.designation); }}>
-              <IconPencil size={11} /> Désignation
+              <IconPencil size={11} /> Modifier
             </button>
+          </div>
+          <div className="flex gap-2 mt-2">
             <button className="btn btn-xs btn-ghost flex items-center gap-1" onClick={() => { setEditingField('reference'); setEditFieldVal(line.reference || ''); }}>
               <IconPencil size={11} /> Réf
             </button>
             <button className="btn btn-xs btn-ghost flex items-center gap-1" onClick={() => { setEditingField('ean'); setEditFieldVal(line.ean || ''); }}>
               <IconPencil size={11} /> EAN
-            </button>
-            <button className="btn btn-xs btn-ghost flex items-center gap-1" onClick={() => { setEditingField('no'); setEditFieldVal(line.no); }}>
-              <IconPencil size={11} /> N°
             </button>
             <button className="btn btn-xs btn-ghost flex items-center gap-1" onClick={() => { setEditingField('page'); setEditFieldVal(line.page != null ? String(line.page) : ''); }}>
               <IconPencil size={11} /> Page
@@ -1340,14 +1381,25 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           <div className="flex justify-between items-center">
             <div>
               <div className="text-xs text-muted">ATTENDU</div>
-              <div className="qty-big qty-expected">{line.orderedQty}</div>
+              <div className="qty-big qty-expected">{showQuantities ? line.orderedQty : '•••'}</div>
             </div>
-            <button className="btn btn-sm btn-secondary flex items-center gap-1" onClick={() => {
-              setEditingQty(true);
-              setEditQtyVal(String(line.orderedQty));
-            }}>
-              <IconPencil size={13} /> MODIFIER
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className={`btn btn-xs ${showQuantities ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={toggleShowQuantities}
+                style={{ fontSize: '0.72rem' }}
+                title="Afficher/masquer les quantités attendues"
+              >
+                {showQuantities ? '👁️ Visible' : '👁️‍🗨️ Masqué'}
+              </button>
+              <button className="btn btn-sm btn-secondary flex items-center gap-1" onClick={() => {
+                setEditingQty(true);
+                setEditQtyVal(String(line.orderedQty));
+              }}>
+                <IconPencil size={13} /> MODIFIER
+              </button>
+            </div>
           </div>
 
           <div className="divider" />
@@ -1384,8 +1436,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               {stage === 'preparation' ? 'PRÉPARATION' : stage === 'chargement' ? 'CHARGEMENT' : 'POINTAGE'}
             </span>
             {disc.isExact && stageTotal > 0 && <span className="badge badge-exact flex items-center gap-1"><IconCheck size={11} /> EXACT</span>}
-            {disc.isShort && <span className="badge badge-short">{disc.remaining} MANQUANTS</span>}
-            {disc.isOver && <span className="badge badge-over">{disc.over} EXCÉDENT</span>}
+            {disc.isShort && <span className="badge badge-short">{showQuantities ? `${disc.remaining} MANQUANTS` : 'MANQUANTS'}</span>}
+            {disc.isOver && <span className="badge badge-over">{showQuantities ? `${disc.over} EXCÉDENT` : 'EXCÉDENT'}</span>}
           </div>
           <div className="flex justify-between mt-2">
             <div>
@@ -1403,11 +1455,11 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               <div className="qty-big" style={{
                 color: disc.remaining > 0 ? 'var(--warning)' : 'var(--success)'
               }}>
-                {disc.remaining}
+                {showQuantities ? disc.remaining : '•••'}
               </div>
             </div>
           </div>
-          {innerPack && (
+          {innerPack && showQuantities && (
             <div className="text-xs text-muted mt-2">
               = {calcPackBreakdown(disc.remaining, innerPack).fullPacks} paquets × {innerPack} + {calcPackBreakdown(disc.remaining, innerPack).loose} unités
             </div>
@@ -1996,21 +2048,47 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
       ? allLines.filter(l => l.billId === Number(billIdParam))
       : allLines;
 
+    const trimmed = code.trim();
+    const lower = trimmed.toLowerCase();
+    const clean = lower.replace(/[^a-z0-9]/gi, '');
+
     // Find line IDs matched via identifier overrides
     const overrideLineIds = new Set(
       allOverrides
-        .filter(o => o.scannedValue === code)
+        .filter(o => 
+          o.scannedValue.toLowerCase() === lower ||
+          (clean.length >= 3 && o.scannedValue.replace(/[^a-z0-9]/gi, '').includes(clean))
+        )
         .map(o => o.orderLineId)
     );
 
-    return linesToSearch.filter(l =>
-      l.ean === code ||
-      l.originalEan === code ||
-      l.reference === code ||
-      l.originalReference === code ||
-      l.referenceAliases.includes(code) ||
+    // 1. Exact matches first
+    const exactMatches = linesToSearch.filter(l =>
+      l.ean?.toLowerCase() === lower ||
+      l.originalEan?.toLowerCase() === lower ||
+      l.reference?.toLowerCase() === lower ||
+      l.originalReference?.toLowerCase() === lower ||
+      l.referenceAliases.some(a => a.toLowerCase() === lower) ||
       overrideLineIds.has(l.id!)
     );
+
+    if (exactMatches.length > 0) return exactMatches;
+
+    // 2. Partial matches (reference substring, barcode substring, or clean alphanumeric substring)
+    if (trimmed.length >= 2) {
+      return linesToSearch.filter(l =>
+        l.reference?.toLowerCase().includes(lower) ||
+        l.originalReference?.toLowerCase().includes(lower) ||
+        (l.ean && (l.ean.toLowerCase().includes(lower) || (clean.length >= 3 && l.ean.replace(/[^a-z0-9]/gi, '').includes(clean)))) ||
+        (l.originalEan && (l.originalEan.toLowerCase().includes(lower) || (clean.length >= 3 && l.originalEan.replace(/[^a-z0-9]/gi, '').includes(clean)))) ||
+        (clean.length >= 2 && (
+          (l.reference && l.reference.toLowerCase().replace(/[^a-z0-9]/gi, '').includes(clean)) ||
+          (l.originalReference && l.originalReference.toLowerCase().replace(/[^a-z0-9]/gi, '').includes(clean))
+        ))
+      );
+    }
+
+    return [];
   };
 
   const handleManualSearch = () => {
