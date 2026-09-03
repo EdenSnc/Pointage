@@ -8,38 +8,39 @@
 
 :root,
 [data-theme="dark"] {
-  /* Soothing Dark Charcoal Black — Zero Eye Strain */
-  --bg-deep: #08090c;
-  --bg-canvas: #0e1017;
-  --bg-card: rgba(18, 21, 29, 0.94);
-  --bg-card-hover: rgba(25, 29, 40, 0.98);
-  --bg-card-active: rgba(32, 38, 52, 1);
-  --bg-surface: rgba(255, 255, 255, 0.08);
-  --bg-surface-elevated: rgba(255, 255, 255, 0.14);
-  --bg-input: #141720;
+  /* Matte Charcoal Black — Pure Charcoal, Zero Midnight Blue Tint */
+  --bg-deep: #0c0d10;
+  --bg-canvas: #121316;
+  --bg-card: rgba(22, 23, 27, 0.96);
+  --bg-card-hover: rgba(30, 31, 37, 0.98);
+  --bg-card-active: rgba(38, 40, 48, 1);
+  --bg-surface: rgba(255, 255, 255, 0.06);
+  --bg-surface-elevated: rgba(255, 255, 255, 0.11);
+  --bg-input: #18191e;
 
   /* Glassmorphism Specs with Distinct High-Contrast Borders */
-  --glass-blur: blur(28px) saturate(190%);
-  --glass-border: 1px solid rgba(255, 255, 255, 0.14);
-  --glass-border-subtle: 1px solid rgba(255, 255, 255, 0.08);
-  --glass-border-bright: 1px solid rgba(255, 255, 255, 0.24);
-  --glass-shadow: 0 8px 32px -6px rgba(0, 0, 0, 0.7), inset 0 1px 0 0 rgba(255, 255, 255, 0.14);
-  --glass-shadow-lg: 0 20px 48px -8px rgba(0, 0, 0, 0.85), inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
-  --glass-shadow-glow: 0 0 30px -5px rgba(59, 130, 246, 0.4);
+  --glass-blur: blur(28px) saturate(180%);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.11);
+  --glass-border-subtle: 1px solid rgba(255, 255, 255, 0.06);
+  --glass-border-bright: 1px solid rgba(255, 255, 255, 0.22);
+  --glass-shadow: 0 8px 32px -6px rgba(0, 0, 0, 0.7), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+  --glass-shadow-lg: 0 20px 48px -8px rgba(0, 0, 0, 0.85), inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
+  --glass-shadow-glow: 0 0 30px -5px rgba(16, 185, 129, 0.25);
 
   /* Typography — Maximum Contrast (WCAG AAA) */
   --font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
   --text-primary: #ffffff;        /* Pure crisp white (100% legibility) */
-  --text-secondary: #cbd5e1;      /* Light silver slate (never blends) */
-  --text-muted: #94a3b8;          /* Clear readable slate (never dark/invisible) */
+  --text-secondary: #d1d5db;      /* Light neutral silver slate */
+  --text-muted: #9ca3af;          /* Clear readable neutral slate */
 
-  /* Brand Identity Tokens — Pointage Official Jade & Obsidian */
-  --brand-obsidian: #121620;
+  /* Brand Identity Tokens — Pointage Official Jade & Matte Charcoal */
+  --brand-obsidian: #18191e;
+  --brand-p-stroke: rgba(255, 255, 255, 0.35);
   --brand-jade: #2ea885;
   --brand-jade-light: #34d399;
   --brand-jade-dark: #0f766e;
-  --brand-sage: #7c9088;
+  --brand-sage: #9ca3af;
   --brand-paper: #ffffff;
 
   /* Primary Brand Accent — Signature Emerald Jade */
@@ -48,6 +49,7 @@
   --accent-light: #34d399;
   --accent-dark: #059669;
   --accent-gradient: linear-gradient(135deg, #10b981 0%, #0d9488 100%);
+
 
   
   --success: #10b981;
@@ -84,9 +86,9 @@
 }
 
 [data-theme="light"] {
-  /* Soft Muted Grey Theme — High Contrast, Non-Glaring */
-  --bg-deep: #e9ecf2;
-  --bg-canvas: #f1f4f9;
+  /* Clean High-Contrast Light Theme */
+  --bg-deep: #edf0f5;
+  --bg-canvas: #f4f6fa;
   --bg-card: #ffffff;
   --bg-card-hover: #f8fafc;
   --bg-card-active: #edf2f7;
@@ -95,23 +97,24 @@
   --bg-input: #ffffff;
 
   --glass-blur: blur(12px);
-  --glass-border: 1px solid #cbd5e1;
-  --glass-border-subtle: 1px solid #e2e8f0;
-  --glass-border-bright: 1px solid #94a3b8;
+  --glass-border: 1px solid #d1d5db;
+  --glass-border-subtle: 1px solid #e5e7eb;
+  --glass-border-bright: 1px solid #9ca3af;
   --glass-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06);
   --glass-shadow-lg: 0 12px 32px -4px rgba(0, 0, 0, 0.14), 0 4px 8px -2px rgba(0, 0, 0, 0.08);
-  --glass-shadow-glow: 0 0 20px rgba(29, 78, 216, 0.2);
+  --glass-shadow-glow: 0 0 20px rgba(5, 150, 105, 0.2);
 
-  --text-primary: #0f172a;        /* Deep midnight slate for high contrast */
-  --text-secondary: #334155;      /* Dark slate */
-  --text-muted: #64748b;          /* Legible muted */
+  --text-primary: #111827;        /* Neutral dark slate */
+  --text-secondary: #374151;      /* Charcoal text */
+  --text-muted: #6b7280;          /* Legible neutral muted */
 
   /* Light Theme Brand Tokens */
-  --brand-obsidian: #161922;
+  --brand-obsidian: #16181f;
+  --brand-p-stroke: rgba(0, 0, 0, 0.18);
   --brand-jade: #059669;
   --brand-jade-light: #10b981;
   --brand-jade-dark: #047857;
-  --brand-sage: #5b8276;
+  --brand-sage: #4b5563;
   --brand-paper: #ffffff;
 
   --accent: #059669;
@@ -119,6 +122,7 @@
   --accent-light: #10b981;
   --accent-dark: #047857;
   --accent-gradient: linear-gradient(135deg, #059669 0%, #0f766e 100%);
+
 
 
   --success: #059669;
@@ -355,7 +359,7 @@ body {
   justify-content: space-between;
   gap: 10px;
   padding: 12px 16px;
-  background: rgba(10, 13, 20, 0.98);
+  background: rgba(18, 19, 23, 0.98);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border-bottom: var(--glass-border);
@@ -363,10 +367,11 @@ body {
 }
 
 [data-theme="light"] .app-header {
-  background: rgba(248, 250, 252, 0.98);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.98);
+  border-bottom: 1px solid #e5e7eb;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
 }
+
 
 
 .brand-container {

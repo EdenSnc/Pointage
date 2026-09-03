@@ -118,14 +118,14 @@ export default function App() {
     return localStorage.getItem('pointage_onboarded') !== 'true';
   });
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    // Default strictly to soothing dark charcoal black
+    // Default to clean, high-contrast light mode
     const saved = localStorage.getItem('pointage_theme');
-    if (saved === 'light') {
-      localStorage.setItem('pointage_theme', 'dark');
-      return 'dark';
+    if (saved === 'dark' || saved === 'light') {
+      return saved;
     }
-    return (saved as 'dark' | 'light') || 'dark';
+    return 'light';
   });
+
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);

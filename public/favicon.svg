@@ -46,7 +46,11 @@
     <path
       d="M 160 416 C 114 416 88 390 88 344 L 88 168 C 88 96 136 56 220 56 L 320 56 C 408 56 456 104 456 192 L 456 244 C 456 332 408 380 320 380 L 264 380 C 258 380 252 384 250 390 C 244 406 236 416 216 416 Z"
       fill="url(#favPBodyGrad)"
+      stroke="rgba(255, 255, 255, 0.26)"
+      stroke-width="10"
+      stroke-linejoin="round"
     />
+
 
     <!-- Inner White Paper Document -->
     <path

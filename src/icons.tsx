@@ -19,9 +19,9 @@ export function BrandLogo({ size = 26, style, className }: IconProps) {
     >
       <defs>
         <linearGradient id="pBodyGrad" x1="15%" y1="10%" x2="85%" y2="90%">
-          <stop offset="0%" stopColor="#252b3b" />
-          <stop offset="60%" stopColor="#161924" />
-          <stop offset="100%" stopColor="#0f1118" />
+          <stop offset="0%" stopColor="#323642" />
+          <stop offset="50%" stopColor="#20232c" />
+          <stop offset="100%" stopColor="#14151b" />
         </linearGradient>
         <linearGradient id="pJadeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#4ade80" />
@@ -37,11 +37,15 @@ export function BrandLogo({ size = 26, style, className }: IconProps) {
         </filter>
       </defs>
 
-      {/* Outer Squircle Container / 'P' Letter Frame */}
+      {/* Outer Squircle Container / 'P' Letter Frame with Specular Contrast Rim */}
       <path
         d="M 160 416 C 114 416 88 390 88 344 L 88 168 C 88 96 136 56 220 56 L 320 56 C 408 56 456 104 456 192 L 456 244 C 456 332 408 380 320 380 L 264 380 C 258 380 252 384 250 390 C 244 406 236 416 216 416 Z"
         fill="url(#pBodyGrad)"
+        stroke="var(--brand-p-stroke, rgba(255, 255, 255, 0.28))"
+        strokeWidth="10"
+        strokeLinejoin="round"
       />
+
 
       {/* Inner White Paper Document */}
       <path

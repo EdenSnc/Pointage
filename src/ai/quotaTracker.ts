@@ -43,7 +43,18 @@ function safeSetItem(key: string, value: string): void {
   memoryStorage[key] = value;
 }
 
+export function _resetQuotaTrackerForTest(): void {
+
+  for (const k of Object.keys(memoryStorage)) {
+    delete memoryStorage[k];
+  }
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try { window.localStorage.clear(); } catch {}
+  }
+}
+
 export function getDailyUsage(): DailyUsage {
+
   const today = getTodayKey();
   const raw = safeGetItem(`pointage_api_usage_${today}`);
   let parsed = { lite: 0, flash: 0 };
