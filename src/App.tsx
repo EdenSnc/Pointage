@@ -1420,6 +1420,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const [useDirectEntry, setUseDirectEntry] = useState(false);
   const [selectedContainer, setSelectedContainer] = useState<number | null>(null);
   const [outcome, setOutcome] = useState<PointageOutcome>('accepted');
+  const [refusalNote, setRefusalNote] = useState('');
+
 
   // Edit mode
   const [editingQty, setEditingQty] = useState(false);
@@ -1472,8 +1474,12 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
       stage,
       batchQty,
       stage === 'preparation' ? selectedContainer : null,
-      stage === 'pointage' ? outcome : null
+      stage === 'pointage' ? outcome : null,
+      stage === 'pointage' && outcome !== 'accepted' ? refusalNote : null
     );
+
+    if (stage === 'pointage') setRefusalNote('');
+
 
     // Save packaging if set
     if (line.reference && (outerPack || innerPack)) {
@@ -1780,8 +1786,41 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 </button>
               ))}
             </div>
+
+            {stage === 'pointage' && outcome !== 'accepted' && (
+              <div className="mt-3 p-2" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-badge)', border: '1px solid var(--glass-border-bright)' }}>
+                <div className="text-xs font-bold text-muted mb-1">MOTIF DU REFUS OU PRÉCISION DU MAGASIN :</div>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {['Emballage écrasé / ouvert', 'Article cassé / défectueux', 'Non commandé / Réf erronée', 'Date dépassée'].map(chip => (
+                    <button
+                      key={chip}
+                      type="button"
+                      className="btn btn-xs btn-ghost"
+                      style={{
+                        fontSize: '0.75rem',
+                        borderColor: refusalNote === chip ? 'var(--accent)' : 'var(--border)',
+                        background: refusalNote === chip ? 'var(--accent-glow)' : 'transparent',
+                        color: refusalNote === chip ? 'var(--accent)' : 'inherit',
+                      }}
+                      onClick={() => setRefusalNote(chip)}
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  className="input input-sm"
+                  style={{ width: '100%' }}
+                  placeholder="Ou précisez le problème (ex: 2 trousses fermeture bloquée)..."
+                  value={refusalNote}
+                  onChange={e => setRefusalNote(e.target.value)}
+                />
+              </div>
+            )}
           </div>
         )}
+
 
         {/* Quantity input */}
         <div className="card">
@@ -2675,9 +2714,19 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
         if (p.orderedQty !== p.originalOrderedQty) {
           text += `   ✏️ *MODIFIÉ :* Initialement ${p.originalOrderedQty}, ramené à ${p.orderedQty}\n`;
         }
+
+        if (stageScope === 'pointage') {
+          const pointageEvts = evts.filter(e => e.stage === 'pointage' && !e.undone);
+          const refusedOrDamaged = pointageEvts.filter(e => e.outcome === 'damaged_refused' || e.outcome === 'refused' || e.outcome === 'damaged_accepted');
+          refusedOrDamaged.forEach(re => {
+            const outcomeLabel = re.outcome === 'damaged_refused' ? 'Avarié Refusé' : re.outcome === 'damaged_accepted' ? 'Avarié Accepté' : 'Refusé';
+            text += `   🚫 *${outcomeLabel} :* Qté ${re.quantity}${re.note ? ` • Motif: "${re.note}"` : ''}\n`;
+          });
+        }
         text += `\n`;
       });
     }
+
 
     if (extras.length > 0) {
       text += `➕ *ARTICLES HORS-BON AJOUTÉS (${extras.length}) :*\n`;

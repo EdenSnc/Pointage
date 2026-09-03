@@ -105,9 +105,11 @@ export interface CountEvent {
   quantity: number;
   containerId: number | null; // transport container id
   outcome: PointageOutcome | null; // only for pointage
+  note?: string | null; // Reason for refusal or incident details
   undone: boolean;
   createdAt: string;
 }
+
 
 export interface TransportContainer {
   id?: number;

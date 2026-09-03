@@ -210,7 +210,8 @@ export async function addCountEvent(
   stage: Stage,
   quantity: number,
   containerId: number | null = null,
-  outcome: PointageOutcome | null = null
+  outcome: PointageOutcome | null = null,
+  note: string | null = null
 ): Promise<number> {
   return db.countEvents.add({
     billId,
@@ -219,10 +220,12 @@ export async function addCountEvent(
     quantity,
     containerId,
     outcome,
+    note: note?.trim() || null,
     undone: false,
     createdAt: new Date().toISOString(),
   });
 }
+
 
 export async function undoLastCount(
   orderLineId: number,
