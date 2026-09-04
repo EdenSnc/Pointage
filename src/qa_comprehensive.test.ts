@@ -434,8 +434,9 @@ describe('QA: WhatsApp Discrepancy Report Generator', () => {
     expect(problems.length).toBe(0);
 
     // Build sample report string
-    let report = `📦 *RAPPORT D'EXPÉDITION / ÉCARTS - POINTAGE PRO*\n`;
+    let report = `📦 *RAPPORT D'EXPÉDITION / ÉCARTS - POINTAGE*\n`;
     report += `🏢 Client : *${bill.client}*\n`;
+
     report += `📄 N° Bon : *${bill.billNumber}*\n`;
     if (problems.length === 0) {
       report += `✅ *Aucun écart signalé :* Toutes les lignes préparées sont conformes.\n`;

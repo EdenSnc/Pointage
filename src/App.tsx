@@ -103,6 +103,8 @@ import { OnboardingWalkthrough } from './OnboardingWalkthrough';
 import { providerRegistry } from './ai/providerRegistry';
 import { ErrorBoundary } from './ErrorBoundary';
 import { SettingsModal } from './SettingsModal';
+import { FastScanQuantityCard } from './FastScanQuantityCard';
+
 
 
 // ---- Toast ----
@@ -336,9 +338,9 @@ function HomeScreen({
           <div className="brand-text">
             <div className="flex items-center gap-2">
               <span className="brand-title">Pointage</span>
-              <span className="brand-pill">PRO</span>
             </div>
             <span className="brand-subtitle">Warehouse Bills Tracker</span>
+
           </div>
         </div>
 
@@ -457,8 +459,9 @@ function HomeScreen({
         {/* Subtle Apple-style credits & Guide trigger */}
         <footer className="app-credits">
           <div className="credits-badge">
-            <span>POINTAGE PRO</span> • <span>MOTEUR HORS-LIGNE LOCAL-FIRST</span>
+            <span>POINTAGE</span> • <span>MOTEUR HORS-LIGNE LOCAL-FIRST</span>
           </div>
+
           <div className="credits-sub">Algorithme d'Entrepôt Découplé • 100% Hors-Ligne</div>
           <div className="text-center mt-2">
             <button
@@ -2417,6 +2420,8 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
   const scanLockRef = useRef(false);
   const [showAssociate, setShowAssociate] = useState(false);
   const [associateSearch, setAssociateSearch] = useState('');
+  const [selectedLine, setSelectedLine] = useState<OrderLine | null>(null);
+
 
   // Start camera
   useEffect(() => {
@@ -2498,6 +2503,11 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
     // Find matches (now including overrides)
     const matches = findLinesByCode(code);
     setMatchedLines(matches);
+    if (matches.length === 1) {
+      setSelectedLine(matches[0]);
+    } else {
+      setSelectedLine(null);
+    }
 
     // Stop camera
     if (streamRef.current) {
@@ -2505,6 +2515,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
       streamRef.current = null;
     }
   };
+
 
   const findLinesByCode = (code: string): OrderLine[] => {
     const linesToSearch = billIdParam
@@ -2574,11 +2585,13 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
   const resetScan = () => {
     setScanResult(null);
     setMatchedLines([]);
+    setSelectedLine(null);
     setShowAssociate(false);
     setAssociateSearch('');
     scanLockRef.current = false;
     setScanning(true);
   };
+
 
   const getBillForLine = (line: OrderLine) => {
     return bills.find(b => b.id === line.billId);
@@ -2700,47 +2713,65 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
         )}
 
 
-        {scanResult && matchedLines.length === 1 && !showAssociate && (
-          <div>
-            <div className="text-sm text-muted">TROUVÉ</div>
-            <div className="font-bold">{matchedLines[0].designation}</div>
-            <div className="text-sm text-muted mt-1">
-              N°{matchedLines[0].no} • {getBillForLine(matchedLines[0])?.client}
-            </div>
-            <button className="btn btn-success btn-full btn-lg mt-3" onClick={() => navigateToLine(matchedLines[0])}>
-              OUVRIR
-            </button>
-            <button className="btn btn-secondary btn-full mt-2 flex items-center justify-center gap-2" onClick={resetScan}>
-              <IconScan size={18} /> RESCANNER
-            </button>
-          </div>
+        {scanResult && (matchedLines.length === 1 || selectedLine) && !showAssociate && (
+          <FastScanQuantityCard
+            line={selectedLine || matchedLines[0]}
+            bill={getBillForLine(selectedLine || matchedLines[0])}
+            stage={(stageParam as Stage) || 'preparation'}
+            onNextScan={resetScan}
+            onOpenLine={navigateToLine}
+            setToast={setToast}
+          />
         )}
 
-        {scanResult && matchedLines.length > 1 && !showAssociate && (
+        {scanResult && matchedLines.length > 1 && !selectedLine && !showAssociate && (
           <div>
-            <div className="text-sm text-muted">TROUVÉ DANS {matchedLines.length} LIGNES</div>
-            <div className="font-bold mb-2">{scanResult}</div>
-            {matchedLines.map((line) => {
-              const b = getBillForLine(line);
-              return (
-                <div key={line.id} className="product-card" onClick={() => navigateToLine(line)}>
-                  <div className="flex items-center gap-2">
-                    <span className="line-no">N°{line.no}</span>
-                    <span className="text-xs text-muted">{b?.client}</span>
-                  </div>
-                  <div className="text-sm truncate">{line.designation}</div>
+            <div className="flex justify-between items-center mb-2">
+              <div>
+                <div className="text-xs font-bold text-muted">CODE DÉTECTÉ DANS {matchedLines.length} LIGNES</div>
+                <div className="font-bold text-base" style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
+                  {scanResult}
                 </div>
-              );
-            })}
-            <button className="btn btn-secondary btn-full mt-2 flex items-center justify-center gap-2" onClick={resetScan}>
-              <IconScan size={18} /> RESCANNER
-            </button>
+              </div>
+              <button className="btn btn-xs btn-secondary flex items-center gap-1" onClick={resetScan}>
+                <IconScan size={14} /> Rescanner
+              </button>
+            </div>
+            <div className="text-xs text-muted mb-2">
+              Touchez la ligne pour pointer et ajuster la quantité directement :
+            </div>
+            <div className="flex flex-col gap-2 mb-2" style={{ maxHeight: '45vh', overflowY: 'auto' }}>
+              {matchedLines.map((line) => {
+                const b = getBillForLine(line);
+                return (
+                  <div
+                    key={line.id}
+                    className="product-card"
+                    onClick={() => setSelectedLine(line)}
+                    style={{ padding: '10px 14px', cursor: 'pointer', margin: 0 }}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="line-no font-bold" style={{ fontSize: '1rem' }}>N°{line.no}</span>
+                      <span className="badge badge-active" style={{ fontSize: '0.7rem' }}>
+                        Qté attendue : {line.orderedQty}
+                      </span>
+
+                    </div>
+                    <div className="font-semibold text-sm truncate">{line.designation}</div>
+                    <div className="text-xs text-muted">
+                      {b?.client} • {line.reference ? `RÉF: ${line.reference}` : 'Sans réf.'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
     </div>
   );
 }
+
 
 // ============================================================
 // SUMMARY / PROBLEMS SCREEN
@@ -2795,7 +2826,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
       minute: '2-digit',
     });
 
-    let text = `📦 *RAPPORT D'EXPÉDITION / ÉCARTS - POINTAGE PRO*\n`;
+    let text = `📦 *RAPPORT D'EXPÉDITION / ÉCARTS - POINTAGE*\n`;
     text += `📅 Date : ${nowStr}\n`;
     text += `🏢 Client : *${bill.client}*\n`;
     text += `📄 N° Bon : *${bill.billNumber}*\n`;
@@ -2860,7 +2891,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
       text += `\n`;
     }
 
-    text += `_Transmis depuis l'application Pointage Pro._`;
+    text += `_Transmis depuis l'application Pointage._`;
     return text;
   };
 
@@ -2878,10 +2909,11 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
 
   const handleSendEmail = () => {
     const report = generateReport();
-    const subject = encodeURIComponent(`Pointage Pro — Synthèse ${bill.billNumber} (${bill.client})`);
+    const subject = encodeURIComponent(`Pointage — Synthèse ${bill.billNumber} (${bill.client})`);
     const body = encodeURIComponent(report);
     window.location.href = `mailto:${reportEmail}?subject=${subject}&body=${body}`;
   };
+
 
   const handleCopyReport = () => {
     const report = generateReport();

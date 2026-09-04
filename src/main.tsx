@@ -41,8 +41,9 @@ const updateSW = registerSW({
     }
   },
   onOfflineReady() {
-    console.log('Pointage Pro prêt pour le travail hors-ligne');
+    console.log('Pointage prêt pour le travail hors-ligne');
   },
+
 });
 
 // When new service worker takes over, reload cleanly if not actively counting

@@ -1279,9 +1279,9 @@ body {
   width: 78%;
   max-width: 300px;
   height: 150px;
-  border: 2px solid rgba(41, 121, 255, 0.8);
+  border: 2px solid rgba(16, 185, 129, 0.85);
   border-radius: 22px;
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65), 0 0 24px rgba(41, 121, 255, 0.4);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65), 0 0 24px rgba(16, 185, 129, 0.4);
 }
 
 .scanner-close {
@@ -1299,13 +1299,16 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(18, 24, 38, 0.95);
+  background: var(--bg-card);
   backdrop-filter: var(--glass-blur);
-  padding: 20px;
+  padding: 16px 18px 24px 18px;
   border-radius: 28px 28px 0 0;
   border-top: var(--glass-border-bright);
-  box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.4);
+  max-height: 82vh;
+  overflow-y: auto;
 }
+
 
 /* ============================================================
    HELPERS, WHITESPACE & REFINEMENTS

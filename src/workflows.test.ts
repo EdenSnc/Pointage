@@ -237,7 +237,7 @@ describe('Workflow 5: Onboarding Walkthrough & Experience Integrity', () => {
 
   it('validates that all 6 onboarding chapters cover key warehouse operations', () => {
     const chapters = [
-      'Bienvenue sur Pointage Pro',
+      'Bienvenue sur Pointage',
       'Import & Ingestion des BL',
       'Les 3 Étapes Entrepôt',
       'Comptage & Colisage',
@@ -246,12 +246,85 @@ describe('Workflow 5: Onboarding Walkthrough & Experience Integrity', () => {
     ];
 
     expect(chapters.length).toBe(6);
-    expect(chapters[0]).toContain('Pointage Pro');
+    expect(chapters[0]).toContain('Pointage');
+
     expect(chapters[1]).toContain('Import');
     expect(chapters[2]).toContain('Étapes');
     expect(chapters[3]).toContain('Comptage');
     expect(chapters[4]).toContain('Scanner');
     expect(chapters[5]).toContain('Sauvegarde');
   });
+
+  it('validates direct scan-to-quantity increment without page navigation', () => {
+    const line: OrderLine = {
+      id: 42,
+      billId: 10,
+      no: '14',
+      page: 1,
+      reference: '70417',
+      ean: '6130000000000',
+      designation: 'Cahier 96p',
+      orderedQty: 24,
+      originalOrderedQty: 24,
+      status: 'active',
+      outerPackSize: 6,
+      innerPackSize: null,
+      warehouseZone: null,
+      packagesRaw: null,
+      referenceAliases: ['70417'],
+      originalNo: '14',
+      originalPage: 1,
+      originalReference: '70417',
+      originalEan: '6130000000000',
+      originalDesignation: 'Cahier 96p',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    let events: CountEvent[] = [];
+    // User scans item, taps +Pack (+6)
+    events.push({
+      id: 1,
+      billId: 10,
+      orderLineId: 42,
+      stage: 'preparation',
+      quantity: 6,
+      containerId: 1,
+      outcome: null,
+      undone: false,
+      createdAt: new Date().toISOString(),
+    });
+    expect(sumStageEvents(events, 'preparation')).toBe(6);
+
+    // User taps +Pack (+6) again
+    events.push({
+      id: 2,
+      billId: 10,
+      orderLineId: 42,
+      stage: 'preparation',
+      quantity: 6,
+      containerId: 1,
+      outcome: null,
+      undone: false,
+      createdAt: new Date().toISOString(),
+    });
+    expect(sumStageEvents(events, 'preparation')).toBe(12);
+
+    // User taps Servir Reste (+12)
+    const remaining = line.orderedQty - sumStageEvents(events, 'preparation');
+    events.push({
+      id: 3,
+      billId: 10,
+      orderLineId: 42,
+      stage: 'preparation',
+      quantity: remaining,
+      containerId: 1,
+      outcome: null,
+      undone: false,
+      createdAt: new Date().toISOString(),
+    });
+    expect(sumStageEvents(events, 'preparation')).toBe(24);
+  });
 });
+
 
