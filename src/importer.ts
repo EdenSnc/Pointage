@@ -12,7 +12,6 @@ import type {
   OrderLine,
 } from './types';
 
-
 export interface ImportIssue {
   billIndex: number;
   lineIndex?: number;
@@ -21,10 +20,65 @@ export interface ImportIssue {
   severity: 'warning' | 'error';
 }
 
+export interface MergedBillInfo {
+  bill: Bill;
+  addedLinesCount: number;
+}
+
 export interface ImportResult {
   bills: Bill[];
+  mergedBills: MergedBillInfo[];
   lineCount: number;
   issues: ImportIssue[];
+}
+
+/**
+ * Normalizes bill number to clean alphanumeric uppercase string.
+ * Strips common prefixes like "BC/", "BL-", "FACTURE:", spaces and dashes.
+ * Example: "BC/0U126/03835" -> "0U12603835"
+ */
+export function normalizeBillNumber(raw: string | null | undefined): string {
+  if (!raw) return '';
+  let cleaned = raw.toUpperCase().trim();
+  // Strip common logistical prefixes
+  cleaned = cleaned.replace(/^(BC|BL|FACTURE|COMMANDE|BON)[\s\/\-_:]*/i, '');
+  // Keep only alphanumeric characters
+  cleaned = cleaned.replace(/[^A-Z0-9]/g, '');
+  return cleaned;
+}
+
+/**
+ * Determines whether two bills represent the same delivery note.
+ */
+export function isSameBill(
+  b1Number: string | undefined,
+  b1Client: string | undefined,
+  b2Number: string | undefined,
+  b2Client: string | undefined
+): boolean {
+  const norm1 = normalizeBillNumber(b1Number);
+  const norm2 = normalizeBillNumber(b2Number);
+
+  const isGeneric1 = !norm1 || norm1 === 'AUTO' || norm1 === 'BLAUTO' || norm1 === 'NOTEMANUSCRITE';
+  const isGeneric2 = !norm2 || norm2 === 'AUTO' || norm2 === 'BLAUTO' || norm2 === 'NOTEMANUSCRITE';
+
+  // Primary rule: Exact normalized bill number match (if non-generic)
+  if (!isGeneric1 && !isGeneric2) {
+    return norm1 === norm2;
+  }
+
+  // Fallback for informal handwritten notes or bills lacking explicit BL numbers:
+  // If at least one bill number is generic, match on identical non-generic client name
+  const c1 = (b1Client || '').trim().toLowerCase();
+  const c2 = (b2Client || '').trim().toLowerCase();
+  const isGenericClient1 = !c1 || c1.includes('client divers') || c1.includes('client inconnu') || c1.includes('note interne');
+  const isGenericClient2 = !c2 || c2.includes('client divers') || c2.includes('client inconnu') || c2.includes('note interne');
+
+  if (!isGenericClient1 && !isGenericClient2 && c1 === c2) {
+    return true;
+  }
+
+  return false;
 }
 
 function validateLine(
@@ -34,6 +88,7 @@ function validateLine(
 ): ImportIssue[] {
   const issues: ImportIssue[] = [];
 
+  // If no reference, no designation, and no EAN -> cannot identify article at all
   if (!line.designation && !line.reference && !line.ean) {
     issues.push({
       billIndex,
@@ -46,11 +101,12 @@ function validateLine(
 
   const qty = line.quantity !== undefined ? line.quantity : (line as any).orderedQty;
   if (qty === undefined || qty === null) {
+    // For informal notes without quantity, we default to 1, but notify as warning
     issues.push({
       billIndex,
       lineIndex,
       field: 'quantity',
-      message: `Ligne ${lineIndex + 1} (${line.designation || line.reference || '?'}): quantité manquante`,
+      message: `Ligne ${lineIndex + 1} (${line.designation || line.reference || '?'}): quantité non précisée (1 par défaut)`,
       severity: 'warning',
     });
   } else if (typeof qty !== 'number' || qty < 0) {
@@ -63,22 +119,13 @@ function validateLine(
     });
   }
 
+  // Only warn about identifiers if BOTH reference and EAN are missing
   if (!line.reference && !line.ean) {
     issues.push({
       billIndex,
       lineIndex,
       field: 'identifiers',
       message: `Ligne ${lineIndex + 1} (${line.designation || '?'}): ni référence ni EAN`,
-      severity: 'warning',
-    });
-  }
-
-  if (!line.no) {
-    issues.push({
-      billIndex,
-      lineIndex,
-      field: 'no',
-      message: `Ligne ${lineIndex + 1}: N° manquant`,
       severity: 'warning',
     });
   }
@@ -93,7 +140,7 @@ function validateBill(bill: ImportBillJSON, billIndex: number): ImportIssue[] {
     issues.push({
       billIndex,
       field: 'billNumber',
-      message: `Facture ${billIndex + 1}: numéro de BL manquant`,
+      message: `Facture ${billIndex + 1}: numéro de BL manquant (généré automatiquement)`,
       severity: 'warning',
     });
   }
@@ -102,7 +149,7 @@ function validateBill(bill: ImportBillJSON, billIndex: number): ImportIssue[] {
     issues.push({
       billIndex,
       field: 'client',
-      message: `Facture ${billIndex + 1}: client manquant`,
+      message: `Facture ${billIndex + 1}: client non spécifié`,
       severity: 'warning',
     });
   }
@@ -191,78 +238,190 @@ export async function importBills(
   const bills = payload.bills || [];
   const now = new Date().toISOString();
   const importedBills: Bill[] = [];
-  let lineCount = 0;
+  const mergedBills: MergedBillInfo[] = [];
+  let totalImportedLines = 0;
   const issues = validateImport(payload);
 
-  for (const billData of bills) {
-    const bill: Bill = {
-      sessionId,
-      billNumber: billData.billNumber || `BL-${Date.now()}`,
-      client: billData.client || 'Client inconnu',
-      date: billData.date || undefined,
-      status: 'active',
-      createdAt: now,
-      updatedAt: now,
-    };
+  // Retrieve all existing active bills in the database to detect multi-page additions
+  const existingActiveBills = await db.bills
+    .filter((b) => b.status === 'active')
+    .toArray();
 
-    const billId = await db.bills.add(bill);
-    bill.id = billId;
+  for (const billData of bills) {
+    // Check if this bill matches an existing active bill OR a bill previously processed in this import
+    const candidateBills = [...existingActiveBills, ...importedBills];
+    const matchingBill = candidateBills.find((cb) =>
+      isSameBill(cb.billNumber, cb.client, billData.billNumber, billData.client)
+    );
 
     const lines = billData.lines || [];
-    for (const lineData of lines) {
-      const rawQty = lineData.quantity !== undefined ? lineData.quantity : (lineData as any).orderedQty;
-      const qty = typeof rawQty === 'number' ? Math.max(0, rawQty) : 0;
-      const ref = lineData.reference != null ? String(lineData.reference) : null;
-      const ean = lineData.ean != null ? String(lineData.ean) : null;
-      const aliases = generateReferenceAliases(ref);
 
-      const orderLine: OrderLine = {
-        billId,
-        originalNo: String(lineData.no || ''),
-        originalPage: lineData.page ?? null,
-        originalReference: ref,
-        originalEan: ean,
-        originalDesignation: lineData.designation || '',
-        originalOrderedQty: qty,
-        no: String(lineData.no || ''),
-        page: lineData.page ?? null,
-        reference: ref,
-        ean: ean,
-        designation: lineData.designation || '',
-        orderedQty: qty,
+    if (matchingBill && matchingBill.id) {
+      // MERGE LINES INTO ORIGINAL BILL
+      const existingLines = await db.orderLines
+        .where('billId')
+        .equals(matchingBill.id)
+        .toArray();
+
+      let addedForThisBill = 0;
+
+      for (let i = 0; i < lines.length; i++) {
+        const lineData = lines[i];
+        const rawQty = lineData.quantity !== undefined ? lineData.quantity : (lineData as any).orderedQty;
+        const qty = typeof rawQty === 'number' && !isNaN(rawQty) ? Math.max(0, rawQty) : 1;
+        const ref = lineData.reference != null ? String(lineData.reference).trim() : null;
+        const ean = lineData.ean != null ? String(lineData.ean).trim() : null;
+        const cleanNo = lineData.no ? String(lineData.no).trim() : '';
+
+        // Duplicate prevention: check against existing lines in the target bill
+        const isDuplicate = existingLines.some((el) => {
+          // 1. Line number matches AND (same reference, same designation, or same quantity)
+          if (cleanNo && el.no === cleanNo) {
+            if (ref && el.reference && ref.toLowerCase() === el.reference.toLowerCase()) return true;
+            if (lineData.designation && el.designation && lineData.designation.toLowerCase() === lineData.designation.toLowerCase()) return true;
+            if (el.orderedQty === qty) return true;
+          }
+          // 2. Exact reference match AND quantity match
+          if (ref && el.reference && ref.toLowerCase() === el.reference.toLowerCase() && el.orderedQty === qty) {
+            return true;
+          }
+          // 3. Exact EAN match AND quantity match
+          if (ean && el.ean && ean === el.ean && el.orderedQty === qty) {
+            return true;
+          }
+          return false;
+        });
+
+        if (!isDuplicate) {
+          const finalNo = cleanNo || String(existingLines.length + addedForThisBill + 1);
+          const designation = lineData.designation?.trim() || (ref ? `Réf: ${ref}` : `Article ${finalNo}`);
+          const aliases = generateReferenceAliases(ref);
+
+          const orderLine: OrderLine = {
+            billId: matchingBill.id,
+            originalNo: finalNo,
+            originalPage: lineData.page ?? null,
+            originalReference: ref,
+            originalEan: ean,
+            originalDesignation: designation,
+            originalOrderedQty: qty,
+            no: finalNo,
+            page: lineData.page ?? null,
+            reference: ref,
+            ean: ean,
+            designation,
+            orderedQty: qty,
+            status: 'active',
+            outerPackSize: null,
+            innerPackSize: null,
+            warehouseZone: null,
+            packagesRaw: lineData.packagesRaw != null ? String(lineData.packagesRaw) : null,
+            referenceAliases: aliases,
+            createdAt: now,
+            updatedAt: now,
+          };
+
+          const newId = await db.orderLines.add(orderLine);
+          orderLine.id = newId;
+          existingLines.push(orderLine);
+          addedForThisBill++;
+          totalImportedLines++;
+        }
+      }
+
+      if (addedForThisBill > 0) {
+        matchingBill.updatedAt = now;
+        await db.bills.put(matchingBill);
+
+        await db.auditEvents.add({
+          billId: matchingBill.id,
+          orderLineId: null,
+          stage: null,
+          type: 'line_added',
+          oldValue: null,
+          newValue: `Fusion multi-pages: ${addedForThisBill} nouvelle(s) ligne(s) ajoutée(s)`,
+          reason: 'Page additionnelle importée',
+          timestamp: now,
+        });
+      }
+
+      if (!importedBills.some((b) => b.id === matchingBill.id)) {
+        importedBills.push(matchingBill);
+      }
+      mergedBills.push({ bill: matchingBill, addedLinesCount: addedForThisBill });
+
+    } else {
+      // CREATE BRAND NEW BILL
+      const defaultBillNumber = billData.billNumber?.trim() || `BL-${Date.now().toString().slice(-6)}`;
+      const defaultClient = billData.client?.trim() || 'Client inconnu';
+
+      const bill: Bill = {
+        sessionId,
+        billNumber: defaultBillNumber,
+        client: defaultClient,
+        date: billData.date || undefined,
         status: 'active',
-        outerPackSize: null,
-        innerPackSize: null,
-        warehouseZone: null,
-        packagesRaw: lineData.packagesRaw != null ? String(lineData.packagesRaw) : null,
-        referenceAliases: aliases,
         createdAt: now,
         updatedAt: now,
       };
 
-      await db.orderLines.add(orderLine);
-      lineCount++;
+      const billId = await db.bills.add(bill);
+      bill.id = billId;
+
+      for (let i = 0; i < lines.length; i++) {
+        const lineData = lines[i];
+        const rawQty = lineData.quantity !== undefined ? lineData.quantity : (lineData as any).orderedQty;
+        const qty = typeof rawQty === 'number' && !isNaN(rawQty) ? Math.max(0, rawQty) : 1;
+        const ref = lineData.reference != null ? String(lineData.reference).trim() : null;
+        const ean = lineData.ean != null ? String(lineData.ean).trim() : null;
+        const finalNo = lineData.no ? String(lineData.no).trim() : String(i + 1);
+        const designation = lineData.designation?.trim() || (ref ? `Réf: ${ref}` : `Article ${finalNo}`);
+        const aliases = generateReferenceAliases(ref);
+
+        const orderLine: OrderLine = {
+          billId,
+          originalNo: finalNo,
+          originalPage: lineData.page ?? null,
+          originalReference: ref,
+          originalEan: ean,
+          originalDesignation: designation,
+          originalOrderedQty: qty,
+          no: finalNo,
+          page: lineData.page ?? null,
+          reference: ref,
+          ean: ean,
+          designation,
+          orderedQty: qty,
+          status: 'active',
+          outerPackSize: null,
+          innerPackSize: null,
+          warehouseZone: null,
+          packagesRaw: lineData.packagesRaw != null ? String(lineData.packagesRaw) : null,
+          referenceAliases: aliases,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await db.orderLines.add(orderLine);
+        totalImportedLines++;
+      }
+
+      await db.auditEvents.add({
+        billId: bill.id!,
+        orderLineId: null,
+        stage: null,
+        type: 'line_added',
+        oldValue: null,
+        newValue: `Import: ${lines.length} lignes`,
+        reason: 'Import initial',
+        timestamp: now,
+      });
+
+      importedBills.push(bill);
     }
-
-    importedBills.push(bill);
   }
 
-  // Audit event
-  for (const bill of importedBills) {
-    const audit: AuditEvent = {
-      billId: bill.id!,
-      orderLineId: null,
-      stage: null,
-      type: 'line_added',
-      oldValue: null,
-      newValue: `Import: ${lineCount} lignes`,
-      reason: 'Import initial',
-      timestamp: now,
-    };
-    await db.auditEvents.add(audit);
-  }
-
-  return { bills: importedBills, lineCount, issues };
+  return { bills: importedBills, mergedBills, lineCount: totalImportedLines, issues };
 }
 
 export async function getOrCreateSession(): Promise<number> {

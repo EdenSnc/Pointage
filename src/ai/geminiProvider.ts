@@ -3,22 +3,27 @@ import type { ImportPayload } from '../types';
 import { optimizeDocumentImage } from './imageOptimizer';
 import { recordApiUsage } from './quotaTracker';
 
-const GEMINI_SYSTEM_INSTRUCTION = `Tu es un assistant expert en extraction optique de Bons de Livraison (BL) d'entrepôt.
-Analyse l'image ou le texte du bon de livraison et extrais toutes les lignes de produits sous forme de JSON strict.
+const GEMINI_SYSTEM_INSTRUCTION = `Tu es un assistant expert en extraction optique de Bons de Livraison (BL) d'entrepôt et de notes manuscrites.
+Analyse l'image ou le texte et extrais toutes les lignes de produits sous forme de JSON strict.
 
 RÈGLES CRITIQUES:
-1. "billNumber": le numéro du BL (ex: "BL-2026-001" ou "BL/OU126/03221"). Si absent, utilise "BL-AUTO".
-2. "client": le nom de l'enseigne ou client destinataire. Si absent, utilise "CLIENT DIVERS".
+1. "billNumber": le numéro du BL (ex: "BL-2026-001", "BC/0U126/03835"). Si absent sur note informelle, utilise "NOTE-MANUSCRITE".
+2. "client": le nom de l'enseigne ou destinataire. Si absent, utilise "NOTE INTERNE / DIVERS".
 3. "lines": liste ordonnée de tous les articles avec:
-   - "no": numéro de ligne séquentiel (ex: "1", "2").
+   - "no": numéro de ligne séquentiel ("1", "2", "3"...). Si absent sur le papier, attribue-le automatiquement.
    - "page": numéro de page où figure la ligne (défaut 1).
-   - "reference": code article / référence fournisseur en tant que STRING (ex: "70380/84", "CL-500").
-   - "ean": code-barres 13 chiffres si visible, sinon null.
-   - "designation": nom complet et clair de l'article.
-   - "quantity": quantité numérique commandée/livrée (nombre entier).
-   - "packagesRaw": libellé de colisage si présent (ex: "2CT/20", "1CT/50"), sinon null.
-4. Ne JAMAIS tronquer les références ni inventer d'articles.
-5. Si plusieurs BL sont présents, crée un objet par BL dans le tableau "bills".
+   - "reference": LA RÉFÉRENCE EST L'IDENTIFIANT PRINCIPAL (ex: "70380/84", "CL-500", "99201"). Ne jamais tronquer ni omettre une référence.
+   - "ean": code-barres 13 chiffres si présent, sinon null (le code-barres est secondaire).
+   - "designation": nom ou description de l'article. Si non mentionné (ex: note manuscrite avec références seules), reprends la référence ou un libellé visible.
+   - "quantity": quantité numérique (nombre entier positif). Si une référence est listée sans quantité explicite, utilise 1 par défaut.
+   - "packagesRaw": colisage si présent (ex: "2CT/20"), sinon null.
+4. BONS MANUSCRITS & NOTES BROUILLON:
+   - Le document peut être une feuille manuscrite au stylo, un brouillon d'entrepôt ou une liste rapide de références.
+   - Extraire chaque ligne même avec une écriture imparfaite.
+5. BONS MULTI-PAGES:
+   - Si les photos ou pages correspondent au MÊME bon de livraison (même numéro de BL, même client, ou pages 1, 2, 3...), regroupe OBLIGATOIREMENT toutes les lignes sous un SEUL objet BL dans "bills" avec le même "billNumber".
+   - Assigne la propriété "page" (1, 2...) correspondante à chaque ligne.
+   - Ne crée plusieurs objets dans "bills" QUE s'il s'agit réellement de factures ou de clients distincts.
 
 FORMAT JSON REQUIS:
 {
@@ -115,8 +120,8 @@ export const geminiProvider: LLMProvider = {
   id: 'gemini',
   name: 'Google Gemini',
   models: [
-    { id: 'gemini-3.5-flash-lite', label: 'Flash Lite 3.5 (500 scans/jour • Rapide)', recommended: true },
-    { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash (20 scans/jour • BL Complexes)' },
+    { id: 'gemini-3.5-flash-lite', label: 'Flash Lite (Recommandé • 500 scans/j)', recommended: true },
+    { id: 'gemini-3.8-flash', label: 'Flash (Complet • 20 scans/j)' },
     { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash (Standard)' },
     { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite (Secours)' },
   ],

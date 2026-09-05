@@ -177,18 +177,11 @@ export default function App() {
           {typeof toast !== 'string' && toast.onUndo && (
             <button
               type="button"
-              className="btn btn-xs btn-warning font-bold"
+              className="toast-undo-btn"
               onClick={async () => {
                 const action = toast.onUndo;
                 setToast('');
                 if (action) await action();
-              }}
-              style={{
-                padding: '4px 12px',
-                minHeight: 32,
-                fontSize: '0.78rem',
-                borderRadius: 8,
-                cursor: 'pointer',
               }}
             >
               {toast.undoLabel || 'Annuler'}
@@ -484,30 +477,7 @@ function HomeScreen({
         )}
 
 
-        {/* Subtle Apple-style credits & Guide trigger */}
-        <footer className="app-credits">
-          <div className="credits-badge">
-            <span>POINTAGE</span> • <span>MOTEUR HORS-LIGNE LOCAL-FIRST</span>
-          </div>
 
-          <div className="credits-sub">Algorithme d'Entrepôt Découplé • 100% Hors-Ligne</div>
-          <div className="text-center mt-2">
-            <button
-              onClick={onOpenWalkthrough}
-              className="btn btn-secondary btn-sm"
-              style={{
-                borderRadius: 'var(--radius-pill)',
-                fontSize: '0.74rem',
-                padding: '6px 14px',
-                gap: 6,
-                display: 'inline-flex',
-                alignItems: 'center',
-              }}
-            >
-              <IconHelp size={14} /> Guide d'utilisation interactif
-            </button>
-          </div>
-        </footer>
       </div>
 
       <div className="bottom-bar">
@@ -872,14 +842,14 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
   const handleExtractAll = async () => {
     if (stagedPhotos.length === 0) return;
     setIsExtracting(true);
-    setExtractProgress("1/3 Optimisation de l'image (Galaxy A54)...");
+    setExtractProgress("1/3 Optimisation des images...");
 
     const t1 = setTimeout(() => {
-      setExtractProgress("2/3 Analyse IA Gemini : Détection du tableau et lecture des lignes...");
+      setExtractProgress("2/3 Analyse IA : Détection et lecture des articles...");
     }, 1800);
 
     const t2 = setTimeout(() => {
-      setExtractProgress("3/3 Vérification des références et préparation du bon...");
+      setExtractProgress("3/3 Préparation des lignes du bon...");
     }, 4500);
 
     try {
@@ -889,7 +859,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
       setIssues(validateImport(result.payload));
       playSuccessChime();
       showToast(
-        `${result.payload.bills?.length || 1} BL extrait(s) (${stagedPhotos.length} pages) avec succès !`,
+        `${result.payload.bills?.length || 1} BL extrait(s) (${stagedPhotos.length} pages) avec succès`,
         setToast
       );
     } catch (err) {
@@ -917,10 +887,18 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
     try {
       const sessionId = await getOrCreateSession();
       const result = await importBills(preview.payload, sessionId);
-      showToast(
-        `${result.bills.length} BL, ${result.lineCount} lignes importées`,
-        setToast
-      );
+      if (result.mergedBills && result.mergedBills.some((m) => m.addedLinesCount > 0)) {
+        const merged = result.mergedBills.find((m) => m.addedLinesCount > 0);
+        showToast(
+          `${merged?.addedLinesCount || result.lineCount} ligne(s) ajoutée(s) au bon existant (${merged?.bill.billNumber || ''})`,
+          setToast
+        );
+      } else {
+        showToast(
+          `${result.bills.length} BL, ${result.lineCount} lignes importées`,
+          setToast
+        );
+      }
       nav('/');
     } catch (e) {
       showToast(`Erreur: ${(e as Error).message}`, setToast);
@@ -962,7 +940,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
               <IconKey size={20} style={{ color: 'var(--accent)' }} /> Clé API Google Gemini Requise
             </div>
             <p className="text-xs text-muted mb-3" style={{ lineHeight: 1.4 }}>
-              Pour numériser vos bons de livraison papier avec votre Samsung Galaxy A54, collez votre clé d'API Google Gemini gratuite ci-dessous :
+              Pour numériser directement vos bons de livraison et notes avec l'appareil photo, collez votre clé d'API Google Gemini ci-dessous :
             </p>
             <form
               className="flex gap-2"
@@ -971,7 +949,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                 if (tempApiKey.trim()) {
                   providerRegistry.setApiKey('gemini', tempApiKey);
                   setApiKey(tempApiKey);
-                  showToast('Clé Gemini configurée !', setToast);
+                  showToast('Clé Gemini configurée', setToast);
                 }
               }}
             >
@@ -996,35 +974,31 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
               </button>
             </form>
             <div className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-              ✦ Clé 100% privée, stockée en local sur votre téléphone • <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-light)', textDecoration: 'underline' }}>Obtenir une clé gratuite</a>
+              Clé 100% privée, stockée localement sur cet appareil • <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-light)', textDecoration: 'underline' }}>Obtenir une clé gratuite</a>
             </div>
           </div>
         ) : (
           /* Gemini Vision Instant Photo Scanner */
           <div className="card">
-            <div className="flex justify-between items-start mb-3">
-              <div>
-                <div className="card-client flex items-center gap-2">
-                  <IconCamera size={20} style={{ color: 'var(--accent)' }} /> Numérisation Photo & Multi-Pages
-                </div>
-                <div className="text-xs text-muted mt-1">
-                  Samsung Galaxy A54 50MP • Multi-pages & multi-BL
-                </div>
+            <div className="flex justify-between items-center mb-3">
+              <div className="card-client flex items-center gap-2">
+                <IconCamera size={20} style={{ color: 'var(--accent)' }} /> Numérisation Photo
               </div>
               <button
-                className="btn btn-xs btn-ghost flex items-center gap-1"
+                type="button"
+                className="btn btn-secondary btn-xs"
                 onClick={() => {
                   setTempApiKey(apiKey);
                   setShowKeyModal(true);
                 }}
                 title="Modifier la clé"
-                style={{ borderRadius: 'var(--radius-pill)', padding: '5px 10px' }}
+                style={{ flexShrink: 0, padding: '4px 10px', fontSize: '0.72rem' }}
               >
-                <IconKey size={13} /> Clé Active • Modifier
+                <IconKey size={12} /> Clé configurée
               </button>
             </div>
 
-            {/* Quick Model Selector (Flash Lite 3.5 vs 3.8 Flash) */}
+            {/* Quick Model Selector */}
             <div className="mb-3">
               <span className="text-xs text-muted font-bold block mb-1">MOTEUR GEMINI :</span>
               <div className="seg-control">
@@ -1036,7 +1010,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                   }}
                   style={{ fontSize: '0.74rem' }}
                 >
-                  ⚡ Flash Lite 3.5 (500/j)
+                  Flash Lite (Recommandé)
                 </button>
                 <button
                   className={`seg-btn ${selectedModel === 'gemini-3.8-flash' ? 'active' : ''}`}
@@ -1046,7 +1020,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                   }}
                   style={{ fontSize: '0.74rem' }}
                 >
-                  🎯 3.8 Flash (20/j • Difficile)
+                  Flash (Complet)
                 </button>
               </div>
             </div>
@@ -1119,7 +1093,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                     </span>
                   ) : (
                     <span className="flex items-center justify-center gap-2">
-                      ✨ NUMÉRISER LES {stagedPhotos.length} PAGES (1 APPEL API)
+                      NUMÉRISER LES {stagedPhotos.length} PAGES
                     </span>
                   )}
                 </button>
@@ -1139,7 +1113,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                     </span>
                   ) : (
                     <span className="flex items-center justify-center gap-2">
-                      <IconCamera size={22} /> PRENDRE EN PHOTO (PAGE 1)
+                      <IconCamera size={20} /> PRENDRE EN PHOTO
                     </span>
                   )}
                 </button>
@@ -1156,7 +1130,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                   }}
                   style={{ color: 'var(--text-muted)' }}
                 >
-                  📁 Ou sélectionner plusieurs photos depuis la galerie
+                  Choisir depuis la galerie
                 </button>
               </div>
             )}
@@ -1171,7 +1145,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
             onClick={() => setShowManualJSON(!showManualJSON)}
           >
             <span className="font-semibold text-sm text-secondary">
-              {showManualJSON ? '▾ Masquer l’importation JSON' : '▸ Coller du JSON manuellement'}
+              {showManualJSON ? 'Masquer l’importation JSON' : 'Coller du JSON manuellement'}
             </span>
           </div>
 
@@ -1450,7 +1424,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               onClick={toggleShowQuantities}
               title={showQuantities ? 'Quantités visibles (Cliquer pour masquer)' : 'Quantités masquées (Cliquer pour afficher)'}
             >
-              {showQuantities ? '👁️ Qtés Visibles' : '👁️‍🗨️ Qtés Masquées'}
+              {showQuantities ? 'Qtés visibles' : 'Qtés masquées'}
             </button>
           </div>
           <span className="text-sm text-muted" style={{ alignSelf: 'center' }}>
