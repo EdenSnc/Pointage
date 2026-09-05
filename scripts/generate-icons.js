@@ -1,4 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+import fs from 'fs';
+import path from 'path';
+import sharp from 'sharp';
+
+const publicDir = path.resolve('public');
+
+const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <!-- Soft Ambient Drop Shadow for Floating 3D Badge on White -->
     <filter id="markShadow" x="-20%" y="-20%" width="140%" height="140%">
@@ -69,4 +75,44 @@
       filter="url(#pCurlShadow)"
     />
   </g>
-</svg>
+</svg>`;
+
+async function run() {
+  const svgBuffer = Buffer.from(svgContent);
+
+  // 1. Save favicon.svg and SVG variants with white background and centered safe-zone mark
+  fs.writeFileSync(path.join(publicDir, 'favicon.svg'), svgContent, 'utf-8');
+  fs.writeFileSync(path.join(publicDir, 'pwa-192x192.svg'), svgContent, 'utf-8');
+  fs.writeFileSync(path.join(publicDir, 'pwa-512x512.svg'), svgContent, 'utf-8');
+  console.log('Saved SVG files');
+
+  // 2. Generate 512x512 PNG
+  await sharp(svgBuffer)
+    .resize(512, 512)
+    .png()
+    .toFile(path.join(publicDir, 'pwa-512x512.png'));
+  console.log('Generated pwa-512x512.png');
+
+  // 3. Generate 192x192 PNG
+  await sharp(svgBuffer)
+    .resize(192, 192)
+    .png()
+    .toFile(path.join(publicDir, 'pwa-192x192.png'));
+  console.log('Generated pwa-192x192.png');
+
+  // 4. Generate Apple Touch Icon 180x180 PNG
+  await sharp(svgBuffer)
+    .resize(180, 180)
+    .png()
+    .toFile(path.join(publicDir, 'apple-touch-icon.png'));
+  console.log('Generated apple-touch-icon.png');
+
+  // 5. Generate Maskable Icon 512x512 PNG
+  await sharp(svgBuffer)
+    .resize(512, 512)
+    .png()
+    .toFile(path.join(publicDir, 'maskable-icon-512x512.png'));
+  console.log('Generated maskable-icon-512x512.png');
+}
+
+run().catch(console.error);

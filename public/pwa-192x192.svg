@@ -1,29 +1,72 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#151b2a"/>
-      <stop offset="100%" stop-color="#080a10"/>
+    <!-- Soft Ambient Drop Shadow for Floating 3D Badge on White -->
+    <filter id="markShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#0f172a" flood-opacity="0.14"/>
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- 'P' Frame Charcoal Gradient -->
+    <linearGradient id="pBodyGrad" x1="15%" y1="10%" x2="85%" y2="90%">
+      <stop offset="0%" stop-color="#242b38"/>
+      <stop offset="50%" stop-color="#181d26"/>
+      <stop offset="100%" stop-color="#0d1017"/>
     </linearGradient>
-    <linearGradient id="strokeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#60a5fa"/>
-      <stop offset="100%" stop-color="#2563eb"/>
-    </linearGradient>
-    <linearGradient id="checkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+
+    <!-- Emerald Jade Accent Gradient -->
+    <linearGradient id="pJadeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#34d399"/>
       <stop offset="100%" stop-color="#059669"/>
     </linearGradient>
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="8" result="blur"/>
-      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+
+    <!-- Folded 3D Paper Curl Gradient -->
+    <linearGradient id="pCurlGrad" x1="10%" y1="10%" x2="90%" y2="90%">
+      <stop offset="0%" stop-color="#6ee7b7"/>
+      <stop offset="45%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#0f766e"/>
+    </linearGradient>
+
+    <!-- Curl Shadow -->
+    <filter id="pCurlShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="-3" dy="5" stdDeviation="6" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+
+    <!-- Paper Subtle Border -->
+    <filter id="paperShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000000" flood-opacity="0.15"/>
     </filter>
   </defs>
-  <rect width="512" height="512" rx="120" fill="url(#bgGrad)"/>
-  <rect width="508" height="508" x="2" y="2" rx="118" stroke="rgba(255, 255, 255, 0.12)" stroke-width="4"/>
-  <g transform="translate(256, 260)" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M0 -124 L114 -60 L0 4 L-114 -60 Z" fill="rgba(37, 99, 235, 0.18)" stroke="url(#strokeGrad)" stroke-width="16"/>
-    <path d="M-114 -60 L0 4 L0 128 L-114 64 Z" fill="rgba(37, 99, 235, 0.08)" stroke="url(#strokeGrad)" stroke-width="16"/>
-    <path d="M0 4 L114 -60 L114 64 L0 128 Z" fill="rgba(37, 99, 235, 0.13)" stroke="url(#strokeGrad)" stroke-width="16"/>
-    <path d="M-57 -92 L57 -28" stroke="rgba(96, 165, 250, 0.7)" stroke-width="10" stroke-dasharray="14 10"/>
-    <path d="M-46 15 L-12 50 L78 -40" stroke="url(#checkGrad)" stroke-width="22" filter="url(#glow)"/>
+
+  <!-- 100% Solid White Canvas (Eliminates Android / Samsung dark background fallback) -->
+  <rect width="512" height="512" fill="#FFFFFF"/>
+
+  <!-- Centered Logo Mark with Safe Zone Padding (Scale 0.65, perfectly centered at 256, 256) -->
+  <g transform="translate(256, 256) scale(0.65) translate(-272, -236)" filter="url(#markShadow)">
+    <!-- Outer 'P' Letter Frame -->
+    <path
+      d="M 160 416 C 114 416 88 390 88 344 L 88 168 C 88 96 136 56 220 56 L 320 56 C 408 56 456 104 456 192 L 456 244 C 456 332 408 380 320 380 L 264 380 C 258 380 252 384 250 390 C 244 406 236 416 216 416 Z"
+      fill="url(#pBodyGrad)"
+      stroke="rgba(0, 0, 0, 0.08)"
+      stroke-width="4"
+      stroke-linejoin="round"
+    />
+
+    <!-- Inner White Paper Document -->
+    <path
+      d="M 160 416 L 160 178 C 160 138 184 114 224 114 L 324 114 C 348 114 366 132 366 156 L 366 266 C 366 278 358 296 344 314 L 254 410 C 248 416 238 416 230 416 Z"
+      fill="#FFFFFF"
+      filter="url(#paperShadow)"
+    />
+
+    <!-- Text Lines on Document -->
+    <rect x="200" y="192" width="112" height="22" rx="11" fill="#1b1e26"/>
+    <rect x="200" y="234" width="62" height="22" rx="11" fill="url(#pJadeGrad)"/>
+
+    <!-- Folded Corner (Curl / Peel) -->
+    <path
+      d="M 366 266 C 366 312 338 350 286 372 C 264 382 246 398 234 416 C 248 382 278 350 316 332 C 346 320 362 296 366 266 Z"
+      fill="url(#pCurlGrad)"
+      filter="url(#pCurlShadow)"
+    />
   </g>
 </svg>
