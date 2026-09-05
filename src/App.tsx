@@ -41,6 +41,11 @@ import {
   calcPackBreakdown,
   roundDownToPack,
   getStageProblemLines,
+  parsePackagingString,
+  serializeCountsForQR,
+  parseQRSyncPayload,
+  planQRMerge,
+  QRSyncPayload,
 } from './logic';
 import { parseImportJSON, importBills, getOrCreateSession, validateImport } from './importer';
 import { exportBackup, importBackup, downloadBackup, shareBackup } from './backup';
@@ -274,6 +279,412 @@ function ApiKeyModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// ---- Reusable QR Code Multi-Phone Merge Modal ----
+function QRSyncModal({
+  isOpen,
+  onClose,
+  billId,
+  initialPayload,
+  initialTab = 'export',
+  setToast,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  billId: number;
+  initialPayload?: QRSyncPayload | null;
+  initialTab?: 'export' | 'import';
+  setToast?: (m: string) => void;
+}) {
+  const bill = useBill(billId);
+  const lines = useBillLines(billId);
+  const events = useBillEvents(billId);
+  const containers = useBillContainers(billId);
+
+  const [tab, setTab] = useState<'export' | 'import'>(initialPayload ? 'import' : initialTab);
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [mergeMode, setMergeMode] = useState<'add' | 'replace'>('add');
+  const [payload, setPayload] = useState<QRSyncPayload | null>(initialPayload || null);
+  const [manualText, setManualText] = useState<string>('');
+  const [isCameraScanning, setIsCameraScanning] = useState(false);
+  const [mergeExecuting, setMergeExecuting] = useState(false);
+  const cameraVideoRef = useRef<HTMLVideoElement>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    if (initialPayload) {
+      setPayload(initialPayload);
+      setTab('import');
+    }
+  }, [initialPayload]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsCameraScanning(false);
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach(t => t.stop());
+        cameraStreamRef.current = null;
+      }
+    }
+  }, [isOpen]);
+
+  // Generate QR code on export
+  useEffect(() => {
+    if (!isOpen || tab !== 'export' || !bill) return;
+
+    let cancelled = false;
+    const containerMap = new Map<number, string>();
+    for (const c of containers) {
+      if (c.id) containerMap.set(c.id, c.name);
+    }
+
+    const json = serializeCountsForQR(bill.billNumber, bill.client, lines, events, containerMap);
+
+    import('qrcode')
+      .then((QRCodeModule) => {
+        if (cancelled) return;
+        const QRCode = (QRCodeModule as any).default || QRCodeModule;
+        QRCode.toDataURL(json, {
+          width: 320,
+          margin: 1,
+          color: {
+            dark: '#000000',
+            light: '#ffffff',
+          },
+        })
+          .then((url: string) => {
+            if (!cancelled) setQrDataUrl(url);
+          })
+          .catch((err: any) => console.error('QR generation error:', err));
+      })
+      .catch((err) => console.error('qrcode module import error:', err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, tab, bill?.id, lines.length, events.length, containers.length]);
+
+  // Handle camera scanning inside modal
+  useEffect(() => {
+    if (!isCameraScanning || !cameraVideoRef.current) return;
+
+    let cancelled = false;
+    let reader: any = null;
+
+    const startScanner = async () => {
+      try {
+        const { BrowserMultiFormatReader } = await import('@zxing/browser');
+        const { BarcodeFormat, DecodeHintType } = await import('@zxing/library');
+        const hints = new Map();
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
+        reader = new BrowserMultiFormatReader(hints);
+
+        if (cameraVideoRef.current && !cancelled) {
+          await reader.decodeFromConstraints(
+            {
+              audio: false,
+              video: {
+                facingMode: { ideal: 'environment' },
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+              },
+            },
+            cameraVideoRef.current,
+            (result: any) => {
+              if (result && !cancelled) {
+                const text = result.getText();
+                const p = parseQRSyncPayload(text);
+                if (p) {
+                  cancelled = true;
+                  playSuccessChime();
+                  setPayload(p);
+                  setIsCameraScanning(false);
+                  if (cameraStreamRef.current) {
+                    cameraStreamRef.current.getTracks().forEach(t => t.stop());
+                    cameraStreamRef.current = null;
+                  }
+                }
+              }
+            }
+          );
+
+          if (cameraVideoRef.current?.srcObject) {
+            cameraStreamRef.current = cameraVideoRef.current.srcObject as MediaStream;
+          }
+        }
+      } catch (err) {
+        console.error('Modal scanner error:', err);
+      }
+    };
+
+    startScanner();
+
+    return () => {
+      cancelled = true;
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach(t => t.stop());
+        cameraStreamRef.current = null;
+      }
+    };
+  }, [isCameraScanning]);
+
+  if (!isOpen || !bill) return null;
+
+  // Plan merge preview
+  const mergePlan = payload ? planQRMerge(lines, events, payload, mergeMode) : null;
+
+  // Execute merge
+  const handleApplyMerge = async () => {
+    if (!mergePlan || mergePlan.items.length === 0) return;
+    setMergeExecuting(true);
+
+    try {
+      const containerNameMap = new Map<string, number>();
+      for (const c of containers) {
+        if (c.id && c.name) containerNameMap.set(c.name.trim().toLowerCase(), c.id);
+      }
+
+      for (const item of mergePlan.items) {
+        let containerId: number | undefined = undefined;
+        if (item.containerName) {
+          const normName = item.containerName.trim().toLowerCase();
+          if (containerNameMap.has(normName)) {
+            containerId = containerNameMap.get(normName);
+          } else {
+            const newCId = await createTransportContainer(billId, item.containerName, 'carton');
+            containerNameMap.set(normName, newCId);
+            containerId = newCId;
+          }
+        }
+
+        await addCountEvent(
+          billId,
+          item.lineId,
+          item.stage,
+          item.incomingQty,
+          containerId,
+          item.outcome || undefined,
+          item.note || undefined
+        );
+      }
+
+      playSuccessChime();
+      if (setToast) {
+        showToast(`Fusion réussie : +${mergePlan.totalQtyAdded} pièces fusionnées !`, setToast);
+      }
+      onClose();
+    } catch (err) {
+      console.error('Error applying QR merge:', err);
+      if (setToast) setToast('Erreur lors de la fusion');
+    } finally {
+      setMergeExecuting(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-content" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-3">
+          <div className="modal-title flex items-center gap-2" style={{ margin: 0 }}>
+            <IconLayers size={18} style={{ color: 'var(--accent)' }} /> FUSION HORS-LIGNE
+          </div>
+          <button type="button" className="btn btn-xs btn-secondary btn-icon" onClick={onClose}>
+            <IconX size={14} />
+          </button>
+        </div>
+
+        {/* Tabs: Émettre / Recevoir */}
+        <div className="seg-control mb-3">
+          <button
+            type="button"
+            className={`seg-btn ${tab === 'export' ? 'active' : ''}`}
+            onClick={() => { setTab('export'); setIsCameraScanning(false); }}
+          >
+            ÉMETTRE QR
+          </button>
+          <button
+            type="button"
+            className={`seg-btn ${tab === 'import' ? 'active' : ''}`}
+            onClick={() => setTab('import')}
+          >
+            RECEVOIR / FUSIONNER
+          </button>
+        </div>
+
+        {/* TAB 1: EXPORT QR */}
+        {tab === 'export' && (
+          <div>
+            <div className="text-xs text-muted mb-2 text-center">
+              Montrez ce QR Code à l'autre téléphone pour synchroniser vos pointages en direct sans connexion.
+            </div>
+
+            <div className="qr-display-container">
+              {qrDataUrl ? (
+                <img src={qrDataUrl} alt="QR Pointage" className="qr-code-img" />
+              ) : (
+                <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div className="spinner" />
+                </div>
+              )}
+              <div className="font-bold text-xs mt-2 text-center" style={{ color: '#0f172a' }}>
+                {bill.billNumber}
+              </div>
+              <div className="text-xs text-muted text-center" style={{ color: '#475569' }}>
+                {bill.client}
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center text-xs text-secondary px-2 mt-2">
+              <span>{events.filter(e => !e.undone).length} saisies</span>
+              <span>Total : {events.filter(e => !e.undone).reduce((sum, e) => sum + e.quantity, 0)} pièces</span>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: IMPORT / MERGE */}
+        {tab === 'import' && (
+          <div>
+            {!payload ? (
+              <div>
+                <div className="text-xs text-muted mb-3">
+                  Scannez l'écran du second téléphone pour importer ses pointages dans votre bon.
+                </div>
+
+                {isCameraScanning ? (
+                  <div className="mb-3" style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', height: 240, background: '#000' }}>
+                    <video ref={cameraVideoRef} playsInline muted autoPlay style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button
+                      type="button"
+                      className="btn btn-xs btn-secondary"
+                      style={{ position: 'absolute', top: 10, right: 10, zIndex: 10 }}
+                      onClick={() => setIsCameraScanning(false)}
+                    >
+                      Arrêter
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-full flex items-center justify-center gap-2 mb-3"
+                    onClick={() => setIsCameraScanning(true)}
+                  >
+                    <IconCamera size={16} /> Scanner le QR du collègue
+                  </button>
+                )}
+
+                <div className="divider" style={{ margin: '14px 0' }} />
+
+                <div className="text-xs text-muted mb-1 font-semibold">OU COLLER LE TEXTE DU QR :</div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder='{"ptg":1,...}'
+                    value={manualText}
+                    onChange={(e) => setManualText(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      const p = parseQRSyncPayload(manualText);
+                      if (p) {
+                        setPayload(p);
+                      } else if (setToast) {
+                        setToast('Format QR Code invalide');
+                      }
+                    }}
+                  >
+                    OK
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-bold text-sm text-accent">Pointages détectés</span>
+                  <button
+                    type="button"
+                    className="btn btn-xs btn-secondary"
+                    onClick={() => { setPayload(null); setManualText(''); }}
+                  >
+                    Changer
+                  </button>
+                </div>
+
+                {payload.billNumber && payload.billNumber !== bill.billNumber && (
+                  <div className="p-2 mb-2 text-xs" style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', borderRadius: 8 }}>
+                    ⚠️ QR issu de "{payload.billNumber}" (actuel : "{bill.billNumber}")
+                  </div>
+                )}
+
+                <div className="flex gap-2 mb-2">
+                  <span className="badge badge-active" style={{ fontSize: '0.75rem' }}>
+                    {mergePlan?.matchedLinesCount || 0} articles
+                  </span>
+                  <span className="badge badge-primary" style={{ fontSize: '0.75rem' }}>
+                    +{mergePlan?.totalQtyAdded || 0} pièces
+                  </span>
+                </div>
+
+                {/* Merge mode selector */}
+                <div className="seg-control mb-2" style={{ fontSize: '0.75rem' }}>
+                  <button
+                    type="button"
+                    className={`seg-btn ${mergeMode === 'add' ? 'active' : ''}`}
+                    onClick={() => setMergeMode('add')}
+                  >
+                    + ADDITIONNER (Conseillé)
+                  </button>
+                  <button
+                    type="button"
+                    className={`seg-btn ${mergeMode === 'replace' ? 'active' : ''}`}
+                    onClick={() => setMergeMode('replace')}
+                  >
+                    ⟳ REMPLACER
+                  </button>
+                </div>
+
+                {/* Items to merge list */}
+                <div className="qr-preview-list">
+                  {mergePlan?.items.map((item, idx) => (
+                    <div key={idx} className="qr-preview-item">
+                      <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                        <div className="font-bold text-xs truncate">
+                          N°{item.lineNo} • {item.designation}
+                        </div>
+                        <div className="text-xs text-muted truncate">
+                          {item.containerName ? `Carton: ${item.containerName}` : 'Hors carton'}
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <div className="text-xs font-mono font-bold text-accent">
+                          +{item.incomingQty}
+                        </div>
+                        <div className="text-xs text-muted" style={{ fontSize: '0.65rem' }}>
+                          Total: {item.newStageQty}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn-primary btn-full flex items-center justify-center gap-2 mt-3"
+                  disabled={mergeExecuting || (mergePlan?.items.length || 0) === 0}
+                  onClick={handleApplyMerge}
+                >
+                  <IconCheck size={16} /> Valider la fusion (+{mergePlan?.totalQtyAdded || 0} pcs)
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1279,9 +1690,19 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
 
   const [stage, setStage] = useState<Stage>('preparation');
   const [searchMode, setSearchMode] = useState<SearchMode>('smart');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => sessionStorage.getItem(`pointage_search_${billId}`) || '');
   const [showProblemsOnly, setShowProblemsOnly] = useState(false);
   const [showQuantities, setShowQuantities] = useState(() => localStorage.getItem('pointage_show_quantities') === 'true');
+  const [showQRSync, setShowQRSync] = useState(false);
+
+  const handleSearchChange = (q: string) => {
+    setSearchQuery(q);
+    if (q) {
+      sessionStorage.setItem(`pointage_search_${billId}`, q);
+    } else {
+      sessionStorage.removeItem(`pointage_search_${billId}`);
+    }
+  };
 
   const toggleShowQuantities = () => {
     setShowQuantities(prev => {
@@ -1344,6 +1765,15 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <div className="font-semibold truncate">{bill.client}</div>
           <div className="text-xs text-muted truncate">{bill.billNumber}</div>
         </div>
+        <button
+          type="button"
+          className="btn btn-sm btn-secondary flex items-center gap-1"
+          style={{ padding: '6px 10px', fontSize: '0.78rem', fontWeight: 700 }}
+          onClick={() => setShowQRSync(true)}
+          title="Fusion multi-téléphones (QR)"
+        >
+          <IconLayers size={14} /> FUSION QR
+        </button>
         <button className="btn btn-sm btn-secondary btn-icon" onClick={() => nav(`/bill/${billId}/summary`)} title="Récapitulatif">
           <IconChart size={18} />
         </button>
@@ -1376,7 +1806,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           ))}
         </div>
 
-        {/* Search input */}
+        {/* Search input with persistence and clear button */}
         <div className="search-wrapper">
           <input
             id="bill-search-input"
@@ -1385,17 +1815,29 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             className="search-input"
             placeholder={searchMode === 'no' ? 'Entrer N°...' : 'Rechercher (réf, code-barres partiel)...'}
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             type={searchMode === 'no' ? 'number' : 'text'}
             inputMode={searchMode === 'no' ? 'numeric' : 'text'}
           />
-          <button
-            className="search-scan-btn"
-            onClick={() => nav(`/scan?billId=${billId}&stage=${stage}`)}
-            title="Scanner"
-          >
-            <IconScan size={18} />
-          </button>
+          {searchQuery ? (
+            <button
+              type="button"
+              className="search-clear-btn"
+              onClick={() => handleSearchChange('')}
+              title="Effacer la recherche"
+              aria-label="Effacer la recherche"
+            >
+              <IconX size={16} />
+            </button>
+          ) : (
+            <button
+              className="search-scan-btn"
+              onClick={() => nav(`/scan?billId=${billId}&stage=${stage}`)}
+              title="Scanner"
+            >
+              <IconScan size={18} />
+            </button>
+          )}
         </div>
 
         {/* Filters and Visibility Toggle */}
@@ -1440,8 +1882,9 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                 </div>
                 <div className="flex gap-1">
                   {line.status !== 'active' && (
-                    <span className={`badge badge-${line.status === 'cancelled' ? 'cancelled' : line.status === 'not_found' ? 'not-found' : 'removed'} flex items-center gap-1`}>
-                      {line.status === 'cancelled' ? <><IconBan size={11} /> ANNULÉ</> :
+                    <span className={`badge badge-${line.status === 'out_of_stock' ? 'out-of-stock' : line.status === 'cancelled' ? 'cancelled' : line.status === 'not_found' ? 'not-found' : 'removed'} flex items-center gap-1`}>
+                      {line.status === 'out_of_stock' ? <><IconBan size={11} /> RUPTURE</> :
+                       line.status === 'cancelled' ? <><IconBan size={11} /> ANNULÉ</> :
                        line.status === 'not_found' ? <><IconSearch size={11} /> INTROUVABLE</> : <><IconX size={11} /> SUPPRIMÉ</>}
                     </span>
                   )}
@@ -1502,6 +1945,13 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <IconPlus size={16} /> EXTRA
         </button>
       </div>
+
+      <QRSyncModal
+        isOpen={showQRSync}
+        onClose={() => setShowQRSync(false)}
+        billId={billId}
+        setToast={setToast}
+      />
     </>
   );
 }
@@ -1554,11 +2004,14 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     });
   };
 
-  // Init pack sizes from line or profile
+  // Init pack sizes from line, profile, or parse from packagesRaw / designation
   useEffect(() => {
     if (line) {
-      setOuterPack(line.outerPackSize ?? profile?.outerPackSize ?? null);
-      setInnerPack(line.innerPackSize ?? profile?.innerPackSize ?? null);
+      const parsed = parsePackagingString(line.packagesRaw, line.designation);
+      const outer = line.outerPackSize ?? profile?.outerPackSize ?? parsed.outerPackSize ?? null;
+      const inner = line.innerPackSize ?? profile?.innerPackSize ?? parsed.innerPackSize ?? null;
+      setOuterPack(outer);
+      setInnerPack(inner);
     }
   }, [line?.id, profile?.id]);
 
@@ -1984,6 +2437,14 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 <span className="text-sm font-semibold">UNITÉS</span>
                 <Stepper value={loose} onChange={setLoose} />
               </div>
+              {((outerCount > 0 && outerPack) || (innerCount > 0 && innerPack)) && (
+                <div className="text-xs font-mono text-muted mt-2 px-2 py-1" style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)' }}>
+                  {outerCount > 0 && outerPack ? `${outerCount} ext × ${outerPack} = ${outerCount * outerPack} pcs ` : ''}
+                  {innerCount > 0 && innerPack ? `${outerCount > 0 ? '+ ' : ''}${innerCount} int × ${innerPack} = ${innerCount * innerPack} pcs ` : ''}
+                  {loose > 0 ? `+ ${loose} unités ` : ''}
+                  = <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{batchQty} pièces</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -2087,6 +2548,24 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           <div className="card">
             <div className="section-title" style={{ marginTop: 0 }}>CARTON DE RANGEMENT</div>
             <div className="flex flex-wrap gap-2 mb-2">
+              <button
+                className={`container-tag ${selectedContainer === null ? 'selected' : ''}`}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 'var(--radius-pill)',
+                  fontWeight: selectedContainer === null ? 700 : 500,
+                  cursor: 'pointer',
+                  borderColor: selectedContainer === null ? 'var(--success)' : 'var(--border)',
+                  background: selectedContainer === null ? 'rgba(16, 185, 129, 0.2)' : undefined,
+                  color: selectedContainer === null ? 'var(--success)' : 'inherit',
+                }}
+                onClick={() => setSelectedContainer(null)}
+              >
+                <span className="flex items-center gap-1">
+                  {selectedContainer === null && <IconCheck size={12} />}
+                  Hors Carton (Frac)
+                </span>
+              </button>
               {containers.map((c) => (
                 <button
                   key={c.id}
@@ -2094,7 +2573,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   style={{
                     padding: '6px 12px',
                     borderRadius: 'var(--radius-pill)',
-                    fontWeight: 700,
+                    fontWeight: selectedContainer === c.id ? 700 : 500,
                     borderColor: selectedContainer === c.id ? 'var(--accent)' : 'var(--border)',
                     background: selectedContainer === c.id ? 'rgba(37, 99, 235, 0.2)' : undefined,
                     cursor: 'pointer',
@@ -2108,22 +2587,6 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   </span>
                 </button>
               ))}
-              <button
-                className={`container-tag ${selectedContainer === null ? 'selected' : ''}`}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: 'var(--radius-pill)',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  borderColor: selectedContainer === null ? 'var(--warning)' : 'var(--border)',
-                }}
-                onClick={() => setSelectedContainer(null)}
-              >
-                <span className="flex items-center gap-1">
-                  {selectedContainer === null && <IconCheck size={12} />}
-                  Hors Carton
-                </span>
-              </button>
               <button
                 className="container-tag"
                 style={{
@@ -2380,26 +2843,47 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
 
 // ---- Stepper Component ----
 function Stepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [text, setText] = useState(String(value));
+
+  useEffect(() => {
+    setText(String(value));
+  }, [value]);
+
   return (
     <div className="stepper">
-      <button className="stepper-btn" onClick={() => onChange(Math.max(0, value - 1))}>−</button>
+      <button type="button" className="stepper-btn" onClick={() => onChange(Math.max(0, value - 1))}>−</button>
       <input
         id="stepper-quantity-input"
         name="stepperQuantity"
         aria-label="Quantité colisage"
         className="stepper-value"
-        type="number"
+        type="text"
         inputMode="numeric"
-        value={value}
-        onChange={(e) => onChange(Math.max(0, parseInt(e.target.value) || 0))}
+        value={text}
+        onFocus={(e) => e.target.select()}
+        onChange={(e) => {
+          const val = e.target.value;
+          setText(val);
+          if (val.trim() === '') {
+            onChange(0);
+          } else {
+            const n = parseInt(val, 10);
+            if (!isNaN(n) && n >= 0) {
+              onChange(n);
+            }
+          }
+        }}
+        onBlur={() => {
+          setText(String(value));
+        }}
         style={{
           background: 'transparent',
           border: 'none',
           color: 'var(--text)',
-          fontFamily: 'var(--font)',
+          fontFamily: 'var(--font-mono)',
         }}
       />
-      <button className="stepper-btn" onClick={() => onChange(value + 1)}>+</button>
+      <button type="button" className="stepper-btn" onClick={() => onChange(value + 1)}>+</button>
     </div>
   );
 }
@@ -2428,6 +2912,13 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
   const [associateSearch, setAssociateSearch] = useState('');
   const [selectedLine, setSelectedLine] = useState<OrderLine | null>(null);
 
+  // Camera lens management (fix 0.5x Ultra-Wide issue on Samsung / multi-lens phones)
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState<string>(() => {
+    return localStorage.getItem('pointage_preferred_camera_id') || '';
+  });
+  const [cameraIndex, setCameraIndex] = useState<number>(0);
+  const [qrSyncModalPayload, setQrSyncModalPayload] = useState<QRSyncPayload | null>(null);
 
   // Start camera
   useEffect(() => {
@@ -2450,19 +2941,27 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
           BarcodeFormat.CODE_39,
           BarcodeFormat.UPC_A,
           BarcodeFormat.UPC_E,
+          BarcodeFormat.QR_CODE,
         ]);
         reader = new BrowserMultiFormatReader(hints);
 
+        const videoConstraints: MediaTrackConstraints = selectedCameraId
+          ? {
+              deviceId: { exact: selectedCameraId },
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+            }
+          : {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+            };
 
         if (videoRef.current && !cancelled) {
           await reader.decodeFromConstraints(
             {
               audio: false,
-              video: {
-                facingMode: { ideal: 'environment' },
-                width: { ideal: 1920 },
-                height: { ideal: 1080 },
-              },
+              video: videoConstraints,
             },
             videoRef.current,
             (result: any) => {
@@ -2473,7 +2972,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
             }
           );
 
-          // Store stream for cleanup and configure Samsung Galaxy A54 autofocus
+          // Store stream for cleanup and configure Samsung Galaxy continuous autofocus
           if (videoRef.current?.srcObject) {
             const stream = videoRef.current.srcObject as MediaStream;
             streamRef.current = stream;
@@ -2482,6 +2981,47 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
               track.applyConstraints({
                 advanced: [{ focusMode: 'continuous' } as any],
               }).catch(() => {});
+            }
+          }
+
+          // Enumerate cameras to detect multi-lens hardware
+          if (navigator.mediaDevices?.enumerateDevices) {
+            try {
+              const devices = await navigator.mediaDevices.enumerateDevices();
+              const videoDevs = devices.filter(d => d.kind === 'videoinput');
+              const backDevs = videoDevs.filter(d => {
+                const lbl = (d.label || '').toLowerCase();
+                return !lbl.includes('front') && !lbl.includes('avant') && !lbl.includes('selfie') && !lbl.includes('user');
+              });
+              const targets = backDevs.length > 0 ? backDevs : videoDevs;
+              setAvailableCameras(targets);
+
+              // Auto-fix: if camera was opened on ultra-wide / 0.5x by default without stored preference
+              if (!selectedCameraId && targets.length > 1) {
+                const currentTrack = (videoRef.current?.srcObject as MediaStream)?.getVideoTracks()[0];
+                const activeLabel = (currentTrack?.label || '').toLowerCase();
+                const isWide = activeLabel.includes('0.5') || activeLabel.includes('ultra') || activeLabel.includes('wide');
+
+                if (isWide) {
+                  // Find standard 1x camera
+                  const standardCam = targets.find(d => {
+                    const lbl = (d.label || '').toLowerCase();
+                    return !lbl.includes('0.5') && !lbl.includes('ultra') && !lbl.includes('wide') && !lbl.includes('macro');
+                  });
+                  if (standardCam && standardCam.deviceId) {
+                    setSelectedCameraId(standardCam.deviceId);
+                    localStorage.setItem('pointage_preferred_camera_id', standardCam.deviceId);
+                    return;
+                  }
+                }
+              }
+
+              if (selectedCameraId) {
+                const idx = targets.findIndex(d => d.deviceId === selectedCameraId);
+                if (idx !== -1) setCameraIndex(idx);
+              }
+            } catch (e) {
+              console.warn('Camera device enumeration failed:', e);
             }
           }
         }
@@ -2499,9 +3039,33 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
         streamRef.current = null;
       }
     };
-  }, [scanning]);
+  }, [scanning, selectedCameraId]);
+
+  const cycleCamera = () => {
+    if (availableCameras.length <= 1) return;
+    const nextIdx = (cameraIndex + 1) % availableCameras.length;
+    const nextDev = availableCameras[nextIdx];
+    setCameraIndex(nextIdx);
+    setSelectedCameraId(nextDev.deviceId);
+    localStorage.setItem('pointage_preferred_camera_id', nextDev.deviceId);
+    const isWide = (nextDev.label || '').toLowerCase().includes('0.5') || (nextDev.label || '').toLowerCase().includes('ultra');
+    showToast(`Caméra : ${isWide ? '0.5x (Grand Angle)' : '1x (Standard)'}`, setToast);
+  };
 
   const handleScanResult = (code: string) => {
+    // Check if code is a Pointage offline QR Sync payload
+    const syncPayload = parseQRSyncPayload(code);
+    if (syncPayload) {
+      playSuccessChime();
+      setScanning(false);
+      setQrSyncModalPayload(syncPayload);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+      return;
+    }
+
     setScanResult(code);
     setScanning(false);
 
@@ -2626,6 +3190,15 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
     return searchLines(linesToSearch, associateSearch, 'smart', billIdParam ? Number(billIdParam) : undefined).slice(0, 20);
   }, [allLines, billIdParam, associateSearch]);
 
+  const targetBillId = React.useMemo(() => {
+    if (billIdParam) return Number(billIdParam);
+    if (qrSyncModalPayload?.billNumber) {
+      const found = bills.find(b => b.billNumber === qrSyncModalPayload.billNumber);
+      if (found?.id) return found.id;
+    }
+    return bills[0]?.id || 0;
+  }, [billIdParam, qrSyncModalPayload, bills]);
+
   return (
     <div className="scanner-overlay">
       {scanning && (
@@ -2633,6 +3206,23 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
           <video ref={videoRef} className="scanner-video" playsInline muted autoPlay />
           <div className="scanner-target" />
         </>
+      )}
+
+      {scanning && availableCameras.length > 1 && (
+        <button
+          type="button"
+          className="camera-lens-btn"
+          onClick={cycleCamera}
+          title="Changer d'objectif caméra (1x / 0.5x)"
+        >
+          <IconCamera size={14} />
+          <span>
+            {availableCameras[cameraIndex]?.label?.toLowerCase().includes('0.5') ||
+            availableCameras[cameraIndex]?.label?.toLowerCase().includes('ultra')
+              ? '0.5x'
+              : '1x'}
+          </span>
+        </button>
       )}
 
       <button className="btn btn-secondary btn-icon scanner-close" onClick={handleClose} aria-label="Fermer">
@@ -2774,6 +3364,19 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         )}
       </div>
+
+      {qrSyncModalPayload && targetBillId > 0 && (
+        <QRSyncModal
+          isOpen={true}
+          onClose={() => {
+            setQrSyncModalPayload(null);
+            resetScan();
+          }}
+          billId={targetBillId}
+          initialPayload={qrSyncModalPayload}
+          setToast={setToast}
+        />
+      )}
     </div>
   );
 }
@@ -2795,6 +3398,8 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
 
   const [summaryTab, setSummaryTab] = useState<'problems' | 'all' | 'cartons' | 'audit'>('problems');
   const [stageScope, setStageScope] = useState<Stage | 'auto'>('preparation');
+  const [showQRSync, setShowQRSync] = useState(false);
+  const [qrSyncInitialTab, setQrSyncInitialTab] = useState<'export' | 'import'>('export');
 
   const eventsByLine = new Map<number, CountEvent[]>();
   for (const e of events) {
@@ -3000,6 +3605,35 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
               title="Copier le texte du rapport"
             >
               <IconClipboard size={15} /> Copier
+            </button>
+          </div>
+        </div>
+
+        {/* Multi-Phone QR Fusion Card */}
+        <div className="card mb-3" style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+          <div className="flex justify-between items-center mb-2">
+            <div className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--accent)' }}>
+              <IconLayers size={18} /> FUSION MULTI-TÉLÉPHONES (QR)
+            </div>
+            <span className="badge badge-active" style={{ fontSize: '0.7rem' }}>100% Hors-Ligne</span>
+          </div>
+          <div className="text-xs text-secondary mb-3">
+            Plusieurs préparateurs sur ce bon ? Partagez et fusionnez vos pointages instantanément sans internet.
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="btn btn-sm btn-primary flex-1 flex items-center justify-center gap-2"
+              onClick={() => { setQrSyncInitialTab('export'); setShowQRSync(true); }}
+            >
+              <IconScan size={15} /> Émettre mon QR
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary flex-1 flex items-center justify-center gap-2"
+              onClick={() => { setQrSyncInitialTab('import'); setShowQRSync(true); }}
+            >
+              <IconPlus size={15} /> Fusionner un QR
             </button>
           </div>
         </div>
@@ -3265,6 +3899,14 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           </div>
         )}
       </div>
+
+      <QRSyncModal
+        isOpen={showQRSync}
+        onClose={() => setShowQRSync(false)}
+        billId={billId}
+        initialTab={qrSyncInitialTab}
+        setToast={setToast}
+      />
     </>
   );
 }

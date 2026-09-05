@@ -330,3 +330,281 @@ export function smartSearchScore(
   return -1;
 }
 
+/**
+ * Automatically parse packaging sizes from raw document strings or designations.
+ * e.g. "18 (3x6)" -> { outerPackSize: 18, innerPackSize: 6 }
+ * e.g. "3*6" or "3x6" -> { outerPackSize: 18, innerPackSize: 6 }
+ * e.g. "2CT/10" -> { outerPackSize: 10, innerPackSize: null }
+ * e.g. "1CT/50" -> { outerPackSize: 50, innerPackSize: null }
+ * e.g. "CT 24" or "Carton 24" -> { outerPackSize: 24, innerPackSize: null }
+ * e.g. "PEINTURE PANDA DE 12" -> { outerPackSize: null, innerPackSize: 12 }
+ * e.g. "PRESENTOIR 36 PCS" -> { outerPackSize: null, innerPackSize: 36 }
+ */
+export function parsePackagingString(
+  raw: string | null | undefined,
+  designation?: string | null
+): { outerPackSize: number | null; innerPackSize: number | null } {
+  let outer: number | null = null;
+  let inner: number | null = null;
+
+  if (raw && typeof raw === 'string') {
+    const s = raw.trim();
+
+    // 1. Pattern: "18 (3x6)" or "18(3*6)" or "18 (3 x 6)"
+    const totalWithBreakdown = s.match(/^(\d+)\s*\(\s*(\d+)\s*[x*×]\s*(\d+)\s*\)$/i);
+    if (totalWithBreakdown) {
+      outer = parseInt(totalWithBreakdown[1], 10);
+      inner = parseInt(totalWithBreakdown[3], 10);
+      return { outerPackSize: outer > 0 ? outer : null, innerPackSize: inner > 0 ? inner : null };
+    }
+
+    // 2. Pattern: "3x6" or "3*6" or "3 x 6"
+    const multMatch = s.match(/^(\d+)\s*[x*×]\s*(\d+)$/i);
+    if (multMatch) {
+      const a = parseInt(multMatch[1], 10);
+      const b = parseInt(multMatch[2], 10);
+      outer = a * b;
+      inner = b;
+      return { outerPackSize: outer > 0 ? outer : null, innerPackSize: inner > 0 ? inner : null };
+    }
+
+    // 3. Pattern: "2CT/10" or "1CT/50" or "3CT/24" (CT = carton)
+    const ctMatch = s.match(/\d*\s*CT\s*[\/:x*]\s*(\d+)/i);
+    if (ctMatch) {
+      outer = parseInt(ctMatch[1], 10);
+      return { outerPackSize: outer > 0 ? outer : null, innerPackSize: null };
+    }
+
+    // 4. Pattern: "CT 24" or "CT24" or "Carton 24" or "Carton de 24"
+    const cartonMatch = s.match(/(?:carton|colis|ct)\s*(?:de)?\s*(\d+)/i);
+    if (cartonMatch) {
+      outer = parseInt(cartonMatch[1], 10);
+      return { outerPackSize: outer > 0 ? outer : null, innerPackSize: null };
+    }
+
+    // 5. Pattern: "/ 24" or "/24"
+    const slashMatch = s.match(/^\/\s*(\d+)$/);
+    if (slashMatch) {
+      outer = parseInt(slashMatch[1], 10);
+      return { outerPackSize: outer > 0 ? outer : null, innerPackSize: null };
+    }
+
+    // 6. Simple single number "24" or "50"
+    const numOnly = s.match(/^(\d+)$/);
+    if (numOnly) {
+      const n = parseInt(numOnly[1], 10);
+      if (n > 1) {
+        outer = n;
+        return { outerPackSize: outer, innerPackSize: null };
+      }
+    }
+  }
+
+  // Check designation (e.g. "PEINTURE PANDA DE 12 34140" or "PRESENTOIR 36 PCS 81216")
+  if (designation && typeof designation === 'string') {
+    const packInDesig = designation.match(/\b(?:de|x|pack\s*de|boite\s*de|présentoir\s*de)\s*(\d+)\b/i) ||
+                        designation.match(/\b(\d+)\s*(?:pcs|pièces|pieces)\b/i);
+    if (packInDesig) {
+      const n = parseInt(packInDesig[1], 10);
+      if (n > 1 && n <= 1000) {
+        inner = n;
+      }
+    }
+  }
+
+  return {
+    outerPackSize: outer && outer > 1 ? outer : null,
+    innerPackSize: inner && inner > 1 ? inner : null,
+  };
+}
+
+// ============================================================
+// OFFLINE QR CODE MULTI-PHONE MERGE PAYLOAD
+// ============================================================
+
+export interface QRSyncCountItem {
+  no: string;
+  ref?: string | null;
+  stage: Stage;
+  qty: number;
+  container?: string | null;
+  outcome?: PointageOutcome | null;
+  note?: string | null;
+}
+
+export interface QRSyncPayload {
+  ptg: 1; // Magic header for Pointage
+  billNumber?: string;
+  client?: string;
+  ts: number;
+  counts: QRSyncCountItem[];
+}
+
+/**
+ * Serialize bill count events into a compact JSON string for QR Code display.
+ */
+export function serializeCountsForQR(
+  billNumber: string,
+  client: string,
+  lines: OrderLine[],
+  events: CountEvent[],
+  containerMap: Map<number, string>
+): string {
+  const lineMap = new Map<number, OrderLine>();
+  for (const l of lines) {
+    if (l.id) lineMap.set(l.id, l);
+  }
+
+  const counts: QRSyncCountItem[] = [];
+
+  // Group non-undone count events
+  for (const e of events) {
+    if (e.undone || e.quantity <= 0) continue;
+    const line = lineMap.get(e.orderLineId);
+    if (!line) continue;
+
+    counts.push({
+      no: line.no,
+      ref: line.reference || undefined,
+      stage: e.stage,
+      qty: e.quantity,
+      container: e.containerId ? containerMap.get(e.containerId) || undefined : undefined,
+      outcome: e.outcome || undefined,
+      note: e.refusalNote || undefined,
+    });
+  }
+
+  const payload: QRSyncPayload = {
+    ptg: 1,
+    billNumber,
+    client,
+    ts: Date.now(),
+    counts,
+  };
+
+  return JSON.stringify(payload);
+}
+
+/**
+ * Validate and parse a QR Code string into a QRSyncPayload.
+ */
+export function parseQRSyncPayload(str: string): QRSyncPayload | null {
+  try {
+    const data = JSON.parse(str);
+    if (data && data.ptg === 1 && Array.isArray(data.counts)) {
+      return data as QRSyncPayload;
+    }
+  } catch {}
+  return null;
+}
+
+export interface QRMergeItemPreview {
+  lineId: number;
+  lineNo: string;
+  designation: string;
+  reference?: string | null;
+  stage: Stage;
+  incomingQty: number;
+  currentStageQty: number;
+  newStageQty: number;
+  containerName?: string | null;
+  outcome?: PointageOutcome | null;
+  note?: string | null;
+}
+
+export interface QRMergePlan {
+  totalItems: number;
+  totalQtyAdded: number;
+  matchedLinesCount: number;
+  unmatchedItemsCount: number;
+  items: QRMergeItemPreview[];
+  unmatched: QRSyncCountItem[];
+}
+
+/**
+ * Pure calculation to plan and preview a merge of offline QR counts into an existing bill.
+ */
+export function planQRMerge(
+  billLines: OrderLine[],
+  existingEvents: CountEvent[],
+  payload: QRSyncPayload,
+  mode: 'add' | 'replace' = 'add'
+): QRMergePlan {
+  const linesByNo = new Map<string, OrderLine>();
+  const linesByRef = new Map<string, OrderLine>();
+
+  for (const line of billLines) {
+    if (line.no) linesByNo.set(String(line.no).trim().toLowerCase(), line);
+    if (line.reference) linesByRef.set(line.reference.trim().toLowerCase(), line);
+  }
+
+  const currentStageTotals = new Map<string, number>();
+  for (const e of existingEvents) {
+    if (e.undone) continue;
+    const key = `${e.orderLineId}_${e.stage}`;
+    currentStageTotals.set(key, (currentStageTotals.get(key) || 0) + e.quantity);
+  }
+
+  const items: QRMergeItemPreview[] = [];
+  const unmatched: QRSyncCountItem[] = [];
+  let totalQtyAdded = 0;
+
+  for (const countItem of payload.counts) {
+    if (!countItem || countItem.qty <= 0) continue;
+
+    const noKey = String(countItem.no || '').trim().toLowerCase();
+    const refKey = (countItem.ref || '').trim().toLowerCase();
+
+    const line = linesByNo.get(noKey) || (refKey ? linesByRef.get(refKey) : undefined);
+
+    if (!line || !line.id) {
+      unmatched.push(countItem);
+      continue;
+    }
+
+    const key = `${line.id}_${countItem.stage}`;
+    const currentQty = currentStageTotals.get(key) || 0;
+
+    let incomingQty = countItem.qty;
+    let newQty = currentQty + incomingQty;
+
+    if (mode === 'replace') {
+      const delta = countItem.qty - currentQty;
+      incomingQty = delta;
+      newQty = countItem.qty;
+    }
+
+    if (incomingQty !== 0 || mode === 'replace') {
+      items.push({
+        lineId: line.id,
+        lineNo: line.no,
+        designation: line.designation,
+        reference: line.reference,
+        stage: countItem.stage,
+        incomingQty,
+        currentStageQty: currentQty,
+        newStageQty: newQty,
+        containerName: countItem.container,
+        outcome: countItem.outcome,
+        note: countItem.note,
+      });
+
+      if (incomingQty > 0) {
+        totalQtyAdded += incomingQty;
+      }
+      currentStageTotals.set(key, newQty);
+    }
+  }
+
+  return {
+    totalItems: payload.counts.length,
+    totalQtyAdded,
+    matchedLinesCount: items.length,
+    unmatchedItemsCount: unmatched.length,
+    items,
+    unmatched,
+  };
+}
+
+
+

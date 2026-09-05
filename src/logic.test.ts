@@ -13,6 +13,11 @@ import {
   lineBlocksCompletion,
   roundDownToPack,
   getStageProblemLines,
+  parsePackagingString,
+  serializeCountsForQR,
+  parseQRSyncPayload,
+  planQRMerge,
+  QRSyncPayload,
 } from './logic';
 
 import type { CountEvent, OrderLine } from './types';
@@ -347,5 +352,126 @@ describe('Stage-decoupled problem detection (getStageProblemLines)', () => {
     expect(problems[0].id).toBe(1);
   });
 });
+
+describe('parsePackagingString', () => {
+  it('parses total with breakdown "18 (3x6)"', () => {
+    const res = parsePackagingString('18 (3x6)');
+    expect(res.outerPackSize).toBe(18);
+    expect(res.innerPackSize).toBe(6);
+  });
+
+  it('parses multiplication "3x6" or "3*6"', () => {
+    const res = parsePackagingString('3x6');
+    expect(res.outerPackSize).toBe(18);
+    expect(res.innerPackSize).toBe(6);
+  });
+
+  it('parses cartons "2CT/10" and "1CT/50"', () => {
+    expect(parsePackagingString('2CT/10').outerPackSize).toBe(10);
+    expect(parsePackagingString('1CT/50').outerPackSize).toBe(50);
+    expect(parsePackagingString('Carton 24').outerPackSize).toBe(24);
+  });
+
+  it('parses pack sizes from designation if raw is empty', () => {
+    const res = parsePackagingString(null, 'PEINTURE PANDA DE 12 34140');
+    expect(res.innerPackSize).toBe(12);
+
+    const res2 = parsePackagingString(null, 'MARQUEUR FLUORESCENT EN PRESENTOIR 36 PCS 81216');
+    expect(res2.innerPackSize).toBe(36);
+  });
+});
+
+describe('QR Code Sync & Merge Payload', () => {
+  it('serializes and parses QR payload correctly', () => {
+    const lines = [
+      makeLine({ id: 1, no: '1', reference: '34140' }),
+      makeLine({ id: 2, no: '2', reference: '76041' }),
+    ];
+    const events = [
+      makeEvent({ orderLineId: 1, stage: 'preparation', quantity: 18, containerId: 101 }),
+      makeEvent({ orderLineId: 2, stage: 'preparation', quantity: 31, containerId: undefined }),
+    ];
+    const containerMap = new Map<number, string>([[101, 'Carton A']]);
+
+    const qrString = serializeCountsForQR('BC/OU126/03864', 'FAYSAL MEZOUAR', lines, events, containerMap);
+    expect(qrString).toContain('BC/OU126/03864');
+
+    const parsed = parseQRSyncPayload(qrString);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.ptg).toBe(1);
+    expect(parsed?.billNumber).toBe('BC/OU126/03864');
+    expect(parsed?.counts).toHaveLength(2);
+    expect(parsed?.counts[0].no).toBe('1');
+    expect(parsed?.counts[0].qty).toBe(18);
+    expect(parsed?.counts[0].container).toBe('Carton A');
+    expect(parsed?.counts[1].container).toBeUndefined();
+  });
+
+  it('plans merge by adding counts into existing events', () => {
+    const lines = [
+      makeLine({ id: 10, no: '1', reference: 'REF1', designation: 'PROD 1' }),
+      makeLine({ id: 20, no: '2', reference: 'REF2', designation: 'PROD 2' }),
+    ];
+    const existingEvents = [
+      makeEvent({ orderLineId: 10, stage: 'preparation', quantity: 5 }),
+    ];
+    const payload: QRSyncPayload = {
+      ptg: 1,
+      billNumber: 'BL-100',
+      client: 'TEST CLIENT',
+      ts: Date.now(),
+      counts: [
+        { no: '1', stage: 'preparation', qty: 10, container: 'C1' },
+        { no: '2', stage: 'preparation', qty: 8 },
+        { no: '99', stage: 'preparation', qty: 4 }, // Unmatched line
+      ],
+    };
+
+    const plan = planQRMerge(lines, existingEvents, payload, 'add');
+    expect(plan.matchedLinesCount).toBe(2);
+    expect(plan.unmatchedItemsCount).toBe(1);
+    expect(plan.totalQtyAdded).toBe(18);
+
+    // Line 1 had 5, adds 10 => 15
+    const item1 = plan.items.find(i => i.lineId === 10);
+    expect(item1?.currentStageQty).toBe(5);
+    expect(item1?.incomingQty).toBe(10);
+    expect(item1?.newStageQty).toBe(15);
+    expect(item1?.containerName).toBe('C1');
+
+    // Line 2 had 0, adds 8 => 8
+    const item2 = plan.items.find(i => i.lineId === 20);
+    expect(item2?.currentStageQty).toBe(0);
+    expect(item2?.incomingQty).toBe(8);
+    expect(item2?.newStageQty).toBe(8);
+
+    expect(plan.unmatched[0].no).toBe('99');
+  });
+
+  it('plans merge in replace mode', () => {
+    const lines = [
+      makeLine({ id: 10, no: '1', reference: 'REF1', designation: 'PROD 1' }),
+    ];
+    const existingEvents = [
+      makeEvent({ orderLineId: 10, stage: 'preparation', quantity: 5 }),
+    ];
+    const payload: QRSyncPayload = {
+      ptg: 1,
+      ts: Date.now(),
+      counts: [
+        { no: '1', stage: 'preparation', qty: 25 },
+      ],
+    };
+
+    const plan = planQRMerge(lines, existingEvents, payload, 'replace');
+    expect(plan.matchedLinesCount).toBe(1);
+    const item1 = plan.items[0];
+    expect(item1.currentStageQty).toBe(5);
+    expect(item1.incomingQty).toBe(20); // delta
+    expect(item1.newStageQty).toBe(25);
+  });
+});
+
+
 
 
