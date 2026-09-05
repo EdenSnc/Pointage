@@ -227,13 +227,13 @@ function ApiKeyModal({
         <div className="modal-title flex items-center gap-2">
           <IconKey size={18} style={{ color: 'var(--accent)' }} /> Clé API Google Gemini
         </div>
-        <div className="text-xs text-muted mb-3" style={{ lineHeight: 1.4 }}>
-          Votre clé reste 100% sur votre appareil dans votre stockage privé. Elle permet à l’application de numériser directement vos BL papier.
+        <div className="text-xs text-muted mb-3">
+          Clé stockée localement sur cet appareil.
         </div>
 
         <form onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
           <div className="mb-3">
-            <span className="text-xs text-muted font-bold block mb-1">CLÉ D’API (AIzaSy...)</span>
+            <span className="text-xs text-muted font-bold block mb-1">CLÉ D’API</span>
             <input
               id="modal-gemini-key-input"
               name="modalGeminiKey"
@@ -249,7 +249,7 @@ function ApiKeyModal({
           </div>
 
           <div className="mb-4">
-            <span className="text-xs text-muted font-bold block mb-1">MODÈLE IA DÉFAUT</span>
+            <span className="text-xs text-muted font-bold block mb-1">MODÈLE</span>
             <div className="seg-control">
               {activeProvider.models.map((m) => (
                 <button
@@ -417,11 +417,6 @@ function HomeScreen({
                 ? 'Aucun bon de livraison actif'
                 : 'Aucun bon archivé dans l’historique'}
             </p>
-            <p className="text-sm text-muted mt-2">
-              {billFilter === 'active'
-                ? 'Importez vos photos de bons ou créez un bon urgent'
-                : 'Dès qu’un bon est clôturé ou expédié, il apparaît dans cet historique.'}
-            </p>
             {billFilter === 'active' && (
               <div className="flex gap-2 justify-center mt-4">
                 <button className="btn btn-primary" onClick={() => nav('/import')}>
@@ -435,20 +430,17 @@ function HomeScreen({
           </div>
         ) : (
           <>
-            <div className="flex justify-between items-center mb-2">
-              <div className="section-title" style={{ margin: 0 }}>
-                {billFilter === 'active' ? 'BONS DE LIVRAISON ACTIFS' : 'HISTORIQUE DES BONS CLÔTURÉS'}
-              </div>
-              {billFilter === 'active' && (
+            {billFilter === 'active' && (
+              <div className="flex justify-end mb-2">
                 <button
                   className="btn btn-xs btn-secondary flex items-center gap-1"
                   onClick={() => setShowManualBillModal(true)}
-                  title="Créer un nouveau bon immédiatement"
+                  title="Créer un nouveau bon"
                 >
                   <IconPlus size={14} /> NOUVEAU BL
                 </button>
-              )}
-            </div>
+              </div>
+            )}
 
             {clientGroups.map(group => {
               if (group.bills.length === 1) {
@@ -566,16 +558,13 @@ function ManualBillModal({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
         <div className="flex justify-between items-center mb-3">
-          <div className="modal-title" style={{ margin: 0 }}>NOUVEAU BON IMMÉDIAT</div>
+          <div className="modal-title" style={{ margin: 0 }}>NOUVEAU BON</div>
           <button className="btn btn-ghost btn-xs btn-icon" onClick={onClose}><IconX size={18} /></button>
         </div>
-        <p className="text-xs text-muted mb-3">
-          Créez un bon d'expédition sur le terrain sans attendre l'administration.
-        </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>
-            <label className="text-xs text-muted font-bold block mb-1">NOM DU CLIENT / ENSEIGNE</label>
+            <label className="text-xs text-muted font-bold block mb-1">CLIENT</label>
             <input
               className="input"
               type="text"
@@ -588,7 +577,7 @@ function ManualBillModal({
           </div>
 
           <div>
-            <label className="text-xs text-muted font-bold block mb-1">NUMÉRO DU BON (BL / BC)</label>
+            <label className="text-xs text-muted font-bold block mb-1">N° DE BON (OPTIONNEL)</label>
             <input
               className="input"
               type="text"
@@ -601,7 +590,7 @@ function ManualBillModal({
           <div className="flex gap-2 justify-end mt-2">
             <button type="button" className="btn btn-secondary" onClick={onClose}>ANNULER</button>
             <button type="submit" className="btn btn-primary flex items-center gap-1">
-              <IconCheck size={16} /> CRÉER ET OUVRIR
+              <IconCheck size={16} /> CRÉER
             </button>
           </div>
         </form>
@@ -637,7 +626,7 @@ function ClientGroupCard({
           <IconBuilding size={18} style={{ color: 'var(--accent)' }} />
           <div>
             <div className="font-bold text-sm" style={{ letterSpacing: '0.3px' }}>{client}</div>
-            <div className="text-xs text-muted">{bills.length} Bons pour ce client</div>
+            <div className="text-xs text-muted">{bills.length} bons</div>
           </div>
         </div>
         <span
@@ -911,7 +900,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
     <>
       <header className="app-header">
         <button className="back-btn" onClick={() => nav(-1)} aria-label="Retour"><IconArrowLeft size={18} /></button>
-        <h1>NUMÉRISATION BL</h1>
+        <h1>NUMÉRISATION</h1>
       </header>
 
       <div className="app-content">
@@ -940,7 +929,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
               <IconKey size={20} style={{ color: 'var(--accent)' }} /> Clé API Google Gemini Requise
             </div>
             <p className="text-xs text-muted mb-3" style={{ lineHeight: 1.4 }}>
-              Pour numériser directement vos bons de livraison et notes avec l'appareil photo, collez votre clé d'API Google Gemini ci-dessous :
+              Collez votre clé Google Gemini pour activer la numérisation :
             </p>
             <form
               className="flex gap-2"
@@ -974,7 +963,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
               </button>
             </form>
             <div className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-              Clé 100% privée, stockée localement sur cet appareil • <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-light)', textDecoration: 'underline' }}>Obtenir une clé gratuite</a>
+              Stockée localement • <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-light)', textDecoration: 'underline' }}>Obtenir une clé gratuite</a>
             </div>
           </div>
         ) : (
@@ -1000,7 +989,6 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
 
             {/* Quick Model Selector */}
             <div className="mb-3">
-              <span className="text-xs text-muted font-bold block mb-1">MOTEUR GEMINI :</span>
               <div className="seg-control">
                 <button
                   className={`seg-btn ${selectedModel === 'gemini-3.5-flash-lite' ? 'active' : ''} flex items-center justify-center gap-1`}
@@ -1030,7 +1018,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
               <div className="mb-3">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-xs font-bold text-secondary">
-                    PAGES PRÊTES ({stagedPhotos.length}) :
+                    Pages ({stagedPhotos.length}) :
                   </span>
                   <button
                     type="button"
@@ -1038,7 +1026,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                     onClick={() => setStagedPhotos([])}
                     style={{ fontSize: '0.72rem' }}
                   >
-                    <IconX size={12} /> Effacer tout
+                    <IconX size={12} /> Effacer
                   </button>
                 </div>
 
@@ -1067,7 +1055,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                     disabled={isExtracting}
                     style={{ minHeight: 44, fontSize: '0.82rem' }}
                   >
-                    <IconPlus size={15} /> Page Suivante
+                    <IconPlus size={15} /> Ajouter page
                   </button>
                   <button
                     type="button"
@@ -1093,7 +1081,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                     </span>
                   ) : (
                     <span className="flex items-center justify-center gap-2">
-                      NUMÉRISER LES {stagedPhotos.length} PAGES
+                      NUMÉRISER ({stagedPhotos.length})
                     </span>
                   )}
                 </button>
@@ -1113,7 +1101,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                     </span>
                   ) : (
                     <span className="flex items-center justify-center gap-2">
-                      <IconCamera size={20} /> PRENDRE EN PHOTO
+                      <IconCamera size={20} /> PRENDRE UNE PHOTO
                     </span>
                   )}
                 </button>
@@ -1145,7 +1133,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
             onClick={() => setShowManualJSON(!showManualJSON)}
           >
             <span className="font-semibold text-sm text-secondary flex items-center gap-2">
-              <IconPencil size={15} /> {showManualJSON ? 'Masquer le JSON' : 'Coller du JSON manuellement'}
+              <IconPencil size={15} /> {showManualJSON ? 'Masquer JSON' : 'Importer JSON'}
             </span>
           </div>
 
@@ -1163,7 +1151,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                 onClick={handleParseManual}
                 disabled={!raw.trim()}
               >
-                ANALYSER LE JSON
+                ANALYSER
               </button>
             </div>
           )}
@@ -1182,9 +1170,9 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
         {preview?.payload && (
           <div className="mt-2">
             <div className="card">
-              <div className="section-title" style={{ marginTop: 0 }}>RÉSULTAT DE L’ANALYSE</div>
+              <div className="section-title" style={{ marginTop: 0 }}>RÉSULTAT</div>
               <p className="font-bold text-lg mb-2">
-                {preview.payload.bills?.length || 0} facture(s) détectée(s) •{' '}
+                {preview.payload.bills?.length || 0} bon(s) •{' '}
                 {preview.payload.bills?.reduce((s, b) => s + (b.lines?.length || 0), 0)} articles
               </p>
               {(preview.payload.bills || []).map((b, i) => (
@@ -1215,7 +1203,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                 onClick={handleImport}
                 disabled={importing || issues.some((i) => i.severity === 'error')}
               >
-                {importing ? 'Enregistrement...' : 'CONFIRMER ET IMPORTER'}
+                {importing ? 'Enregistrement...' : 'IMPORTER'}
               </button>
             </div>
           </div>
@@ -1228,8 +1216,8 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
               <div className="modal-title flex items-center gap-2">
                 <IconKey size={18} style={{ color: 'var(--accent)' }} /> Clé API Google Gemini
               </div>
-              <div className="text-xs text-muted mb-3" style={{ lineHeight: 1.4 }}>
-                Votre clé est stockée uniquement dans votre navigateur mobile. Elle permet à l’application de numériser directement vos BL papier.
+              <div className="text-xs text-muted mb-3">
+                Stockée localement sur cet appareil.
               </div>
 
               <div className="mb-3">
@@ -1916,7 +1904,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
 
             {stage === 'pointage' && outcome !== 'accepted' && (
               <div className="mt-3 p-2" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-badge)', border: '1px solid var(--glass-border-bright)' }}>
-                <div className="text-xs font-bold text-muted mb-1">MOTIF DU REFUS OU PRÉCISION DU MAGASIN :</div>
+                <div className="text-xs font-bold text-muted mb-1">MOTIF :</div>
                 <div className="flex flex-wrap gap-1 mb-2">
                   {['Emballage écrasé / ouvert', 'Article cassé / défectueux', 'Non commandé / Réf erronée', 'Date dépassée'].map(chip => (
                     <button
@@ -2059,7 +2047,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                         showToast(`Lot scellé : ${rounded.servedQty} servis (${rounded.missingQty} reliquat)`, setToast);
                       }}
                     >
-                      <IconBox size={14} /> Servir {rounded.servedQty} (Carton scellé • {rounded.missingQty} reliquat)
+                      <IconBox size={14} /> Servir {rounded.servedQty} ({rounded.missingQty} reliquat)
                     </button>
                   </div>
                 );
@@ -2133,7 +2121,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               >
                 <span className="flex items-center gap-1">
                   {selectedContainer === null && <IconCheck size={12} />}
-                  Hors Carton (À l'unité)
+                  Hors Carton
                 </span>
               </button>
               <button
@@ -2160,7 +2148,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             {/* Show transport breakdown for this line */}
             {events.filter(e => e.stage === 'preparation' && !e.undone).length > 0 && (
               <div className="mt-2 pt-2" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                <div className="text-xs text-muted mb-1">RÉPARTITION DÉJÀ ENREGISTRÉE :</div>
+                <div className="text-xs text-muted mb-1">RÉPARTITION :</div>
                 {containers.map((c) => {
                   const qty = events
                     .filter(e => e.stage === 'preparation' && !e.undone && e.containerId === c.id)
@@ -2180,7 +2168,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   if (noContainer === 0) return null;
                   return (
                     <div className="flex justify-between text-sm py-1">
-                      <span className="text-muted">Hors Carton (À l'unité)</span>
+                      <span className="text-muted">Hors Carton</span>
 
                       <span className="font-bold">{noContainer} unités</span>
                     </div>
@@ -2220,9 +2208,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 className="btn btn-sm flex items-center justify-center gap-1"
                 style={{ flex: 1, background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger)', border: '1px solid rgba(239, 68, 68, 0.3)' }}
                 onClick={() => handleStatusChange('out_of_stock')}
-                title="Stock totalement épuisé dans l'entrepôt"
+                title="Stock totalement épuisé"
               >
-                <IconBan size={15} /> RUPTURE DÉFINITIVE
+                <IconBan size={15} /> RUPTURE
               </button>
               <button
                 className="btn btn-sm btn-warning flex items-center justify-center gap-1"
@@ -2257,7 +2245,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               style={{ flex: 1 }}
               onClick={() => handleStatusChange('active')}
             >
-              <IconUndo size={15} /> RÉACTIVER L'ARTICLE ({line.status === 'out_of_stock' ? 'RUPTURE' : line.status === 'not_found' ? 'INTROUVABLE' : 'ANNULÉ'})
+              <IconUndo size={15} /> RÉACTIVER L'ARTICLE
             </button>
           </div>
         )}
@@ -2673,7 +2661,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
           <div>
             <div className="flex justify-between items-start mb-2">
               <div>
-                <div className="text-xs font-bold text-muted">CODE-BARRES INCONNU</div>
+                <div className="text-xs font-bold text-muted">CODE INCONNU</div>
                 <div className="font-bold text-lg" style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
                   {scanResult}
                 </div>
@@ -2684,7 +2672,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
             </div>
 
             <div className="text-xs text-secondary mb-2">
-              Touchez l'article de votre bon pour associer ce code immédiatement :
+              Associer à un article :
             </div>
 
             <input
@@ -2724,7 +2712,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
                 className="btn btn-secondary btn-full flex items-center justify-center gap-2 mt-2"
                 onClick={() => nav(`/bill/${billIdParam}/extras?stage=${stageParam}&ean=${scanResult}`)}
               >
-                <IconPlus size={16} /> Article absent du bon (Produit Hors-BL)
+                <IconPlus size={16} /> Produit Hors-BL
               </button>
             )}
           </div>
@@ -2746,7 +2734,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
           <div>
             <div className="flex justify-between items-center mb-2">
               <div>
-                <div className="text-xs font-bold text-muted">CODE DÉTECTÉ DANS {matchedLines.length} LIGNES</div>
+                <div className="text-xs font-bold text-muted">{matchedLines.length} ARTICLES TROUVÉS</div>
                 <div className="font-bold text-base" style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
                   {scanResult}
                 </div>
@@ -2756,7 +2744,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
               </button>
             </div>
             <div className="text-xs text-muted mb-2">
-              Touchez la ligne pour pointer et ajuster la quantité directement :
+              Sélectionnez la ligne :
             </div>
             <div className="flex flex-col gap-2 mb-2" style={{ maxHeight: '45vh', overflowY: 'auto' }}>
               {matchedLines.map((line) => {
@@ -2771,7 +2759,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
                     <div className="flex justify-between items-center">
                       <span className="line-no font-bold" style={{ fontSize: '1rem' }}>N°{line.no}</span>
                       <span className="badge badge-active" style={{ fontSize: '0.7rem' }}>
-                        Qté attendue : {line.orderedQty}
+                        Attendu : {line.orderedQty}
                       </span>
 
                     </div>
@@ -2985,18 +2973,11 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
 
         {/* Report Dispatch Card */}
         <div className="card mb-3" style={{ background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
-          <div className="flex justify-between items-center mb-2">
+          <div className="flex justify-between items-center mb-3">
             <div className="font-bold text-sm flex items-center gap-2" style={{ color: '#22c55e' }}>
-              <IconSend size={18} /> TRANSMISSION RAPPORT ÉCARTS
+              <IconSend size={18} /> RAPPORT D'ÉCARTS
             </div>
             <span className="badge badge-active" style={{ fontSize: '0.7rem' }}>Instantané</span>
-          </div>
-          <p className="text-xs text-muted mb-2">
-            Transmettez la synthèse des manquants, colis préparés et ruptures au responsable ou au bureau :
-          </p>
-          <div className="text-xs text-muted mb-3 flex flex-wrap items-center gap-2">
-            <span>Destinataire WhatsApp : <strong className="text-primary">{whatsappNumber}</strong></span>
-            {reportEmail && <span>• Email : <strong className="text-primary">{reportEmail}</strong></span>}
           </div>
           <div className="flex gap-2 flex-wrap">
             <button
@@ -3004,7 +2985,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
               style={{ background: '#25D366', color: '#fff', fontWeight: 700, border: 'none', minWidth: 150 }}
               onClick={handleShareWhatsApp}
             >
-              <IconSend size={15} /> WhatsApp ({whatsappNumber})
+              <IconSend size={15} /> WhatsApp
             </button>
             <button
               className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
@@ -3026,15 +3007,8 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
         {/* BL Lifecycle & Archiving Card */}
         <div className="card mb-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
           <div className="flex justify-between items-center">
-            <div>
-              <div className="font-bold text-sm">
-                {bill.status === 'completed' ? 'Bon Clôturé & Archivé' : 'Statut : Bon Actif'}
-              </div>
-              <div className="text-xs text-muted">
-                {bill.status === 'completed'
-                  ? 'Ce bon est conservé dans l’historique.'
-                  : 'Visible sur l’écran d’accueil pour le travail d’entrepôt.'}
-              </div>
+            <div className="font-bold text-sm">
+              {bill.status === 'completed' ? 'Bon Archivé' : 'Bon Actif'}
             </div>
             {bill.status === 'completed' ? (
               <button
@@ -3055,7 +3029,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
                   nav('/');
                 }}
               >
-                <IconCheck size={14} /> Clôturer & Archiver
+                <IconCheck size={14} /> Clôturer
               </button>
             )}
           </div>
@@ -3080,25 +3054,25 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
             className={`btn btn-sm ${summaryTab === 'problems' ? 'btn-warning' : 'btn-secondary'} flex items-center gap-1`}
             onClick={() => setSummaryTab('problems')}
           >
-            <IconWarning size={14} /> PROBLÈMES ({problemLines.length})
+            <IconWarning size={14} /> Problèmes ({problemLines.length})
           </button>
           <button
             className={`btn btn-sm ${summaryTab === 'all' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setSummaryTab('all')}
           >
-            TOUTES ({lines.length})
+            Toutes ({lines.length})
           </button>
           <button
             className={`btn btn-sm ${summaryTab === 'cartons' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
             onClick={() => setSummaryTab('cartons')}
           >
-            <IconBox size={14} /> PAR CARTON ({containers.length})
+            <IconBox size={14} /> Cartons ({containers.length})
           </button>
           <button
             className={`btn btn-sm ${summaryTab === 'audit' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
             onClick={() => setSummaryTab('audit')}
           >
-            <IconClipboard size={14} /> AUDIT
+            <IconClipboard size={14} /> Audit
           </button>
         </div>
 
@@ -3149,8 +3123,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
                     <div className="font-bold flex items-center gap-2">
                       <span className="container-tag selected" style={{ fontSize: '0.9rem' }}>{c.label}</span>
                       <span className="text-xs text-muted">
-                        {c.type === 'loose' ? 'Hors Carton (À l\'unité)' : c.type === 'large' ? 'Grand Colis' : 'Carton Standard'}
-
+                        {c.type === 'loose' ? 'Hors Carton' : c.type === 'large' ? 'Grand Colis' : 'Carton Standard'}
                       </span>
                     </div>
                     <span className="badge badge-active font-mono">{totalUnits} unités</span>
@@ -3191,7 +3164,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
               return (
                 <div className="card mb-3" style={{ borderColor: 'var(--warning-border)' }}>
                   <div className="flex justify-between items-center mb-2">
-                    <span className="container-tag" style={{ background: 'var(--bg-surface)' }}>HORS CARTON (À L'UNITÉ)</span>
+                    <span className="container-tag" style={{ background: 'var(--bg-surface)' }}>HORS CARTON</span>
 
                     <span className="badge badge-warning font-mono">{totalUnits} unités</span>
                   </div>
@@ -3446,25 +3419,18 @@ function BackupScreen({
 
       <div className="app-content">
         {/* Automatic saving assurance card */}
-        <div className="card" style={{ borderColor: 'var(--success)', background: 'rgba(16, 185, 129, 0.06)' }}>
-          <div className="flex items-center gap-2 font-bold mb-1" style={{ color: 'var(--success)' }}>
-            <IconCheck size={18} /> Enregistrement 100% Automatique & Continu
-          </div>
-          <p className="text-xs text-secondary" style={{ lineHeight: 1.5 }}>
-            Chaque scan, pointage, modification de quantité ou statut est instantanément enregistré dans la mémoire locale de votre téléphone (IndexedDB).
-          </p>
-          <p className="text-xs text-muted mt-1">
-            ✦ Vous n'avez jamais besoin d'enregistrer manuellement. Cet écran sert uniquement à <strong>télécharger un fichier de secours</strong> ou à <strong>transférer vos données</strong> vers un autre appareil.
-          </p>
+        <div className="card flex items-center gap-2 py-2 mb-3" style={{ borderColor: 'var(--success)', background: 'rgba(16, 185, 129, 0.06)' }}>
+          <IconCheck size={16} style={{ color: 'var(--success)' }} />
+          <span className="text-xs text-secondary font-semibold">Sauvegarde locale automatique</span>
         </div>
 
         <div className="card">
-          <div className="section-title" style={{ marginTop: 0 }}>EXPORTER (FICHIER JSON)</div>
+          <div className="section-title" style={{ marginTop: 0 }}>EXPORTER</div>
           <button className="btn btn-primary btn-full btn-lg mb-2 flex items-center justify-center gap-2" onClick={handleExport} disabled={exporting}>
-            <IconDisk size={18} /> {exporting ? 'Export...' : 'TÉLÉCHARGER LE FICHIER'}
+            <IconDisk size={18} /> {exporting ? 'Export...' : 'TÉLÉCHARGER (.JSON)'}
           </button>
           <button className="btn btn-secondary btn-full flex items-center justify-center gap-2" onClick={handleShare}>
-            <IconShare size={18} /> PARTAGER (Drive, WhatsApp, Email...)
+            <IconShare size={18} /> PARTAGER
           </button>
         </div>
 
@@ -3481,35 +3447,29 @@ function BackupScreen({
             style={{ display: 'none' }}
           />
           <button className="btn btn-warning btn-full flex items-center justify-center gap-2" onClick={() => fileInputRef.current?.click()}>
-            <IconFolder size={18} /> CHOISIR FICHIER DE SAUVEGARDE
+            <IconFolder size={18} /> IMPORTER (.JSON)
           </button>
         </div>
 
         {onOpenWalkthrough && (
           <div className="card mt-3">
             <div className="section-title" style={{ marginTop: 0 }}>GUIDE D'UTILISATION</div>
-            <p className="text-sm text-muted mb-3">
-              Besoin de revoir le fonctionnement des étapes de pointage, d'emballage ou du scanner ?
-            </p>
             <button
               className="btn btn-secondary btn-full flex items-center justify-center gap-2"
               onClick={onOpenWalkthrough}
             >
-              <IconHelp size={18} /> REVOIR LE GUIDE INTERACTIF
+              <IconHelp size={18} /> GUIDE INTERACTIF
             </button>
           </div>
         )}
 
         {/* Subtle Credits Card */}
-        <div className="card mt-4" style={{ textAlign: 'center', padding: '20px 16px' }}>
-          <div className="brand-container mb-2" style={{ justifyContent: 'center' }}>
-            <BrandWordmark size={32} />
+        <div className="card mt-4" style={{ textAlign: 'center', padding: '16px' }}>
+          <div className="brand-container mb-1" style={{ justifyContent: 'center' }}>
+            <BrandWordmark size={28} />
           </div>
-          <div className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-            Pointage • Solution Logistique Entrepôt
-          </div>
-          <div className="text-xs text-muted mt-1">
-            Minimaliste • Intemporel • 100% Hors-Ligne
+          <div className="text-xs text-muted">
+            100% Hors-Ligne
           </div>
         </div>
 
@@ -3538,10 +3498,10 @@ function HistoryScreen() {
       <div className="app-content">
         <div className="seg-control mb-3">
           <button className={`seg-btn ${tab === 'active' ? 'active' : ''}`} onClick={() => setTab('active')}>
-            ACTIVES
+            Actifs
           </button>
           <button className={`seg-btn ${tab === 'completed' ? 'active' : ''}`} onClick={() => setTab('completed')}>
-            TERMINÉES
+            Archivés
           </button>
         </div>
 
@@ -3557,7 +3517,7 @@ function HistoryScreen() {
 
         {filteredBills.length === 0 && (
           <div className="empty-state">
-            <p>Aucune facture {tab === 'active' ? 'active' : 'terminée'}</p>
+            <p>Aucun bon {tab === 'active' ? 'actif' : 'archivé'}</p>
           </div>
         )}
       </div>

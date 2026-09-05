@@ -45,7 +45,7 @@ export function SettingsModal({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
         <div className="flex justify-between items-center mb-3">
-          <div className="modal-title" style={{ margin: 0 }}>PARAMÈTRES & QUOTAS</div>
+          <div className="modal-title" style={{ margin: 0 }}>PARAMÈTRES</div>
           <button
             className="btn btn-ghost btn-xs btn-icon"
             onClick={onClose}
@@ -60,9 +60,9 @@ export function SettingsModal({
         <div className="card mb-3" style={{ background: 'var(--bg-surface)' }}>
           <div className="flex justify-between items-center">
             <div>
-              <div className="font-bold text-sm">Apparence & Thème</div>
+              <div className="font-bold text-sm">Thème</div>
               <div className="text-xs text-muted">
-                {theme === 'dark' ? 'Mode Sombre OLED (Optimal entrepôt)' : 'Mode Clair Haute Lisibilité'}
+                {theme === 'dark' ? 'Sombre' : 'Clair'}
               </div>
             </div>
             <button
@@ -71,11 +71,11 @@ export function SettingsModal({
             >
               {theme === 'dark' ? (
                 <>
-                  <IconSun size={15} /> Passer en Clair
+                  <IconSun size={15} /> Clair
                 </>
               ) : (
                 <>
-                  <IconMoon size={15} /> Passer en Sombre
+                  <IconMoon size={15} /> Sombre
                 </>
               )}
             </button>
@@ -86,16 +86,13 @@ export function SettingsModal({
         <div className="card mb-3" style={{ background: 'var(--bg-surface)' }}>
           <div className="flex items-center gap-2 mb-2">
             <IconSparkles size={16} style={{ color: 'var(--accent)' }} />
-            <div className="font-bold text-sm">Consommation API Gemini (Aujourd'hui)</div>
-          </div>
-          <div className="text-xs text-muted mb-3">
-            Quotas officiels gratuits Google AI Studio par jour :
+            <div className="font-bold text-sm">Quotas API (Aujourd'hui)</div>
           </div>
 
           {/* Flash Lite 3.5 */}
           <div className="mb-3">
             <div className="flex justify-between items-center text-xs mb-1">
-              <span className="font-semibold">Flash Lite 3.5 (Rapide • Recommandé)</span>
+              <span className="font-semibold">Flash Lite 3.5</span>
               <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
                 {quota.liteUsed} / {quota.liteLimit} scans
               </span>
@@ -109,15 +106,12 @@ export function SettingsModal({
                 }}
               />
             </div>
-            <div className="text-xs text-muted mt-1" style={{ fontSize: '0.72rem' }}>
-              Il vous reste <strong>{Math.max(0, quota.liteLimit - quota.liteUsed)}</strong> scans aujourd'hui.
-            </div>
           </div>
 
           {/* Flash 3.8 */}
-          <div className="mb-2">
+          <div className="mb-1">
             <div className="flex justify-between items-center text-xs mb-1">
-              <span className="font-semibold">Flash 3.8 (Ultra-précis • BL complexes)</span>
+              <span className="font-semibold">Flash 3.8</span>
               <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
                 {quota.flashUsed} / {quota.flashLimit} scans
               </span>
@@ -131,14 +125,6 @@ export function SettingsModal({
                 }}
               />
             </div>
-            <div className="text-xs text-muted mt-1" style={{ fontSize: '0.72rem' }}>
-              Il vous reste <strong>{Math.max(0, quota.flashLimit - quota.flashUsed)}</strong> scans aujourd'hui.
-            </div>
-          </div>
-
-          <div className="divider" style={{ margin: '10px 0' }} />
-          <div className="text-xs text-muted text-center" style={{ fontSize: '0.72rem' }}>
-            Réinitialisation automatique à minuit.
           </div>
         </div>
 
@@ -148,13 +134,10 @@ export function SettingsModal({
             <IconSend size={16} style={{ color: '#25D366' }} />
             <div className="font-bold text-sm">Destinataires des Rapports</div>
           </div>
-          <div className="text-xs text-muted mb-3">
-            Destinations où transmettre les synthèses d'expédition et d'écarts :
-          </div>
 
           <div className="mb-3">
             <label className="text-xs font-semibold text-muted block mb-1">
-              Numéro WhatsApp du Responsable
+              WhatsApp
             </label>
             <input
               type="text"
@@ -166,14 +149,11 @@ export function SettingsModal({
                 localStorage.setItem('pointage_whatsapp_number', e.target.value);
               }}
             />
-            <div className="text-xs text-muted mt-1" style={{ fontSize: '0.7rem' }}>
-              Par défaut : <strong>+213556264976</strong> (Format international avec indicatif)
-            </div>
           </div>
 
           <div className="mb-1">
             <label className="text-xs font-semibold text-muted block mb-1">
-              Email Facturation / Responsable (Optionnel)
+              Email (Optionnel)
             </label>
             <input
               type="email"
@@ -190,7 +170,6 @@ export function SettingsModal({
 
         {/* Configuration Actions */}
         <div className="flex flex-col gap-2">
-
           <button
             className="btn btn-secondary btn-full flex items-center justify-center gap-2"
             onClick={() => {
@@ -198,7 +177,7 @@ export function SettingsModal({
               onOpenKeyModal();
             }}
           >
-            <IconKey size={16} /> Gérer la Clé API Gemini
+            <IconKey size={16} /> Clé API Gemini
           </button>
 
           <button
@@ -208,7 +187,7 @@ export function SettingsModal({
               onOpenWalkthrough();
             }}
           >
-            <IconHelp size={16} /> Relancer le Guide Interactif
+            <IconHelp size={16} /> Guide d'utilisation
           </button>
         </div>
       </div>

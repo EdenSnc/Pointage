@@ -16,6 +16,8 @@ import {
   IconArrowRight,
   IconPlus,
   IconPencil,
+  IconCheck,
+  IconWarning,
 } from './icons';
 
 interface FastScanQuantityCardProps {
@@ -181,12 +183,12 @@ export function FastScanQuantityCard({
 
         <div className="flex items-center gap-2">
           {isExact ? (
-            <span className="badge badge-exact font-bold" style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
-              ✓ Ligne complète
+            <span className="badge badge-exact font-bold flex items-center gap-1" style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
+              <IconCheck size={12} /> Complet
             </span>
           ) : isOver ? (
-            <span className="badge badge-over font-bold" style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
-              ⚠️ Surplus (+{totalCounted - line.orderedQty})
+            <span className="badge badge-over font-bold flex items-center gap-1" style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
+              <IconWarning size={12} /> Surplus (+{totalCounted - line.orderedQty})
             </span>
           ) : (
             <span className="badge badge-active font-bold" style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
@@ -254,7 +256,7 @@ export function FastScanQuantityCard({
               color: remaining > 0 ? 'var(--warning)' : 'var(--accent)',
             }}
           >
-            {remaining > 0 ? `Reste à servir : ${remaining}` : 'Complet ✓'}
+            {remaining > 0 ? `Reste : ${remaining}` : 'Complet'}
           </div>
         </div>
 
@@ -273,7 +275,7 @@ export function FastScanQuantityCard({
       {(stage === 'preparation' || stage === 'chargement') && (
         <div className="mb-3">
           <div className="text-xs font-semibold text-muted mb-1 flex items-center gap-1">
-            <IconBox size={13} /> Colis de destination :
+            <IconBox size={13} /> Colis :
           </div>
           <div
             className="flex gap-2 overflow-x-auto py-1 items-center"
@@ -358,7 +360,6 @@ export function FastScanQuantityCard({
       {/* TIER 3: THUMB-ZONE QUICK ACTIONS (Fitts's Law: 48dp Bounds)   */}
       {/* ============================================================ */}
       <div className="flex flex-col gap-2 mb-3">
-        <div className="text-xs font-semibold text-muted">Ajouter en 1 clic :</div>
         <div className="flex gap-2">
           {/* +1 Quick Action */}
           <button
@@ -509,14 +510,14 @@ export function FastScanQuantityCard({
 
       {recentDelta !== null && (
         <div
-          className="text-xs font-bold text-center py-2 mb-2 rounded"
+          className="text-xs font-bold text-center py-1 mb-2 rounded"
           style={{
             background: 'rgba(16, 185, 129, 0.15)',
             color: 'var(--accent)',
             borderRadius: 10,
           }}
         >
-          ✓ +{recentDelta} unités enregistrées avec succès !
+          +{recentDelta}
         </div>
       )}
 
@@ -528,7 +529,7 @@ export function FastScanQuantityCard({
           onClick={onNextScan}
           style={{ minHeight: 50, fontSize: '0.95rem', fontWeight: 800, borderRadius: 14 }}
         >
-          <IconScan size={18} /> Scanner suivant
+          <IconScan size={18} /> Suivant
         </button>
         <button
           type="button"
