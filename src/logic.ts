@@ -474,11 +474,20 @@ export function serializeCountsForQR(
     });
   }
 
+  // Deterministic timestamp: use the latest count event's timestamp so the QR code
+  // remains completely static and identical unless an actual count is modified.
+  const latestEventTs = events
+    .filter(e => !e.undone && e.createdAt)
+    .reduce((max, e) => {
+      const t = new Date(e.createdAt).getTime();
+      return Math.max(max, isNaN(t) ? 0 : t);
+    }, 0);
+
   const payload: QRSyncPayload = {
     ptg: 1,
     billNumber,
     client,
-    ts: Date.now(),
+    ts: latestEventTs,
     counts,
   };
 
