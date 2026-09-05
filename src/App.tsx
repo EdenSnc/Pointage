@@ -104,20 +104,26 @@ import { providerRegistry } from './ai/providerRegistry';
 import { ErrorBoundary } from './ErrorBoundary';
 import { SettingsModal } from './SettingsModal';
 import { FastScanQuantityCard } from './FastScanQuantityCard';
+import { playSuccessChime, playErrorBeep, playWarningBeep } from './audio';
 
-
+export interface ToastItem {
+  message: string;
+  onUndo?: () => void | Promise<void>;
+  undoLabel?: string;
+}
 
 // ---- Toast ----
 let toastTimeout: ReturnType<typeof setTimeout> | null = null;
-function showToast(msg: string, setToast: (m: string) => void) {
+function showToast(msg: string | ToastItem, setToast: (m: any) => void, duration = 2500) {
   setToast(msg);
   if (toastTimeout) clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => setToast(''), 2500);
+  const timeoutMs = typeof msg === 'object' && msg.onUndo ? 5000 : duration;
+  toastTimeout = setTimeout(() => setToast(''), timeoutMs);
 }
 
 // ---- App Shell ----
 export default function App() {
-  const [toast, setToast] = useState('');
+  const [toast, setToast] = useState<string | ToastItem>('');
   const [showWalkthrough, setShowWalkthrough] = useState(() => {
     return localStorage.getItem('pointage_onboarded') !== 'true';
   });
@@ -174,7 +180,31 @@ export default function App() {
           <Route path="/bill/:billId/extras" element={<ExtrasScreen setToast={setToast} />} />
         </Routes>
       </ErrorBoundary>
-      {toast && <div className="toast">{toast}</div>}
+      {toast && (
+        <div className="toast flex items-center justify-between gap-3" style={{ minWidth: 260 }}>
+          <span>{typeof toast === 'string' ? toast : toast.message}</span>
+          {typeof toast !== 'string' && toast.onUndo && (
+            <button
+              type="button"
+              className="btn btn-xs btn-warning font-bold"
+              onClick={async () => {
+                const action = toast.onUndo;
+                setToast('');
+                if (action) await action();
+              }}
+              style={{
+                padding: '4px 12px',
+                minHeight: 32,
+                fontSize: '0.78rem',
+                borderRadius: 8,
+                cursor: 'pointer',
+              }}
+            >
+              {toast.undoLabel || 'Annuler'}
+            </button>
+          )}
+        </div>
+      )}
       <OnboardingWalkthrough
         isOpen={showWalkthrough}
         onClose={() => setShowWalkthrough(false)}
@@ -308,7 +338,18 @@ function HomeScreen({
 
   const handleArchiveBill = async (billId: number) => {
     await db.bills.update(billId, { status: 'completed' });
-    showToast('Bon archivé dans l’historique', setToast);
+    showToast(
+      {
+        message: 'Bon archivé dans l’historique',
+        onUndo: async () => {
+          await db.bills.update(billId, { status: 'active' });
+          showToast('Bon restauré dans les bons actifs', setToast);
+        },
+        undoLabel: 'Annuler (5s)',
+      },
+      setToast as any,
+      5000
+    );
   };
 
   const handleRestoreBill = async (billId: number) => {
@@ -333,14 +374,10 @@ function HomeScreen({
   return (
     <>
       <header className="app-header">
-        <div className="brand-container" onClick={() => nav('/')} title="Pointage — Warehouse Bills Tracker">
+        <div className="brand-container" onClick={() => nav('/')} title="Pointage">
           <BrandLogo size={34} />
           <div className="brand-text">
-            <div className="flex items-center gap-2">
-              <span className="brand-title">Pointage</span>
-            </div>
-            <span className="brand-subtitle">Warehouse Bills Tracker</span>
-
+            <span className="brand-title">Pointage</span>
           </div>
         </div>
 
@@ -844,24 +881,32 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
   const handleExtractAll = async () => {
     if (stagedPhotos.length === 0) return;
     setIsExtracting(true);
-    setExtractProgress(
-      stagedPhotos.length > 1
-        ? `Extraction de ${stagedPhotos.length} pages avec Gemini...`
-        : 'Lecture du document avec Gemini...'
-    );
+    setExtractProgress("1/3 Optimisation de l'image (Galaxy A54)...");
+
+    const t1 = setTimeout(() => {
+      setExtractProgress("2/3 Analyse IA Gemini : Détection du tableau et lecture des lignes...");
+    }, 1800);
+
+    const t2 = setTimeout(() => {
+      setExtractProgress("3/3 Vérification des références et préparation du bon...");
+    }, 4500);
 
     try {
       const files = stagedPhotos.map((p) => p.file);
       const result = await activeProvider.extractFromImage(files, apiKey, selectedModel);
       setPreview({ payload: result.payload, parseError: null });
       setIssues(validateImport(result.payload));
+      playSuccessChime();
       showToast(
         `${result.payload.bills?.length || 1} BL extrait(s) (${stagedPhotos.length} pages) avec succès !`,
         setToast
       );
     } catch (err) {
+      playErrorBeep();
       showToast(`Erreur IA: ${(err as Error).message}`, setToast);
     } finally {
+      clearTimeout(t1);
+      clearTimeout(t2);
       setIsExtracting(false);
       setExtractProgress('');
     }
@@ -2496,13 +2541,18 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
   }, [scanning]);
 
   const handleScanResult = (code: string) => {
-    if (navigator.vibrate) navigator.vibrate(50);
     setScanResult(code);
     setScanning(false);
 
     // Find matches (now including overrides)
     const matches = findLinesByCode(code);
     setMatchedLines(matches);
+    if (matches.length > 0) {
+      playSuccessChime();
+    } else {
+      playErrorBeep();
+    }
+
     if (matches.length === 1) {
       setSelectedLine(matches[0]);
     } else {

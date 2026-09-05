@@ -94,22 +94,6 @@ export function BrandWordmark({
         >
           Pointage
         </span>
-        {showSubtitle && (
-          <span
-            style={{
-              fontFamily: 'var(--font)',
-              fontSize: `${Math.max(8.5, size * 0.28)}px`,
-              fontWeight: 700,
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              color: 'var(--brand-sage)',
-              lineHeight: 1,
-              marginTop: 3,
-            }}
-          >
-            Warehouse Bills Tracker
-          </span>
-        )}
       </div>
     </div>
   );
