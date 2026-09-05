@@ -45,6 +45,7 @@ import {
   serializeCountsForQR,
   parseQRSyncPayload,
   planQRMerge,
+  findNormalBackCamera,
   QRSyncPayload,
 } from './logic';
 import { parseImportJSON, importBills, getOrCreateSession, validateImport } from './importer';
@@ -2912,12 +2913,10 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
   const [associateSearch, setAssociateSearch] = useState('');
   const [selectedLine, setSelectedLine] = useState<OrderLine | null>(null);
 
-  // Camera lens management (fix 0.5x Ultra-Wide issue on Samsung / multi-lens phones)
-  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
+  // Dedicated Normal 1x Camera Management (100% eliminates 0.5x Ultra-Wide)
   const [selectedCameraId, setSelectedCameraId] = useState<string>(() => {
     return localStorage.getItem('pointage_preferred_camera_id') || '';
   });
-  const [cameraIndex, setCameraIndex] = useState<number>(0);
   const [qrSyncModalPayload, setQrSyncModalPayload] = useState<QRSyncPayload | null>(null);
 
   // Start camera
@@ -2945,9 +2944,25 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
         ]);
         reader = new BrowserMultiFormatReader(hints);
 
-        const videoConstraints: MediaTrackConstraints = selectedCameraId
+        // If we haven't resolved a normal camera device ID yet, inspect devices first
+        let activeDeviceId = selectedCameraId;
+        if (!activeDeviceId && navigator.mediaDevices?.enumerateDevices) {
+          try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const normalId = findNormalBackCamera(devices);
+            if (normalId) {
+              activeDeviceId = normalId;
+              setSelectedCameraId(normalId);
+              localStorage.setItem('pointage_preferred_camera_id', normalId);
+            }
+          } catch (e) {
+            console.warn('Initial device enumeration skipped:', e);
+          }
+        }
+
+        const videoConstraints: MediaTrackConstraints = activeDeviceId
           ? {
-              deviceId: { exact: selectedCameraId },
+              deviceId: { exact: activeDeviceId },
               width: { ideal: 1920 },
               height: { ideal: 1080 },
             }
@@ -2972,56 +2987,41 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
             }
           );
 
-          // Store stream for cleanup and configure Samsung Galaxy continuous autofocus
+          // Configure Samsung Galaxy continuous autofocus & force zoom >= 1.0x (anti-wide)
           if (videoRef.current?.srcObject) {
             const stream = videoRef.current.srcObject as MediaStream;
             streamRef.current = stream;
             const track = stream.getVideoTracks()[0];
             if (track && 'applyConstraints' in track) {
-              track.applyConstraints({
-                advanced: [{ focusMode: 'continuous' } as any],
-              }).catch(() => {});
+              const caps = (track as any).getCapabilities ? (track as any).getCapabilities() : {};
+              const adv: any = {};
+              if (caps.focusMode && Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
+                adv.focusMode = 'continuous';
+              }
+              if (caps.zoom) {
+                // If the hardware starts at 0.5x or 0.6x, zoom directly to 1.0x (standard 1x lens view)
+                const minZoom = caps.zoom.min || 1;
+                adv.zoom = Math.max(1.0, minZoom);
+              }
+              if (Object.keys(adv).length > 0) {
+                track.applyConstraints({ advanced: [adv] }).catch(() => {});
+              }
             }
           }
 
-          // Enumerate cameras to detect multi-lens hardware
+          // Once permission is granted and stream is open, re-check camera labels to guarantee
+          // we are locked onto the 1x normal camera (e.g. camera2 2 on Samsung)
           if (navigator.mediaDevices?.enumerateDevices) {
             try {
               const devices = await navigator.mediaDevices.enumerateDevices();
-              const videoDevs = devices.filter(d => d.kind === 'videoinput');
-              const backDevs = videoDevs.filter(d => {
-                const lbl = (d.label || '').toLowerCase();
-                return !lbl.includes('front') && !lbl.includes('avant') && !lbl.includes('selfie') && !lbl.includes('user');
-              });
-              const targets = backDevs.length > 0 ? backDevs : videoDevs;
-              setAvailableCameras(targets);
-
-              // Auto-fix: if camera was opened on ultra-wide / 0.5x by default without stored preference
-              if (!selectedCameraId && targets.length > 1) {
-                const currentTrack = (videoRef.current?.srcObject as MediaStream)?.getVideoTracks()[0];
-                const activeLabel = (currentTrack?.label || '').toLowerCase();
-                const isWide = activeLabel.includes('0.5') || activeLabel.includes('ultra') || activeLabel.includes('wide');
-
-                if (isWide) {
-                  // Find standard 1x camera
-                  const standardCam = targets.find(d => {
-                    const lbl = (d.label || '').toLowerCase();
-                    return !lbl.includes('0.5') && !lbl.includes('ultra') && !lbl.includes('wide') && !lbl.includes('macro');
-                  });
-                  if (standardCam && standardCam.deviceId) {
-                    setSelectedCameraId(standardCam.deviceId);
-                    localStorage.setItem('pointage_preferred_camera_id', standardCam.deviceId);
-                    return;
-                  }
-                }
-              }
-
-              if (selectedCameraId) {
-                const idx = targets.findIndex(d => d.deviceId === selectedCameraId);
-                if (idx !== -1) setCameraIndex(idx);
+              const normalId = findNormalBackCamera(devices);
+              if (normalId && normalId !== activeDeviceId) {
+                setSelectedCameraId(normalId);
+                localStorage.setItem('pointage_preferred_camera_id', normalId);
+                return; // Will re-run effect with the guaranteed 1x camera
               }
             } catch (e) {
-              console.warn('Camera device enumeration failed:', e);
+              console.warn('Camera verification failed:', e);
             }
           }
         }
@@ -3040,17 +3040,6 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
       }
     };
   }, [scanning, selectedCameraId]);
-
-  const cycleCamera = () => {
-    if (availableCameras.length <= 1) return;
-    const nextIdx = (cameraIndex + 1) % availableCameras.length;
-    const nextDev = availableCameras[nextIdx];
-    setCameraIndex(nextIdx);
-    setSelectedCameraId(nextDev.deviceId);
-    localStorage.setItem('pointage_preferred_camera_id', nextDev.deviceId);
-    const isWide = (nextDev.label || '').toLowerCase().includes('0.5') || (nextDev.label || '').toLowerCase().includes('ultra');
-    showToast(`Caméra : ${isWide ? '0.5x (Grand Angle)' : '1x (Standard)'}`, setToast);
-  };
 
   const handleScanResult = (code: string) => {
     // Check if code is a Pointage offline QR Sync payload
@@ -3206,23 +3195,6 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
           <video ref={videoRef} className="scanner-video" playsInline muted autoPlay />
           <div className="scanner-target" />
         </>
-      )}
-
-      {scanning && availableCameras.length > 1 && (
-        <button
-          type="button"
-          className="camera-lens-btn"
-          onClick={cycleCamera}
-          title="Changer d'objectif caméra (1x / 0.5x)"
-        >
-          <IconCamera size={14} />
-          <span>
-            {availableCameras[cameraIndex]?.label?.toLowerCase().includes('0.5') ||
-            availableCameras[cameraIndex]?.label?.toLowerCase().includes('ultra')
-              ? '0.5x'
-              : '1x'}
-          </span>
-        </button>
       )}
 
       <button className="btn btn-secondary btn-icon scanner-close" onClick={handleClose} aria-label="Fermer">

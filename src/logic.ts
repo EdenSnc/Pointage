@@ -606,5 +606,91 @@ export function planQRMerge(
   };
 }
 
+/**
+ * Automatically select the standard/normal (1x) rear camera,
+ * discarding any 0.5x Ultra-Wide, wide-angle, macro, or front-facing cameras.
+ */
+export function findNormalBackCamera(
+  devices: Array<{ deviceId: string; label: string; kind?: string }>
+): string | null {
+  const videoDevs = devices.filter(d => !d.kind || d.kind === 'videoinput');
+  if (videoDevs.length === 0) return null;
+
+  // Filter out front/selfie cameras
+  const backDevs = videoDevs.filter(d => {
+    const lbl = (d.label || '').toLowerCase();
+    return (
+      !lbl.includes('front') &&
+      !lbl.includes('avant') &&
+      !lbl.includes('selfie') &&
+      !lbl.includes('user')
+    );
+  });
+
+  const candidates = backDevs.length > 0 ? backDevs : videoDevs;
+  if (candidates.length === 1) return candidates[0].deviceId;
+
+  // 1. Explicitly filter out wide / ultra / macro / depth / 0.5 / 0.6
+  const nonWideCandidates = candidates.filter(d => {
+    const lbl = (d.label || '').toLowerCase();
+    return (
+      !lbl.includes('ultra') &&
+      !lbl.includes('0.5') &&
+      !lbl.includes('0.6') &&
+      !lbl.includes('macro') &&
+      !lbl.includes('depth') &&
+      !lbl.includes('wide')
+    );
+  });
+
+  if (nonWideCandidates.length === 1) {
+    return nonWideCandidates[0].deviceId;
+  }
+
+  // 2. Look for explicit main / standard / primary / 1x labels
+  const explicitMain = candidates.find(d => {
+    const lbl = (d.label || '').toLowerCase();
+    return (
+      lbl.includes('main') ||
+      lbl.includes('standard') ||
+      lbl.includes('primary') ||
+      lbl.includes('1x')
+    );
+  });
+  if (explicitMain) return explicitMain.deviceId;
+
+  // 3. Samsung Galaxy Camera2 HAL pattern:
+  // On Samsung phones with Camera2 API, the cameras are numbered:
+  // camera2 0 = 0.5x Ultra-Wide / Logical Wide
+  // camera2 2 = Main 1x Sensor (50MP standard lens)
+  // camera2 3 = Macro Sensor
+  // If camera2 2 is present, it is ALWAYS the physical 1x main sensor!
+  const samsungMain = candidates.find(d => {
+    const lbl = (d.label || '').toLowerCase();
+    return lbl.includes('camera2 2') || lbl.includes('camera 2');
+  });
+  if (samsungMain) return samsungMain.deviceId;
+
+  // 4. If the first back camera is camera2 0, and there are other back cameras,
+  // the second back camera (index 1) is the main sensor (Camera 2) on Samsung:
+  if (
+    candidates.length >= 2 &&
+    (candidates[0].label || '').toLowerCase().includes('camera2 0')
+  ) {
+    return candidates[1].deviceId;
+  }
+
+  // 5. Fallback: if candidates[0] has '0' in label and candidate 1 exists, prefer candidate 1
+  if (
+    candidates.length >= 2 &&
+    (candidates[0].label || '').toLowerCase().includes('0')
+  ) {
+    return candidates[1].deviceId;
+  }
+
+  return (nonWideCandidates[0] || candidates[0]).deviceId;
+}
+
+
 
 

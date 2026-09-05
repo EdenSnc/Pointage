@@ -17,6 +17,7 @@ import {
   serializeCountsForQR,
   parseQRSyncPayload,
   planQRMerge,
+  findNormalBackCamera,
   QRSyncPayload,
 } from './logic';
 
@@ -471,6 +472,38 @@ describe('QR Code Sync & Merge Payload', () => {
     expect(item1.newStageQty).toBe(25);
   });
 });
+
+describe('findNormalBackCamera (1x camera selection)', () => {
+  it('selects camera2 2 over camera2 0 on Samsung devices', () => {
+    const devices = [
+      { deviceId: 'wide-0', label: 'camera2 0, facing back', kind: 'videoinput' },
+      { deviceId: 'front-1', label: 'camera2 1, facing front', kind: 'videoinput' },
+      { deviceId: 'main-2', label: 'camera2 2, facing back', kind: 'videoinput' },
+    ];
+    expect(findNormalBackCamera(devices)).toBe('main-2');
+  });
+
+  it('filters out ultra-wide and 0.5x labels', () => {
+    const devices = [
+      { deviceId: 'wide-id', label: 'Back Ultra Wide (0.5x)', kind: 'videoinput' },
+      { deviceId: 'main-id', label: 'Back Camera 1 (Standard 1x)', kind: 'videoinput' },
+    ];
+    expect(findNormalBackCamera(devices)).toBe('main-id');
+  });
+
+  it('discards front camera and returns sole back camera', () => {
+    const devices = [
+      { deviceId: 'front-id', label: 'Front Camera', kind: 'videoinput' },
+      { deviceId: 'back-id', label: 'Back Camera', kind: 'videoinput' },
+    ];
+    expect(findNormalBackCamera(devices)).toBe('back-id');
+  });
+
+  it('handles empty device list gracefully', () => {
+    expect(findNormalBackCamera([])).toBeNull();
+  });
+});
+
 
 
 
