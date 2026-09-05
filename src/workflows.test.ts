@@ -8,13 +8,11 @@ import {
   calcBatchQty,
   sumStageEvents,
   calcDiscrepancy,
-  calcBillProgress,
   lineBlocksCompletion,
   getStageTotals,
-  generateReferenceAliases,
   smartSearchScore,
 } from './logic';
-import type { OrderLine, CountEvent, Bill } from './types';
+import type { OrderLine, CountEvent } from './types';
 
 function makeLine(overrides: Partial<OrderLine> = {}): OrderLine {
   return {

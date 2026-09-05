@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   sumStageEvents,
+  calcDiscrepancy,
   smartSearchScore,
   calcPackBreakdown,
   roundDownToPack,
@@ -312,11 +313,12 @@ describe('QA: Carton & Container Distributions', () => {
     const events: CountEvent[] = [
       makeEvent({ orderLineId: 1, stage: 'preparation', containerId: 101, quantity: 24 }), // Carton A
       makeEvent({ orderLineId: 1, stage: 'preparation', containerId: 102, quantity: 18 }), // Carton B
-      makeEvent({ orderLineId: 1, stage: 'preparation', containerId: null, quantity: 6 }),  // Vrac / loose
+      makeEvent({ orderLineId: 1, stage: 'preparation', containerId: null, quantity: 6 }),  // Hors Carton / loose
     ];
 
     const totalPrep = sumStageEvents(events, 'preparation');
     expect(totalPrep).toBe(48);
+    expect(calcDiscrepancy(line, totalPrep).isExact).toBe(true);
 
     const inCartonA = events
       .filter(e => e.containerId === 101 && !e.undone)
@@ -324,14 +326,14 @@ describe('QA: Carton & Container Distributions', () => {
     const inCartonB = events
       .filter(e => e.containerId === 102 && !e.undone)
       .reduce((s, e) => s + e.quantity, 0);
-    const inVrac = events
+    const inHorsCarton = events
       .filter(e => e.containerId === null && !e.undone)
       .reduce((s, e) => s + e.quantity, 0);
 
     expect(inCartonA).toBe(24);
     expect(inCartonB).toBe(18);
-    expect(inVrac).toBe(6);
-    expect(inCartonA + inCartonB + inVrac).toBe(48);
+    expect(inHorsCarton).toBe(6);
+    expect(inCartonA + inCartonB + inHorsCarton).toBe(48);
   });
 
   it('ignores undone / cancelled events in container tallies', () => {

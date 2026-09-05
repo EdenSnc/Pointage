@@ -4,7 +4,7 @@
 // Direct Tap-to-Type Keypad + Velocity Acceleration + Audio/Haptics
 // ============================================================
 
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { OrderLine, Bill, Stage, PointageOutcome } from './types';
 import { useLineEvents, useBillContainers, addCountEvent, undoLastCount } from './hooks';
 import { sumStageEvents } from './logic';
@@ -16,7 +16,6 @@ import {
   IconArrowRight,
   IconPlus,
   IconPencil,
-  IconCheck,
 } from './icons';
 
 interface FastScanQuantityCardProps {

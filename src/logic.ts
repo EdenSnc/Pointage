@@ -2,7 +2,7 @@
 // POINTAGE — Pure quantity arithmetic (no dependencies)
 // ============================================================
 
-import { CountEvent, PointageOutcome, Stage, LineStatus, OrderLine, LineDiscrepancy, StageTotals } from './types';
+import { CountEvent, PointageOutcome, Stage, OrderLine, LineDiscrepancy, StageTotals } from './types';
 
 /**
  * Calculate batch quantity from packaging counts.

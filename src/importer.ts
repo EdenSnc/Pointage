@@ -10,7 +10,6 @@ import type {
   ImportLineJSON,
   Bill,
   OrderLine,
-  AuditEvent,
 } from './types';
 
 

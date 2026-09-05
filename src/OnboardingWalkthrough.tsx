@@ -34,7 +34,7 @@ const STEPS: TourStep[] = [
   {
     route: '/',
     badge: 'Étape 1 sur 4 • Accueil',
-    title: 'Pointage — Warehouse Bills',
+    title: 'Pointage — Vos Bons de Livraison',
     text: 'Vos bons de livraison sont centralisés ici. Touchez une facture pour commencer à pointer vos colis.',
     icon: <BrandLogo size={32} />,
   },

@@ -5,18 +5,14 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
 import type {
-  Bill,
   OrderLine,
-  CountEvent,
   TransportContainer,
-  ExtraProduct,
   Stage,
   AuditEvent,
   LineStatus,
   PointageOutcome,
   ChangeReason,
   BillIdentifierOverride,
-  IdentifierSuggestion,
   ProductProfile,
 } from './types';
 import { smartSearchScore } from './logic';
@@ -345,34 +341,6 @@ export async function createTransportContainer(
 
   const id = await db.transportContainers.add(container);
   return { ...container, id };
-}
-
-export async function createSpecialContainer(
-  billId: number,
-  label: string,
-  type: 'loose' | 'large'
-): Promise<TransportContainer> {
-  // Check if already exists
-  const existing = await db.transportContainers
-    .where('billId')
-    .equals(billId)
-    .toArray();
-  const found = existing.find((c) => c.label === label);
-  if (found) return found;
-
-  const container: TransportContainer = {
-    billId,
-    label,
-    type,
-    createdAt: new Date().toISOString(),
-  };
-  const id = await db.transportContainers.add(container);
-  return { ...container, id };
-}
-
-export async function ensureSpecialContainers(billId: number): Promise<void> {
-  await createSpecialContainer(billId, 'HORS CARTON', 'loose');
-  await createSpecialContainer(billId, 'GRAND COLIS', 'large');
 }
 
 

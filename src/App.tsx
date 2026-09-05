@@ -2,7 +2,7 @@
 // POINTAGE — Main Application
 // ============================================================
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { HashRouter, Routes, Route, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
@@ -20,14 +20,12 @@ import {
   useAllSessionOverrides,
   useProductProfile,
   useBillExtras,
-  useSessionExtras,
   useAllSessionLines,
   addCountEvent,
   undoLastCount,
   updateOrderLineField,
   updateLineStatus,
   createTransportContainer,
-  ensureSpecialContainers,
   addExtra,
   addIdentifierOverride,
   addIdentifierSuggestion,
@@ -47,25 +45,21 @@ import {
 import { parseImportJSON, importBills, getOrCreateSession, validateImport } from './importer';
 import { exportBackup, importBackup, downloadBackup, shareBackup } from './backup';
 import type { BackupData } from './backup';
-import { copyExtractionPrompt } from './extractionPrompt';
 import type {
   Stage,
   Bill,
   OrderLine,
   CountEvent,
-  TransportContainer,
   LineStatus,
   PointageOutcome,
   ChangeReason,
   SearchMode,
-  AuditEvent,
 } from './types';
 
 import {
   BrandLogo,
   BrandWordmark,
   IconScan,
-
   IconImport,
   IconDisk,
   IconClipboard,
@@ -81,13 +75,10 @@ import {
   IconChart,
   IconShare,
   IconFolder,
-  IconLink,
   IconBolt,
   IconArrowLeft,
   IconLayers,
   IconHash,
-  IconSun,
-  IconMoon,
   IconHelp,
   IconCamera,
   IconKey,
@@ -104,7 +95,7 @@ import { providerRegistry } from './ai/providerRegistry';
 import { ErrorBoundary } from './ErrorBoundary';
 import { SettingsModal } from './SettingsModal';
 import { FastScanQuantityCard } from './FastScanQuantityCard';
-import { playSuccessChime, playErrorBeep, playWarningBeep } from './audio';
+import { playSuccessChime, playErrorBeep } from './audio';
 
 export interface ToastItem {
   message: string;
@@ -2463,7 +2454,6 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
   const [manualEntry, setManualEntry] = useState('');
   const streamRef = useRef<MediaStream | null>(null);
   const scanLockRef = useRef(false);
-  const [showAssociate, setShowAssociate] = useState(false);
   const [associateSearch, setAssociateSearch] = useState('');
   const [selectedLine, setSelectedLine] = useState<OrderLine | null>(null);
 
@@ -2494,7 +2484,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
 
 
         if (videoRef.current && !cancelled) {
-          const controls = await reader.decodeFromConstraints(
+          await reader.decodeFromConstraints(
             {
               audio: false,
               video: {
@@ -2636,7 +2626,6 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
     setScanResult(null);
     setMatchedLines([]);
     setSelectedLine(null);
-    setShowAssociate(false);
     setAssociateSearch('');
     scanLockRef.current = false;
     setScanning(true);
@@ -2657,15 +2646,14 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
     navigateToLine(line);
   };
 
-  // Lines available for association
-  const associateLines = (() => {
-    if (!showAssociate) return [];
+  // Lines available for manual association when code is unknown
+  const candidateAssociateLines = React.useMemo(() => {
     const linesToSearch = billIdParam
       ? allLines.filter(l => l.billId === Number(billIdParam))
       : allLines;
     if (!associateSearch.trim()) return linesToSearch.slice(0, 20);
     return searchLines(linesToSearch, associateSearch, 'smart', billIdParam ? Number(billIdParam) : undefined).slice(0, 20);
-  })();
+  }, [allLines, billIdParam, associateSearch]);
 
   return (
     <div className="scanner-overlay">
@@ -2726,10 +2714,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
             />
 
             <div style={{ maxHeight: '38vh', overflowY: 'auto' }} className="flex flex-col gap-1 mb-2">
-              {(associateSearch.trim()
-                ? searchLines(billIdParam ? allLines.filter(l => l.billId === Number(billIdParam)) : allLines, associateSearch, 'smart', billIdParam ? Number(billIdParam) : undefined).slice(0, 20)
-                : (billIdParam ? allLines.filter(l => l.billId === Number(billIdParam)) : allLines).slice(0, 20)
-              ).map((line) => {
+              {candidateAssociateLines.map((line) => {
                 const b = getBillForLine(line);
                 return (
                   <div
@@ -2763,7 +2748,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
         )}
 
 
-        {scanResult && (matchedLines.length === 1 || selectedLine) && !showAssociate && (
+        {scanResult && (matchedLines.length === 1 || selectedLine) && (
           <FastScanQuantityCard
             line={selectedLine || matchedLines[0]}
             bill={getBillForLine(selectedLine || matchedLines[0])}
@@ -2774,7 +2759,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
           />
         )}
 
-        {scanResult && matchedLines.length > 1 && !selectedLine && !showAssociate && (
+        {scanResult && matchedLines.length > 1 && !selectedLine && (
           <div>
             <div className="flex justify-between items-center mb-2">
               <div>
@@ -3430,7 +3415,6 @@ function BackupScreen({
 }) {
   const nav = useNavigate();
   const [exporting, setExporting] = useState(false);
-  const [importInput, setImportInput] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = async () => {
@@ -3539,7 +3523,7 @@ function BackupScreen({
             <BrandWordmark size={32} />
           </div>
           <div className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-            Pointage Pro • Solution Logistique Entrepôt
+            Pointage • Solution Logistique Entrepôt
           </div>
           <div className="text-xs text-muted mt-1">
             Minimaliste • Intemporel • 100% Hors-Ligne

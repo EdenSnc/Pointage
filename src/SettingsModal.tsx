@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState } from 'react';
 import {
   IconX,
   IconSun,
@@ -6,9 +6,7 @@ import {
   IconKey,
   IconHelp,
   IconSparkles,
-  IconCheck,
   IconSend,
-  IconMail,
 } from './icons';
 import { useDailyApiQuota } from './ai/quotaTracker';
 
@@ -30,10 +28,10 @@ export function SettingsModal({
   onOpenWalkthrough,
 }: SettingsModalProps) {
   const quota = useDailyApiQuota();
-  const [whatsappNumber, setWhatsappNumber] = React.useState(
+  const [whatsappNumber, setWhatsappNumber] = useState(
     () => localStorage.getItem('pointage_whatsapp_number') || '+213556264976'
   );
-  const [reportEmail, setReportEmail] = React.useState(
+  const [reportEmail, setReportEmail] = useState(
     () => localStorage.getItem('pointage_report_email') || ''
   );
 
