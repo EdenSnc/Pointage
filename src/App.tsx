@@ -1003,24 +1003,24 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
               <span className="text-xs text-muted font-bold block mb-1">MOTEUR GEMINI :</span>
               <div className="seg-control">
                 <button
-                  className={`seg-btn ${selectedModel === 'gemini-3.5-flash-lite' ? 'active' : ''}`}
+                  className={`seg-btn ${selectedModel === 'gemini-3.5-flash-lite' ? 'active' : ''} flex items-center justify-center gap-1`}
                   onClick={() => {
                     setSelectedModel('gemini-3.5-flash-lite');
                     providerRegistry.setSelectedModel('gemini', 'gemini-3.5-flash-lite');
                   }}
                   style={{ fontSize: '0.74rem' }}
                 >
-                  Flash Lite (Recommandé)
+                  <IconBolt size={13} /> Flash Lite (Rapide)
                 </button>
                 <button
-                  className={`seg-btn ${selectedModel === 'gemini-3.8-flash' ? 'active' : ''}`}
+                  className={`seg-btn ${selectedModel === 'gemini-3.8-flash' ? 'active' : ''} flex items-center justify-center gap-1`}
                   onClick={() => {
                     setSelectedModel('gemini-3.8-flash');
                     providerRegistry.setSelectedModel('gemini', 'gemini-3.8-flash');
                   }}
                   style={{ fontSize: '0.74rem' }}
                 >
-                  Flash (Complet)
+                  <IconLayers size={13} /> Flash (Avancé)
                 </button>
               </div>
             </div>
@@ -1034,11 +1034,11 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                   </span>
                   <button
                     type="button"
-                    className="btn btn-xs btn-ghost text-danger"
+                    className="btn btn-xs btn-ghost text-danger flex items-center gap-1"
                     onClick={() => setStagedPhotos([])}
                     style={{ fontSize: '0.72rem' }}
                   >
-                    Effacer tout
+                    <IconX size={12} /> Effacer tout
                   </button>
                 </div>
 
@@ -1053,7 +1053,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                         onClick={() => handleRemovePhoto(p.id)}
                         title="Supprimer cette page"
                       >
-                        ✕
+                        <IconX size={12} />
                       </button>
                     </div>
                   ))}
@@ -1062,22 +1062,22 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                 <div className="flex gap-2 mb-2">
                   <button
                     type="button"
-                    className="btn btn-secondary flex-1"
+                    className="btn btn-secondary flex-1 flex items-center justify-center gap-1"
                     onClick={handleTriggerPhoto}
                     disabled={isExtracting}
                     style={{ minHeight: 44, fontSize: '0.82rem' }}
                   >
-                    <IconCamera size={16} /> + Ajouter une Page
+                    <IconPlus size={15} /> Page Suivante
                   </button>
                   <button
                     type="button"
-                    className="btn btn-secondary"
+                    className="btn btn-secondary flex items-center justify-center gap-1"
                     onClick={() => document.getElementById('gallery-file-input')?.click()}
                     disabled={isExtracting}
                     title="Choisir depuis la galerie"
                     style={{ minHeight: 44, fontSize: '0.82rem' }}
                   >
-                    Galerie
+                    <IconFolder size={15} /> Galerie
                   </button>
                 </div>
 
@@ -1120,7 +1120,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
 
                 <button
                   type="button"
-                  className="btn btn-ghost btn-full mt-2 text-xs"
+                  className="btn btn-ghost btn-full mt-2 text-xs flex items-center justify-center gap-2"
                   onClick={() => {
                     if (!apiKey.trim()) {
                       setShowKeyModal(true);
@@ -1130,7 +1130,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                   }}
                   style={{ color: 'var(--text-muted)' }}
                 >
-                  Choisir depuis la galerie
+                  <IconFolder size={15} /> Choisir depuis la galerie
                 </button>
               </div>
             )}
@@ -1144,8 +1144,8 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
             style={{ cursor: 'pointer' }}
             onClick={() => setShowManualJSON(!showManualJSON)}
           >
-            <span className="font-semibold text-sm text-secondary">
-              {showManualJSON ? 'Masquer l’importation JSON' : 'Coller du JSON manuellement'}
+            <span className="font-semibold text-sm text-secondary flex items-center gap-2">
+              <IconPencil size={15} /> {showManualJSON ? 'Masquer le JSON' : 'Coller du JSON manuellement'}
             </span>
           </div>
 
@@ -1420,11 +1420,12 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               <IconWarning size={14} /> {showProblemsOnly ? 'PROBLÈMES' : 'Problèmes'}
             </button>
             <button
-              className={`btn btn-sm ${showQuantities ? 'btn-primary' : 'btn-secondary'}`}
+              className={`btn btn-sm ${showQuantities ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
               onClick={toggleShowQuantities}
-              title={showQuantities ? 'Quantités visibles (Cliquer pour masquer)' : 'Quantités masquées (Cliquer pour afficher)'}
+              title={showQuantities ? 'Masquer les quantités' : 'Afficher les quantités'}
             >
-              {showQuantities ? 'Qtés visibles' : 'Qtés masquées'}
+              {showQuantities ? <IconEye size={15} /> : <IconEyeOff size={15} />}
+              <span>{showQuantities ? 'Visibles' : 'Masquées'}</span>
             </button>
           </div>
           <span className="text-sm text-muted" style={{ alignSelf: 'center' }}>
@@ -1451,17 +1452,17 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                 </div>
                 <div className="flex gap-1">
                   {line.status !== 'active' && (
-                    <span className={`badge badge-${line.status === 'cancelled' ? 'cancelled' : line.status === 'not_found' ? 'not-found' : 'removed'}`}>
-                      {line.status === 'cancelled' ? 'ANNULÉ' :
-                       line.status === 'not_found' ? 'INTROUVABLE' : 'SUPPRIMÉ'}
+                    <span className={`badge badge-${line.status === 'cancelled' ? 'cancelled' : line.status === 'not_found' ? 'not-found' : 'removed'} flex items-center gap-1`}>
+                      {line.status === 'cancelled' ? <><IconBan size={11} /> ANNULÉ</> :
+                       line.status === 'not_found' ? <><IconSearch size={11} /> INTROUVABLE</> : <><IconX size={11} /> SUPPRIMÉ</>}
                     </span>
                   )}
-                  {disc.isModified && <span className="badge badge-modified">MODIFIÉ</span>}
+                  {disc.isModified && <span className="badge badge-modified flex items-center gap-1"><IconPencil size={11} /> MODIFIÉ</span>}
                   {line.status === 'active' && disc.isExact && stageTotal > 0 && (
                     <span className="badge badge-exact flex items-center gap-1"><IconCheck size={11} /> EXACT</span>
                   )}
                   {line.status === 'active' && disc.isShort && (
-                    <span className="badge badge-short">{showQuantities ? `${disc.remaining} MANQ` : 'MANQUANT'}</span>
+                    <span className="badge badge-short flex items-center gap-1"><IconWarning size={11} /> {showQuantities ? `${disc.remaining} MANQ` : 'MANQUANT'}</span>
                   )}
                   {line.status === 'active' && disc.isOver && (
                     <span className="badge badge-over">{showQuantities ? `${disc.over} EXCÉD` : 'EXCÉDENT'}</span>
@@ -2112,7 +2113,11 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   }}
                   onClick={() => setSelectedContainer(selectedContainer === c.id ? null : c.id!)}
                 >
-                  {selectedContainer === c.id ? '✓ ' : ''}{c.label}
+                  <span className="flex items-center gap-1">
+                    {selectedContainer === c.id && <IconCheck size={12} />}
+                    <IconBox size={13} />
+                    {c.label}
+                  </span>
                 </button>
               ))}
               <button
@@ -2126,8 +2131,10 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 }}
                 onClick={() => setSelectedContainer(null)}
               >
-                {selectedContainer === null ? '✓ ' : ''}📦 Hors Carton (À l'unité)
-
+                <span className="flex items-center gap-1">
+                  {selectedContainer === null && <IconCheck size={12} />}
+                  Hors Carton (À l'unité)
+                </span>
               </button>
               <button
                 className="container-tag"
@@ -2144,7 +2151,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   showToast(`${c.label} créé`, setToast);
                 }}
               >
-                + Nouveau Carton
+                <span className="flex items-center gap-1">
+                  <IconPlus size={13} /> Nouveau Carton
+                </span>
               </button>
             </div>
 
@@ -2835,37 +2844,37 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
       minute: '2-digit',
     });
 
-    let text = `📦 *RAPPORT D'EXPÉDITION / ÉCARTS - POINTAGE*\n`;
-    text += `📅 Date : ${nowStr}\n`;
-    text += `🏢 Client : *${bill.client}*\n`;
-    text += `📄 N° Bon : *${bill.billNumber}*\n`;
+    let text = `*RAPPORT D'EXPÉDITION / ÉCARTS - POINTAGE*\n`;
+    text += `Date : ${nowStr}\n`;
+    text += `Client : *${bill.client}*\n`;
+    text += `N° Bon : *${bill.billNumber}*\n`;
     text += `------------------------------------\n`;
-    text += `📊 Avancement Préparation : ${prep.done}/${prep.total} (${prep.percent}%)\n`;
-    if (load.done > 0) text += `🚚 Chargement : ${load.done}/${load.total} (${load.percent}%)\n`;
+    text += `Avancement Préparation : ${prep.done}/${prep.total} (${prep.percent}%)\n`;
+    if (load.done > 0) text += `Chargement : ${load.done}/${load.total} (${load.percent}%)\n`;
     text += `------------------------------------\n\n`;
 
     if (stageProblems.length === 0) {
-      text += `✅ *Aucun écart signalé :* Toutes les lignes préparées sont conformes.\n\n`;
+      text += `*Aucun écart signalé :* Toutes les lignes préparées sont conformes.\n\n`;
     } else {
-      text += `⚠️ *ANOMALIES & ÉCARTS DÉTECTÉS (${stageProblems.length}) :*\n\n`;
+      text += `*ANOMALIES & ÉCARTS DÉTECTÉS (${stageProblems.length}) :*\n\n`;
       stageProblems.forEach((p, idx) => {
         const evts = eventsByLine.get(p.id!) || [];
         const prepQty = sumStageEvents(evts, 'preparation');
         text += `${idx + 1}. *N°${p.no}* - ${p.designation}\n`;
         if (p.reference) text += `   Réf: ${p.reference}\n`;
         if (p.status === 'out_of_stock') {
-          text += `   🔴 *RUPTURE DÉFINITIVE EN ENTREPÔT* (Attendu: ${p.orderedQty})\n`;
+          text += `   [RUPTURE DÉFINITIVE EN ENTREPÔT] (Attendu: ${p.orderedQty})\n`;
         } else if (p.status === 'not_found') {
-          text += `   🟠 *ARTICLE INTROUVABLE* (Attendu: ${p.orderedQty})\n`;
+          text += `   [ARTICLE INTROUVABLE] (Attendu: ${p.orderedQty})\n`;
         } else if (p.status === 'cancelled') {
-          text += `   ⚪ *ARTICLE ANNULÉ*\n`;
+          text += `   [ARTICLE ANNULÉ]\n`;
         } else if (prepQty < p.orderedQty) {
-          text += `   📉 *MANQUANT :* Préparé ${prepQty} / ${p.orderedQty} (Reliquat: -${p.orderedQty - prepQty})\n`;
+          text += `   [MANQUANT] : Préparé ${prepQty} / ${p.orderedQty} (Reliquat: -${p.orderedQty - prepQty})\n`;
         } else if (prepQty > p.orderedQty) {
-          text += `   📈 *EXCÉDENT :* Préparé ${prepQty} / ${p.orderedQty} (+${prepQty - p.orderedQty})\n`;
+          text += `   [EXCÉDENT] : Préparé ${prepQty} / ${p.orderedQty} (+${prepQty - p.orderedQty})\n`;
         }
         if (p.orderedQty !== p.originalOrderedQty) {
-          text += `   ✏️ *MODIFIÉ :* Initialement ${p.originalOrderedQty}, ramené à ${p.orderedQty}\n`;
+          text += `   [MODIFIÉ] : Initialement ${p.originalOrderedQty}, ramené à ${p.orderedQty}\n`;
         }
 
         if (stageScope === 'pointage') {
@@ -2873,7 +2882,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           const refusedOrDamaged = pointageEvts.filter(e => e.outcome === 'damaged_refused' || e.outcome === 'refused' || e.outcome === 'damaged_accepted');
           refusedOrDamaged.forEach(re => {
             const outcomeLabel = re.outcome === 'damaged_refused' ? 'Avarié Refusé' : re.outcome === 'damaged_accepted' ? 'Avarié Accepté' : 'Refusé';
-            text += `   🚫 *${outcomeLabel} :* Qté ${re.quantity}${re.note ? ` • Motif: "${re.note}"` : ''}\n`;
+            text += `   [${outcomeLabel}] : Qté ${re.quantity}${re.note ? ` • Motif: "${re.note}"` : ''}\n`;
           });
         }
         text += `\n`;
@@ -2882,7 +2891,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
 
 
     if (extras.length > 0) {
-      text += `➕ *ARTICLES HORS-BON AJOUTÉS (${extras.length}) :*\n`;
+      text += `*ARTICLES HORS-BON AJOUTÉS (${extras.length}) :*\n`;
       extras.forEach((ex) => {
         text += `• ${ex.designation || ex.scannedEan || 'Extra'} : Qté ${ex.quantity}\n`;
       });
@@ -2890,7 +2899,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
     }
 
     if (containers.length > 0) {
-      text += `📦 *RÉPARTITION DES COLIS :*\n`;
+      text += `*RÉPARTITION DES COLIS :*\n`;
       containers.forEach((c) => {
         const count = events
           .filter((e) => e.stage === 'preparation' && !e.undone && e.containerId === c.id)
