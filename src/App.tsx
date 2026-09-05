@@ -94,7 +94,17 @@ import {
   IconSend,
   IconBuilding,
   IconMail,
+  IconFileSpreadsheet,
+  IconTable,
 } from './icons';
+
+import {
+  buildFinalBillRows,
+  compileFinalBillData,
+  downloadFinalBillExcel,
+  shareFinalBillViaWhatsAppOrFile,
+  formatFinalBillWhatsAppMessage,
+} from './excelExport';
 
 import { OnboardingWalkthrough } from './OnboardingWalkthrough';
 import { providerRegistry } from './ai/providerRegistry';
@@ -774,6 +784,9 @@ function HomeScreen({
           <BrandLogo size={34} />
           <div className="brand-text">
             <span className="brand-title">Pointage</span>
+            <span className="badge" style={{ fontSize: '0.62rem', fontWeight: 700, background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', padding: '1px 5px', borderRadius: 4 }}>
+              SURFACE v1.4
+            </span>
           </div>
         </div>
 
@@ -3372,6 +3385,9 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   const [stageScope, setStageScope] = useState<Stage | 'auto'>('preparation');
   const [showQRSync, setShowQRSync] = useState(false);
   const [qrSyncInitialTab, setQrSyncInitialTab] = useState<'export' | 'import'>('export');
+  const [exportOnlyPresent, setExportOnlyPresent] = useState(false);
+  const [showPriceModal, setShowPriceModal] = useState(false);
+  const [editingPrices, setEditingPrices] = useState<Record<number, string>>({});
 
   const eventsByLine = new Map<number, CountEvent[]>();
   for (const e of events) {
@@ -3504,11 +3520,51 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
     if (setToast) setToast('Rapport copié dans le presse-papier');
   };
 
+  const finalBillRows = buildFinalBillRows(lines, eventsByLine, {
+    stage: stageScope === 'auto' ? 'preparation' : stageScope,
+    onlyPresent: exportOnlyPresent,
+  });
+  const finalBillData = compileFinalBillData(bill, finalBillRows);
+
+  const handleDownloadFinalExcel = () => {
+    try {
+      downloadFinalBillExcel(finalBillData);
+      if (setToast) setToast('Facture Excel (.xlsx) téléchargée');
+    } catch (err: any) {
+      if (setToast) setToast(`Erreur: ${err.message}`);
+    }
+  };
+
+  const handleShareFinalWhatsApp = async () => {
+    try {
+      await shareFinalBillViaWhatsAppOrFile(finalBillData, whatsappNumber);
+    } catch (err: any) {
+      if (setToast) setToast(`Erreur: ${err.message}`);
+    }
+  };
+
+  const handleSendFinalEmail = () => {
+    const bodyText = formatFinalBillWhatsAppMessage(finalBillData);
+    const subject = encodeURIComponent(`Pointage Surface — Facture Finale ${bill.billNumber} (${bill.client})`);
+    const body = encodeURIComponent(bodyText);
+    window.location.href = `mailto:${reportEmail}?subject=${subject}&body=${body}`;
+  };
+
+  const handleSavePrice = async (lineId: number, rawVal: string) => {
+    const parsed = parseFloat(rawVal.replace(',', '.'));
+    const val = !isNaN(parsed) && parsed >= 0 ? parsed : null;
+    await db.orderLines.update(lineId, { unitPrice: val, updatedAt: new Date().toISOString() });
+    if (setToast) setToast(val != null ? `Prix enregistré: ${val} DA` : 'Prix effacé');
+  };
+
   return (
     <>
       <header className="app-header">
         <button className="back-btn" onClick={() => nav(-1)} aria-label="Retour"><IconArrowLeft size={18} /></button>
         <h1>RÉCAPITULATIF</h1>
+        <span className="badge" style={{ fontSize: '0.62rem', fontWeight: 700, background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', padding: '1px 5px', borderRadius: 4 }}>
+          SURFACE v1.4
+        </span>
       </header>
 
       <div className="app-content">
@@ -3546,6 +3602,88 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           <ProgressRow label="Préparation" progress={prep} />
           <ProgressRow label="Chargement" progress={load} />
           <ProgressRow label="Pointage" progress={point} />
+        </div>
+
+        {/* Surface Final Bill & Pricing Card */}
+        <div className="card mb-3" style={{ background: 'rgba(56, 189, 248, 0.06)', border: '1px solid rgba(56, 189, 248, 0.25)' }}>
+          <div className="flex justify-between items-center mb-2">
+            <div className="font-bold text-sm flex items-center gap-2" style={{ color: '#0284c7' }}>
+              <IconFileSpreadsheet size={18} /> FACTURE & BL DE SURFACE
+            </div>
+            <span className="badge" style={{ fontSize: '0.65rem', background: 'rgba(56, 189, 248, 0.15)', color: '#0284c7', fontWeight: 700 }}>
+              Pointage Réel
+            </span>
+          </div>
+
+          <div className="text-xs text-secondary mb-3">
+            Structure conforme aux bons de commande. Calcule exactement ce qui est présent physiquement pour la saisie magasin et la facturation.
+          </div>
+
+          {/* Key metrics */}
+          <div className="flex gap-2 mb-3 flex-wrap items-center">
+            <div className="badge badge-secondary text-xs flex items-center gap-1">
+              <IconBox size={13} /> {finalBillData.totalActualQty} / {finalBillData.totalOrderedQty} pièces
+            </div>
+            {finalBillData.totalDiffQty !== 0 ? (
+              <div className="badge text-xs" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', fontWeight: 700 }}>
+                {finalBillData.totalDiffQty > 0 ? `+${finalBillData.totalDiffQty}` : finalBillData.totalDiffQty} écart
+              </div>
+            ) : (
+              <div className="badge text-xs" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e', fontWeight: 700 }}>
+                100% Conforme
+              </div>
+            )}
+            {finalBillData.isPriced && finalBillData.totalAmountTtc > 0 && (
+              <div className="badge text-xs font-bold" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
+                {finalBillData.totalAmountTtc.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DA
+              </div>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex gap-2 flex-wrap mb-2">
+            <button
+              className="btn btn-sm btn-primary flex-1 flex items-center justify-center gap-2"
+              style={{ minWidth: 140 }}
+              onClick={handleDownloadFinalExcel}
+              title="Télécharger la facture finale au format Excel (.xlsx)"
+            >
+              <IconFileSpreadsheet size={15} /> Excel (.xlsx)
+            </button>
+            <button
+              className="btn btn-sm flex-1 flex items-center justify-center gap-2"
+              style={{ background: '#25D366', color: '#fff', fontWeight: 700, border: 'none', minWidth: 140 }}
+              onClick={handleShareFinalWhatsApp}
+              title="Transmettre la facture vérifiée au responsable par WhatsApp"
+            >
+              <IconSend size={15} /> WhatsApp
+            </button>
+            <button
+              className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
+              onClick={handleSendFinalEmail}
+              title="Envoyer par email au responsable"
+            >
+              <IconMail size={15} /> Email
+            </button>
+            <button
+              className="btn btn-sm btn-ghost flex items-center justify-center gap-1"
+              onClick={() => setShowPriceModal(true)}
+              title="Consulter ou renseigner les prix unitaires pour la saisie"
+            >
+              <IconTable size={15} /> Prix
+            </button>
+          </div>
+
+          <div className="pt-2 mt-2" style={{ borderTop: '1px solid rgba(56, 189, 248, 0.15)' }}>
+            <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-secondary">
+              <input
+                type="checkbox"
+                checked={exportOnlyPresent}
+                onChange={(e) => setExportOnlyPresent(e.target.checked)}
+              />
+              <span>Exclure les articles non reçus (Qté = 0)</span>
+            </label>
+          </div>
         </div>
 
         {/* Report Dispatch Card */}
@@ -3879,6 +4017,160 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
         initialTab={qrSyncInitialTab}
         setToast={setToast}
       />
+
+      {showPriceModal && (
+        <div className="modal-backdrop" onClick={() => setShowPriceModal(false)}>
+          <div
+            className="modal-content"
+            style={{ maxWidth: 520, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-2">
+              <div className="modal-title flex items-center gap-2" style={{ margin: 0, fontSize: '1rem', color: '#0284c7' }}>
+                <IconTable size={18} /> PRIX UNITAIRES & VALORISATION
+              </div>
+              <button
+                type="button"
+                className="btn btn-xs btn-secondary btn-icon"
+                onClick={() => setShowPriceModal(false)}
+                aria-label="Fermer"
+              >
+                <IconX size={14} />
+              </button>
+            </div>
+
+            <div className="text-xs text-secondary mb-3">
+              Renseignez ou vérifiez les prix unitaires (PU HT/TTC) des articles pour générer la facture valorisée destinée à la saisie magasin.
+            </div>
+
+            {/* Total summary bar */}
+            <div
+              className="card mb-3 py-2 px-3 flex justify-between items-center"
+              style={{ background: 'rgba(56, 189, 248, 0.06)', border: '1px solid rgba(56, 189, 248, 0.2)' }}
+            >
+              <div>
+                <div className="text-xs text-secondary font-medium">Articles chiffrés</div>
+                <div className="text-sm font-bold">
+                  {lines.filter((l) => l.unitPrice != null && l.unitPrice > 0).length} / {lines.length} lignes
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-secondary font-medium">Montant Total Pointé</div>
+                <div className="text-sm font-bold" style={{ color: '#0284c7' }}>
+                  {finalBillData.totalAmountTtc.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DA
+                </div>
+              </div>
+            </div>
+
+            {/* Line list */}
+            <div style={{ overflowY: 'auto', flex: 1, paddingRight: 4 }} className="space-y-2">
+              {lines.map((l) => {
+                const evts = eventsByLine.get(l.id!) || [];
+                const actualQty = evts
+                  .filter((e) => !e.undone && (stageScope === 'auto' ? e.stage === 'preparation' : e.stage === stageScope))
+                  .reduce((sum, e) => sum + e.quantity, 0);
+
+                const currentVal =
+                  editingPrices[l.id!] !== undefined
+                    ? editingPrices[l.id!]
+                    : l.unitPrice != null
+                    ? String(l.unitPrice)
+                    : '';
+
+                const numVal = parseFloat(currentVal.replace(',', '.'));
+                const lineTotal = !isNaN(numVal) && numVal > 0 ? numVal * actualQty : 0;
+
+                return (
+                  <div
+                    key={l.id}
+                    className="card p-2 text-xs flex justify-between items-center gap-2"
+                    style={{ background: 'var(--bg-secondary, rgba(255,255,255,0.03))' }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="font-semibold truncate" title={l.designation}>
+                        {l.designation}
+                      </div>
+                      <div className="text-secondary flex gap-2 mt-0.5" style={{ fontSize: '0.72rem' }}>
+                        <span>Réf: {l.reference || '-'}</span>
+                        <span>Col: {l.colisage || 1}</span>
+                        <span
+                          className="font-medium"
+                          style={{ color: actualQty < l.expectedQuantity ? 'var(--warning)' : 'inherit' }}
+                        >
+                          Pointé: {actualQty} / {l.expectedQuantity}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+                      <div style={{ width: 85 }}>
+                        <div className="text-secondary mb-0.5 text-right" style={{ fontSize: '0.65rem' }}>
+                          P.U. (DA)
+                        </div>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          className="input input-sm text-right font-mono"
+                          style={{ padding: '2px 6px', height: 28, fontSize: '0.8rem' }}
+                          placeholder="0.00"
+                          value={currentVal}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setEditingPrices((prev) => ({ ...prev, [l.id!]: val }));
+                          }}
+                          onBlur={(e) => {
+                            handleSavePrice(l.id!, e.target.value);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              (e.target as HTMLInputElement).blur();
+                            }
+                          }}
+                        />
+                      </div>
+                      <div style={{ width: 75, textAlign: 'right' }}>
+                        <div className="text-secondary mb-0.5" style={{ fontSize: '0.65rem' }}>
+                          Total
+                        </div>
+                        <div
+                          className="font-bold text-xs truncate font-mono"
+                          style={{ color: lineTotal > 0 ? '#10b981' : 'var(--muted)' }}
+                        >
+                          {lineTotal > 0 ? `${lineTotal.toFixed(2)}` : '-'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Modal actions */}
+            <div
+              className="flex justify-between items-center gap-2 mt-3 pt-2"
+              style={{ borderTop: '1px solid var(--border)' }}
+            >
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                onClick={() => setShowPriceModal(false)}
+              >
+                Fermer
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-primary flex items-center gap-1"
+                onClick={() => {
+                  setShowPriceModal(false);
+                  handleDownloadFinalExcel();
+                }}
+              >
+                <IconFileSpreadsheet size={15} /> Exporter Excel (.xlsx)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

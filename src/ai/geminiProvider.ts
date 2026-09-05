@@ -16,6 +16,7 @@ RÈGLES CRITIQUES:
    - "ean": code-barres 13 chiffres si présent, sinon null (le code-barres est secondaire).
    - "designation": nom ou description de l'article. Si non mentionné (ex: note manuscrite avec références seules), reprends la référence ou un libellé visible.
    - "quantity": quantité numérique (nombre entier positif). Si une référence est listée sans quantité explicite, utilise 1 par défaut.
+   - "unitPrice": prix unitaire numérique (colonne "PU" ou "Prix Unitaire" en DA, ex: 42.50, 560.00). Si absent sur le papier, utilise null.
    - "packagesRaw": colisage si présent (ex: "2CT/20"), sinon null.
 4. BONS MANUSCRITS & NOTES BROUILLON:
    - Le document peut être une feuille manuscrite au stylo, un brouillon d'entrepôt ou une liste rapide de références.
@@ -24,6 +25,9 @@ RÈGLES CRITIQUES:
    - Si les photos ou pages correspondent au MÊME bon de livraison (même numéro de BL, même client, ou pages 1, 2, 3...), regroupe OBLIGATOIREMENT toutes les lignes sous un SEUL objet BL dans "bills" avec le même "billNumber".
    - Assigne la propriété "page" (1, 2...) correspondante à chaque ligne.
    - Ne crée plusieurs objets dans "bills" QUE s'il s'agit réellement de factures ou de clients distincts.
+6. TOTAUX IMPRIMÉS & CONTRÔLE FINANCIER:
+   - "totalTtc": montant total TTC numérique imprimé au bas du bon si présent (ex: 57644.00), sinon null.
+   - "discountPercent": remise éventuelle en pourcentage si mentionnée (ex: 6.00), sinon null.
 
 FORMAT JSON REQUIS:
 {
@@ -32,6 +36,8 @@ FORMAT JSON REQUIS:
       "billNumber": "BL-EXEMPLE",
       "client": "NOM CLIENT",
       "date": "2026-09-03",
+      "totalTtc": 57644.00,
+      "discountPercent": 6.00,
       "lines": [
         {
           "no": "1",
@@ -40,6 +46,7 @@ FORMAT JSON REQUIS:
           "ean": "3760123456789",
           "designation": "STYLO BILLE BLEU",
           "quantity": 50,
+          "unitPrice": 42.50,
           "packagesRaw": "1CT/50"
         }
       ]
@@ -278,3 +285,61 @@ export const geminiProvider: LLMProvider = {
 
   },
 };
+
+export interface ChecksumValidationResult {
+  hasPrices: boolean;
+  computedTotal: number;
+  printedTotal: number | null;
+  isValid: boolean;
+  discrepancy: number;
+  warning?: string;
+}
+
+/**
+ * Mathematically validates the sum of all line items (qty * unitPrice) against
+ * the total printed on the physical document (checksum guardrail).
+ * This eliminates silent AI hallucinations and OCR misreadings.
+ */
+export function validateFinancialChecksum(
+  lines: Array<{ quantity?: number; unitPrice?: number | null }>,
+  printedTotal?: number | null
+): ChecksumValidationResult {
+  let hasPrices = false;
+  let computedTotal = 0;
+
+  for (const line of lines) {
+    if (typeof line.unitPrice === 'number' && !isNaN(line.unitPrice) && line.unitPrice > 0) {
+      hasPrices = true;
+      const qty = typeof line.quantity === 'number' && !isNaN(line.quantity) ? line.quantity : 1;
+      // Strict 2-decimal rounded multiplication
+      const lineTotal = Math.round((qty * line.unitPrice + Number.EPSILON) * 100) / 100;
+      computedTotal = Math.round((computedTotal + lineTotal + Number.EPSILON) * 100) / 100;
+    }
+  }
+
+  if (!hasPrices || printedTotal == null || printedTotal <= 0) {
+    return {
+      hasPrices,
+      computedTotal,
+      printedTotal: printedTotal ?? null,
+      isValid: true,
+      discrepancy: 0,
+    };
+  }
+
+  const discrepancy = Math.round((computedTotal - printedTotal + Number.EPSILON) * 100) / 100;
+  // Allow at most 0.10 DA due to rounding of decimals on line totals
+  const isValid = Math.abs(discrepancy) <= 0.10;
+
+  return {
+    hasPrices,
+    computedTotal,
+    printedTotal,
+    isValid,
+    discrepancy,
+    warning: isValid
+      ? undefined
+      : `Écart de calcul détecté : Total des lignes (${computedTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DA) ≠ Total imprimé (${printedTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DA). Vérifiez les prix unitaires.`,
+  };
+}
+

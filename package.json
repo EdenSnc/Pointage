@@ -1,7 +1,7 @@
 {
   "name": "pointage",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.4.0-surface-beta",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -19,7 +19,8 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.3",
-    "workbox-window": "^7.4.1"
+    "workbox-window": "^7.4.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/qrcode": "^1.5.6",

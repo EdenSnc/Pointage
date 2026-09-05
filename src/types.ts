@@ -75,6 +75,7 @@ export interface OrderLine {
   originalEan: string | null;
   originalDesignation: string;
   originalOrderedQty: number;
+  originalUnitPrice?: number | null;
   // Current (mutable)
   no: string;
   page: number | null;
@@ -82,6 +83,7 @@ export interface OrderLine {
   ean: string | null;
   designation: string;
   orderedQty: number;
+  unitPrice?: number | null;
   // Status
   status: LineStatus;
   // Packaging (worker-set, optional)
@@ -180,6 +182,7 @@ export interface ImportLineJSON {
   ean?: string | null;
   designation?: string;
   quantity?: number;
+  unitPrice?: number | null;
   packagesRaw?: string | null;
 }
 
@@ -187,11 +190,45 @@ export interface ImportBillJSON {
   billNumber?: string;
   client?: string;
   date?: string | null;
+  totalTtc?: number | null;
+  discountPercent?: number | null;
   lines?: ImportLineJSON[];
 }
 
 export interface ImportPayload {
   bills?: ImportBillJSON[];
+}
+
+// --- Final Bill Export Shape (Surface Edition) ---
+
+export type FinalBillRowStatus = 'CONFORME' | 'MANQUANT' | 'SURPLUS' | 'RUPTURE' | 'AVARIE' | 'ANNULE';
+
+export interface FinalBillRow {
+  no: string;
+  code: string; // Product reference / Code article
+  ean: string | null;
+  designation: string;
+  colisage: string | null;
+  orderedQty: number;
+  actualQty: number; // Quantité physiquement pointée en surface
+  diffQty: number; // actualQty - orderedQty
+  unitPrice: number | null; // P.U. HT en DA
+  totalTtc: number | null; // actualQty * (unitPrice || 0)
+  status: FinalBillRowStatus;
+  observation: string;
+}
+
+export interface FinalBillExportData {
+  billNumber: string;
+  client: string;
+  date: string;
+  totalOrderedQty: number;
+  totalActualQty: number;
+  totalDiffQty: number;
+  totalAmountTtc: number;
+  isPriced: boolean;
+  checksumValid: boolean;
+  rows: FinalBillRow[];
 }
 
 // --- Computed helpers ---

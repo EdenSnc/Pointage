@@ -272,6 +272,8 @@ export async function importBills(
         const ref = lineData.reference != null ? String(lineData.reference).trim() : null;
         const ean = lineData.ean != null ? String(lineData.ean).trim() : null;
         const cleanNo = lineData.no ? String(lineData.no).trim() : '';
+        const rawPrice = lineData.unitPrice;
+        const unitPrice = typeof rawPrice === 'number' && !isNaN(rawPrice) && rawPrice >= 0 ? rawPrice : null;
 
         // Duplicate prevention: check against existing lines in the target bill
         const isDuplicate = existingLines.some((el) => {
@@ -305,12 +307,14 @@ export async function importBills(
             originalEan: ean,
             originalDesignation: designation,
             originalOrderedQty: qty,
+            originalUnitPrice: unitPrice,
             no: finalNo,
             page: lineData.page ?? null,
             reference: ref,
             ean: ean,
             designation,
             orderedQty: qty,
+            unitPrice,
             status: 'active',
             outerPackSize: null,
             innerPackSize: null,
@@ -377,6 +381,8 @@ export async function importBills(
         const finalNo = lineData.no ? String(lineData.no).trim() : String(i + 1);
         const designation = lineData.designation?.trim() || (ref ? `Réf: ${ref}` : `Article ${finalNo}`);
         const aliases = generateReferenceAliases(ref);
+        const rawPrice = lineData.unitPrice;
+        const unitPrice = typeof rawPrice === 'number' && !isNaN(rawPrice) && rawPrice >= 0 ? rawPrice : null;
 
         const orderLine: OrderLine = {
           billId,
@@ -386,12 +392,14 @@ export async function importBills(
           originalEan: ean,
           originalDesignation: designation,
           originalOrderedQty: qty,
+          originalUnitPrice: unitPrice,
           no: finalNo,
           page: lineData.page ?? null,
           reference: ref,
           ean: ean,
           designation,
           orderedQty: qty,
+          unitPrice,
           status: 'active',
           outerPackSize: null,
           innerPackSize: null,
