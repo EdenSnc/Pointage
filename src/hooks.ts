@@ -105,17 +105,82 @@ export function useBillEvents(billId: number | undefined) {
   );
 }
 
-// ---------- Transport Containers ----------
+// ---------- Transport Containers (Shared Across Bills of Same Seller/Client) ----------
 export function useBillContainers(billId: number | undefined) {
   return useLiveQuery(
-    () =>
-      billId !== undefined
-        ? db.transportContainers
-            .where('billId')
-            .equals(billId)
-            .toArray()
-        : [],
+    async () => {
+      if (billId === undefined) return [];
+      const currentBill = await db.bills.get(billId);
+      const client = currentBill?.client?.trim();
+
+      // Find all bill IDs belonging to the same client/seller
+      let clientBillIds: number[] = [billId];
+      if (client) {
+        const siblingBills = await db.bills.where('client').equals(client).toArray();
+        clientBillIds = Array.from(new Set([...clientBillIds, ...siblingBills.map((b) => b.id!)]));
+      }
+
+      const allContainers = await db.transportContainers.toArray();
+      const relevant = allContainers.filter((c) => {
+        if (client && c.client && c.client.trim().toLowerCase() === client.toLowerCase()) return true;
+        if (c.billId && clientBillIds.includes(c.billId)) return true;
+        return false;
+      });
+
+      // Natural alphanumeric sort: CARTON A, CARTON B, CARTON C...
+      relevant.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+      return relevant;
+    },
     [billId],
+    []
+  );
+}
+
+export function useEntityContainers(client: string | undefined) {
+  return useLiveQuery(
+    async () => {
+      if (!client) return [];
+      const trimmed = client.trim();
+      const siblingBills = await db.bills.where('client').equals(trimmed).toArray();
+      const clientBillIds = siblingBills.map((b) => b.id!);
+
+      const allContainers = await db.transportContainers.toArray();
+      const relevant = allContainers.filter((c) => {
+        if (c.client && c.client.trim().toLowerCase() === trimmed.toLowerCase()) return true;
+        if (c.billId && clientBillIds.includes(c.billId)) return true;
+        return false;
+      });
+
+      relevant.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+      return relevant;
+    },
+    [client],
+    []
+  );
+}
+
+// ---------- Cross-Bill Queries for Same Seller/Client Entity ----------
+export function useEntityBills(client: string | undefined) {
+  return useLiveQuery(
+    async () => {
+      if (!client) return [];
+      return db.bills.where('client').equals(client.trim()).toArray();
+    },
+    [client],
+    []
+  );
+}
+
+export function useEntityLines(client: string | undefined) {
+  return useLiveQuery(
+    async () => {
+      if (!client) return [];
+      const bills = await db.bills.where('client').equals(client.trim()).toArray();
+      const billIds = bills.map((b) => b.id!).filter((id) => id != null);
+      if (billIds.length === 0) return [];
+      return db.orderLines.where('billId').anyOf(billIds).toArray();
+    },
+    [client],
     []
   );
 }
@@ -243,6 +308,37 @@ export async function undoLastCount(
   await db.auditEvents.add({
     billId: last.billId,
     orderLineId,
+    stage,
+    type: 'count_event_undone',
+    oldValue: String(last.quantity),
+    newValue: null,
+    reason: null,
+    timestamp: new Date().toISOString(),
+  });
+
+  return true;
+}
+
+export async function undoLastBillCount(
+  billId: number,
+  stage: Stage
+): Promise<boolean> {
+  const events = await db.countEvents
+    .where('billId')
+    .equals(billId)
+    .toArray();
+  const stageEvents = events
+    .filter((e) => e.stage === stage && !e.undone)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  if (stageEvents.length === 0) return false;
+
+  const last = stageEvents[0];
+  await db.countEvents.update(last.id!, { undone: true });
+
+  // Audit
+  await db.auditEvents.add({
+    billId: last.billId,
+    orderLineId: last.orderLineId,
     stage,
     type: 'count_event_undone',
     oldValue: String(last.quantity),
@@ -385,25 +481,94 @@ export async function updateLineStatus(
 }
 
 export async function createTransportContainer(
-  billId: number
+  billId: number,
+  client?: string,
+  customLabel?: string,
+  type: 'carton' | 'chouala' | 'loose' | 'large' = 'carton'
 ): Promise<TransportContainer> {
-  const existing = await db.transportContainers
-    .where('billId')
-    .equals(billId)
-    .toArray();
+  const currentBill = await db.bills.get(billId);
+  const resolvedClient = client || currentBill?.client?.trim();
 
-  const cartonCount = existing.filter((c) => c.type === 'carton').length;
-  const nextLetter = String.fromCharCode(65 + cartonCount); // A, B, C...
+  let existingContainers: TransportContainer[] = [];
+  if (resolvedClient) {
+    const siblingBills = await db.bills.where('client').equals(resolvedClient).toArray();
+    const clientBillIds = Array.from(new Set([billId, ...siblingBills.map((b) => b.id!)]));
+    const allContainers = await db.transportContainers.toArray();
+    existingContainers = allContainers.filter((c) => {
+      if (c.client && c.client.trim().toLowerCase() === resolvedClient.toLowerCase()) return true;
+      if (c.billId && clientBillIds.includes(c.billId)) return true;
+      return false;
+    });
+  } else {
+    existingContainers = await db.transportContainers.where('billId').equals(billId).toArray();
+  }
 
+  const countForType = existingContainers.filter((c) => c.type === type).length;
+  let nextLetter = '';
+  if (countForType < 26) {
+    nextLetter = String.fromCharCode(65 + countForType);
+  } else {
+    const first = String.fromCharCode(65 + Math.floor(countForType / 26) - 1);
+    const second = String.fromCharCode(65 + (countForType % 26));
+    nextLetter = `${first}${second}`;
+  }
+
+  const defaultPrefix = type === 'chouala' ? 'SAC' : 'CARTON';
   const container: TransportContainer = {
     billId,
-    label: `CARTON ${nextLetter}`,
-    type: 'carton',
+    client: resolvedClient,
+    label: customLabel || `${defaultPrefix} ${nextLetter}`,
+    type,
     createdAt: new Date().toISOString(),
   };
 
   const id = await db.transportContainers.add(container);
   return { ...container, id };
+}
+
+export async function substituteOrderLine(
+  originalLineId: number,
+  substituteLineId: number,
+  clientPaidAdvance: boolean,
+  notifyClient: boolean,
+  note?: string
+): Promise<void> {
+  const origLine = await db.orderLines.get(originalLineId);
+  const subLine = await db.orderLines.get(substituteLineId);
+  if (!origLine || !subLine) return;
+
+  const priceDiff = (subLine.unitPrice || 0) - (origLine.unitPrice || 0);
+  const fullNote = [
+    `Remplacé par: ${subLine.designation} (Réf: ${subLine.reference || '-'})`,
+    `Écart: ${priceDiff >= 0 ? '+' : ''}${priceDiff.toFixed(2)} DA`,
+    clientPaidAdvance ? `Client a payé d'avance` : `Paiement à la livraison`,
+    notifyClient ? `Mentionné sur bon` : `Remplacement interne`,
+    note ? `Note: ${note}` : '',
+  ].filter(Boolean).join(' | ');
+
+  await db.orderLines.update(originalLineId, {
+    status: 'out_of_stock',
+    substitutedById: substituteLineId,
+    substitutionNote: fullNote,
+    updatedAt: new Date().toISOString(),
+  });
+
+  await db.orderLines.update(substituteLineId, {
+    substituteForId: originalLineId,
+    substitutionNote: `Remplace: ${origLine.designation}`,
+    updatedAt: new Date().toISOString(),
+  });
+
+  await db.auditEvents.add({
+    billId: origLine.billId,
+    orderLineId: originalLineId,
+    stage: null,
+    type: 'product_substituted',
+    oldValue: origLine.designation,
+    newValue: subLine.designation,
+    reason: fullNote,
+    timestamp: new Date().toISOString(),
+  });
 }
 
 

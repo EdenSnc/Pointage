@@ -1,4 +1,3 @@
-import React from 'react';
 import { IconBox, IconClipboard, IconCheck, IconUndo } from './icons';
 
 interface ConformityDonutChartProps {
@@ -31,7 +30,18 @@ export function ConformityDonutChart({
   // Calculate completion / conformity percentage
   const total = totalLines || 1;
   const pctConforme = Math.min(100, Math.round((conformeCount / total) * 100));
-  const isFullConform = problemCount === 0 && shortCount === 0 && actualPieces >= orderedPieces && orderedPieces > 0;
+  const diffPieces = actualPieces - orderedPieces;
+
+  // Exact 100% full conformity requires 0 problems, 0 short, 0 over, and exact piece match
+  const isFullConform =
+    problemCount === 0 &&
+    shortCount === 0 &&
+    overCount === 0 &&
+    actualPieces === orderedPieces &&
+    orderedPieces > 0;
+
+  const isNotStarted = actualPieces === 0;
+  const hasSurplus = overCount > 0 || diffPieces > 0;
 
   // Donut geometry specs (Apple style)
   const size = 148;
@@ -41,14 +51,36 @@ export function ConformityDonutChart({
 
   // Segment stroke dashes
   const conformeDash = (conformeCount / total) * circumference;
+  const overDash = (overCount / total) * circumference;
   const shortDash = (shortCount / total) * circumference;
   const problemDash = (problemCount / total) * circumference;
 
   const conformeOffset = 0;
-  const shortOffset = -conformeDash;
-  const problemOffset = -(conformeDash + shortDash);
+  const overOffset = -conformeDash;
+  const shortOffset = -(conformeDash + overDash);
+  const problemOffset = -(conformeDash + overDash + shortDash);
 
-  const diffPieces = actualPieces - orderedPieces;
+  // Subtitle & color determination for all 5 states
+  let kpiSubText = `${pctConforme}% Conforme`;
+  let kpiSubColor = 'var(--text-muted)';
+
+  if (isNotStarted) {
+    kpiSubText = 'À pointer';
+    kpiSubColor = 'var(--text-muted)';
+  } else if (isFullConform) {
+    kpiSubText = 'Conforme';
+    kpiSubColor = 'var(--accent)';
+  } else if (problemCount > 0) {
+    kpiSubText = `${problemCount} anomalie${problemCount > 1 ? 's' : ''}`;
+    kpiSubColor = '#ef4444';
+  } else if (hasSurplus) {
+    kpiSubText = `+${diffPieces > 0 ? diffPieces : overCount} pcs Excédent`;
+    kpiSubColor = '#a855f7';
+  } else if (shortCount > 0) {
+    const missing = Math.abs(diffPieces);
+    kpiSubText = missing > 0 ? `${missing} manquantes` : `${shortCount} incomplets`;
+    kpiSubColor = '#f59e0b';
+  }
 
   return (
     <div className="donut-card">
@@ -93,6 +125,10 @@ export function ConformityDonutChart({
               <stop offset="0%" stopColor="#34d399" />
               <stop offset="100%" stopColor="#059669" />
             </linearGradient>
+            <linearGradient id="donutPurpleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#c084fc" />
+              <stop offset="100%" stopColor="#9333ea" />
+            </linearGradient>
             <linearGradient id="donutAmberGrad" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stopColor="#fbbf24" />
               <stop offset="100%" stopColor="#d97706" />
@@ -124,6 +160,22 @@ export function ConformityDonutChart({
               strokeWidth={strokeWidth}
               strokeDasharray={`${conformeDash} ${circumference}`}
               strokeDashoffset={conformeOffset}
+              strokeLinecap="round"
+              style={{ transition: 'stroke-dasharray 0.5s ease' }}
+            />
+          )}
+
+          {/* Over / Surplus Segment */}
+          {overCount > 0 && (
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="none"
+              stroke="url(#donutPurpleGrad)"
+              strokeWidth={strokeWidth}
+              strokeDasharray={`${overDash} ${circumference}`}
+              strokeDashoffset={overOffset}
               strokeLinecap="round"
               style={{ transition: 'stroke-dasharray 0.5s ease' }}
             />
@@ -165,13 +217,13 @@ export function ConformityDonutChart({
         {/* Center Glanceable KPI */}
         <div className="donut-center-content">
           <div className="donut-kpi-val">
-            {isFullConform ? '100%' : `${pctConforme}%`}
+            {isFullConform ? '100%' : isNotStarted ? '0%' : `${pctConforme}%`}
           </div>
           <div
             className="donut-kpi-sub"
-            style={{ color: isFullConform ? 'var(--accent)' : shortCount > 0 ? '#f59e0b' : 'var(--text-muted)' }}
+            style={{ color: kpiSubColor }}
           >
-            {isFullConform ? 'Conforme' : diffPieces !== 0 ? `${diffPieces > 0 ? `+${diffPieces}` : diffPieces} pcs` : `${problemCount} écarts`}
+            {kpiSubText}
           </div>
         </div>
       </div>

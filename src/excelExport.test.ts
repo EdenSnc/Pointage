@@ -610,4 +610,43 @@ describe('excelExport — Extensive Edge Cases Resilience', () => {
     expect(msg).not.toContain('21. [REF-21]');
     expect(msg).toContain('... et 15 autres anomalies (voir fichier Excel .xlsx complet ci-joint)');
   });
+
+  it('enables native gridlines and table cell borders in the Excel workbook', () => {
+    const finalData = compileFinalBillData(dummyBill, [
+      {
+        no: '1',
+        code: '84012',
+        ean: null,
+        designation: 'CORRECTEUR STYLO 10 ML',
+        colisage: '1,00',
+        orderedQty: 120,
+        actualQty: 120,
+        diffQty: 0,
+        unitPrice: 42.50,
+        totalTtc: 5100.00,
+        status: 'CONFORME',
+        observation: '',
+      },
+    ]);
+
+    const wb = createFinalBillWorkbook(finalData);
+    const sheetName = wb.SheetNames[0];
+    const ws = wb.Sheets[sheetName];
+
+    // Verify native gridlines view
+    expect(ws['!views']).toBeDefined();
+    expect(ws['!views']![0].showGridLines).toBe(true);
+
+    // Verify table header outline border on cell A9
+    expect(ws['A9']).toBeDefined();
+    expect(ws['A9'].s).toBeDefined();
+    expect(ws['A9'].s.border).toBeDefined();
+    expect(ws['A9'].s.border.top.style).toBe('thin');
+
+    // Verify data row border on cell A10
+    expect(ws['A10']).toBeDefined();
+    expect(ws['A10'].s).toBeDefined();
+    expect(ws['A10'].s.border).toBeDefined();
+    expect(ws['A10'].s.border.bottom.style).toBe('thin');
+  });
 });

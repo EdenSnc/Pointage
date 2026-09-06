@@ -8,6 +8,7 @@ import {
   hapticTap,
   isAudioMuted,
   setAudioMuted,
+  triggerAmbientFlash,
 } from './audio';
 
 describe('Multimodal Audio & Haptic Feedback Engine', () => {
@@ -126,5 +127,11 @@ describe('Multimodal Audio & Haptic Feedback Engine', () => {
 
     setAudioMuted(false);
     expect(isAudioMuted()).toBe(false);
+  });
+
+  it('triggers ambient perimeter flash element and classes without throwing', () => {
+    expect(() => triggerAmbientFlash('success')).not.toThrow();
+    expect(() => triggerAmbientFlash('warning')).not.toThrow();
+    expect(() => triggerAmbientFlash('error')).not.toThrow();
   });
 });

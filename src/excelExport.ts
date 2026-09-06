@@ -5,6 +5,7 @@
 
 import * as XLSX from 'xlsx';
 import type {
+  Stage,
   Bill,
   OrderLine,
   CountEvent,
@@ -15,7 +16,7 @@ import type {
 import { sumStageEvents } from './logic';
 
 export interface FinalBillOptions {
-  stage?: 'preparation' | 'pointage';
+  stage?: Stage;
   onlyPresent?: boolean; // filter only items where actualQty > 0
 }
 
@@ -290,9 +291,32 @@ export function createFinalBillWorkbook(data: FinalBillExportData): XLSX.WorkBoo
     ...(hasDiscount ? [{ wch: 18 }] : []), // Rem. Paiement(%)
   ];
 
-  // Number formatting
+  // Force native gridlines across Excel view
+  ws['!views'] = [{ showGridLines: true }];
+
+  // Table outlines and number formatting
+  const thinBorder = {
+    top: { style: 'thin', color: { rgb: 'D1D5DB' } },
+    bottom: { style: 'thin', color: { rgb: 'D1D5DB' } },
+    left: { style: 'thin', color: { rgb: 'D1D5DB' } },
+    right: { style: 'thin', color: { rgb: 'D1D5DB' } },
+  };
+
+  const colLetters = hasDiscount ? ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] : ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+
+  // Apply outline borders to table header row (row 9)
+  for (const c of colLetters) {
+    const cell = ws[`${c}9`];
+    if (cell) cell.s = { border: thinBorder, font: { bold: true } };
+  }
+
+  // Number formatting and outlines for data rows
   if (rows.length > 0) {
     for (let r = firstDataRowIdx; r <= lastDataRowIdx; r++) {
+      for (const c of colLetters) {
+        const cell = ws[`${c}${r}`];
+        if (cell) cell.s = { border: thinBorder };
+      }
       const cellD = ws[`D${r}`];
       if (cellD && (typeof cellD.v === 'number' || cellD.f)) cellD.z = '#,##0.00';
       const cellG = ws[`G${r}`];

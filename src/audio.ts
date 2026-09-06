@@ -4,6 +4,47 @@
 // ============================================================
 
 let audioCtx: AudioContext | null = null;
+let ambientFlashTimeout: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Triggers an ambient screen perimeter flash (peripheral visual confirmation)
+ * Success: High-contrast emerald green vignette
+ * Warning / Duplicate: Warm amber glow
+ * Error / Unrecognized: High-contrast ruby red flash
+ * Designed for warehouse peripheral vision confirmation without direct screen gaze.
+ */
+export function triggerAmbientFlash(type: 'success' | 'warning' | 'error') {
+  if (typeof document === 'undefined') return;
+
+  try {
+    let el = document.getElementById('ambient-perimeter-flash');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'ambient-perimeter-flash';
+      el.className = 'ambient-perimeter-flash';
+      el.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(el);
+    }
+
+    if (ambientFlashTimeout) {
+      clearTimeout(ambientFlashTimeout);
+      ambientFlashTimeout = null;
+    }
+    el.classList.remove('flash-success', 'flash-warning', 'flash-error');
+
+    // Force DOM reflow to re-trigger animation cleanly
+    void el.offsetWidth;
+
+    el.classList.add(`flash-${type}`);
+
+    ambientFlashTimeout = setTimeout(() => {
+      if (el) {
+        el.classList.remove(`flash-${type}`);
+      }
+      ambientFlashTimeout = null;
+    }, 280);
+  } catch {}
+}
 
 /**
  * Lazily initialize or resume Web Audio Context on user gesture
@@ -29,17 +70,20 @@ function getAudioContext(): AudioContext | null {
 
 /**
  * Instant sensory confirmation for a successful barcode scan or count increment:
- * Crisp ascending two-tone chime (D5 587.33 Hz -> A5 880 Hz) + 12ms tactile micro-pulse
+ * Crisp ascending two-tone chime (D5 587.33 Hz -> A5 880 Hz) + 12ms tactile micro-pulse + emerald perimeter flash
  */
 export function playSuccessChime() {
-  // 1. Tactile haptic pulse (crisp mechanical switch feel on Samsung A54)
+  // 1. Ambient peripheral visual confirmation (emerald green)
+  triggerAmbientFlash('success');
+
+  // 2. Tactile haptic pulse (crisp mechanical switch feel on Samsung A54)
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
     try {
       navigator.vibrate(12);
     } catch {}
   }
 
-  // 2. Synthesized acoustic-like chime (soft attack to eliminate pops)
+  // 3. Synthesized acoustic-like chime (soft attack to eliminate pops)
   if (isAudioMuted()) return;
   const ctx = getAudioContext();
   if (!ctx) return;
@@ -80,6 +124,7 @@ export function playSuccessChime() {
  * Haptic: distinct double pulse [25ms, 45ms, 25ms]
  */
 export function playWarningBeep() {
+  triggerAmbientFlash('warning');
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
     try {
       navigator.vibrate([25, 45, 25]);
@@ -151,6 +196,7 @@ export function setAudioMuted(muted: boolean): void {
  * Haptic: triumphant rhythmic sequence [12ms, 35ms, 18ms]
  */
 export function playExactMatchChime() {
+  triggerAmbientFlash('success');
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
     try {
       navigator.vibrate([12, 35, 18]);
@@ -218,6 +264,7 @@ export function playUndoBeep() {
  * Haptic: crisp alert pattern [30ms, 45ms, 30ms] (replaces harsh 140ms continuous buzz)
  */
 export function playErrorBeep() {
+  triggerAmbientFlash('error');
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
     try {
       navigator.vibrate([30, 45, 30]);

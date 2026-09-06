@@ -39,6 +39,7 @@ export type AuditEventType =
   | 'bill_reimported'
   | 'count_event_undone'
   | 'line_removed_by_revision'
+  | 'product_substituted'
   | 'status_changed';
 
 export type SessionStatus = 'active' | 'completed';
@@ -103,6 +104,11 @@ export interface OrderLine {
   packagesRaw: string | null;
   // Compound reference aliases for search
   referenceAliases: string[];
+  colisage?: string | null;
+  substituteForId?: number | null;
+  substitutedById?: number | null;
+  substitutionNote?: string | null;
+  sampleTaken?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -113,9 +119,11 @@ export interface CountEvent {
   orderLineId: number;
   stage: Stage;
   quantity: number;
-  containerId: number | null; // transport container id
+  containerId?: number | null; // transport container id
   outcome: PointageOutcome | null; // only for pointage
   note?: string | null; // Reason for refusal or incident details
+  refusalNote?: string | null; // Backwards-compatible alias
+  packType?: string | null; // Colisage metadata
   undone: boolean;
   createdAt: string;
 }
@@ -124,8 +132,10 @@ export interface CountEvent {
 export interface TransportContainer {
   id?: number;
   billId: number;
-  label: string; // "CARTON A", "CARTON B", "LOOSE / ON TOP", etc.
-  type: 'carton' | 'loose' | 'large';
+  client?: string; // seller/client entity name for shared multi-bill packaging
+  label: string; // "CARTON A", "CHOUALA A", etc.
+  name?: string; // Backwards-compatible alias for label
+  type: 'carton' | 'chouala' | 'loose' | 'large';
   createdAt: string;
 }
 

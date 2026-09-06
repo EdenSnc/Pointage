@@ -21,19 +21,24 @@ import {
   useProductProfile,
   useBillExtras,
   useAllSessionLines,
+  useEntityBills,
+  useEntityLines,
   addCountEvent,
   undoLastCount,
+  undoLastBillCount,
   resetLineStageCount,
   setLineStageTotalCount,
   updateOrderLineField,
   updateLineStatus,
   createTransportContainer,
+  substituteOrderLine,
   addExtra,
   addIdentifierOverride,
   addIdentifierSuggestion,
   saveProductProfile,
   searchLines,
 } from './hooks';
+import { useHardwareScanner } from './useHardwareScanner';
 import {
   calcBatchQty,
   sumStageEvents,
@@ -100,6 +105,8 @@ import {
   IconTable,
   IconVolume,
   IconVolumeX,
+  IconTrash,
+  IconBag,
 } from './icons';
 
 import {
@@ -395,7 +402,7 @@ function QRSyncModal({
     let cancelled = false;
     const containerMap = new Map<number, string>();
     for (const c of containers) {
-      if (c.id) containerMap.set(c.id, c.name);
+      if (c.id) containerMap.set(c.id, c.label || c.name || '');
     }
 
     const json = serializeCountsForQR(bill.billNumber, bill.client, lines, events, containerMap);
@@ -501,7 +508,7 @@ function QRSyncModal({
     try {
       const containerNameMap = new Map<string, number>();
       for (const c of containers) {
-        if (c.id && c.name) containerNameMap.set(c.name.trim().toLowerCase(), c.id);
+        if (c.id && c.label) containerNameMap.set(c.label.trim().toLowerCase(), c.id);
       }
 
       for (const item of mergePlan.items) {
@@ -511,9 +518,11 @@ function QRSyncModal({
           if (containerNameMap.has(normName)) {
             containerId = containerNameMap.get(normName);
           } else {
-            const newCId = await createTransportContainer(billId, item.containerName, 'carton');
-            containerNameMap.set(normName, newCId);
-            containerId = newCId;
+            const newC = await createTransportContainer(billId, bill?.client, item.containerName, 'carton');
+            if (newC.id != null) {
+              containerNameMap.set(normName, newC.id);
+              containerId = newC.id;
+            }
           }
         }
 
@@ -1065,7 +1074,7 @@ function ManualBillModal({
   );
 }
 
-// ---- Client Group Accordion Card ----
+// ---- Client Group Accordion Card (With Cross-Bill Search) ----
 function ClientGroupCard({
   client,
   bills,
@@ -1079,8 +1088,14 @@ function ClientGroupCard({
   onArchiveBill?: (id: number) => void;
   onRestoreBill?: (id: number) => void;
 }) {
-
   const [expanded, setExpanded] = useState(true);
+  const [groupSearch, setGroupSearch] = useState('');
+  const entityLines = useEntityLines(client);
+
+  const matchedLines = React.useMemo(() => {
+    if (!groupSearch.trim() || !entityLines) return [];
+    return searchLines(entityLines, groupSearch, 'smart');
+  }, [groupSearch, entityLines]);
 
   return (
     <div className="client-group-block mb-3">
@@ -1092,7 +1107,7 @@ function ClientGroupCard({
           <IconBuilding size={18} style={{ color: 'var(--accent)' }} />
           <div>
             <div className="font-bold text-sm" style={{ letterSpacing: '0.3px' }}>{client}</div>
-            <div className="text-xs text-muted">{bills.length} bons</div>
+            <div className="text-xs text-muted">{bills.length} bon{bills.length > 1 ? 's' : ''}</div>
           </div>
         </div>
         <span
@@ -1111,15 +1126,76 @@ function ClientGroupCard({
 
       {expanded && (
         <div className="flex flex-col gap-2">
-          {bills.map((b) => (
-            <BillCard
-              key={b.id}
-              bill={b}
-              onClick={() => onSelectBill(b.id!)}
-              onArchive={onArchiveBill ? () => onArchiveBill(b.id!) : undefined}
-              onRestore={onRestoreBill ? () => onRestoreBill(b.id!) : undefined}
-            />
-          ))}
+          {bills.length > 1 && (
+            <div className="search-wrapper mb-1" onClick={(e) => e.stopPropagation()}>
+              <input
+                className="search-input"
+                style={{ height: 38, fontSize: '0.82rem', paddingLeft: 12 }}
+                placeholder={`Rechercher un article dans les ${bills.length} bons de ${client}...`}
+                value={groupSearch}
+                onChange={(e) => setGroupSearch(e.target.value)}
+              />
+              {groupSearch && (
+                <button
+                  type="button"
+                  className="search-clear-btn"
+                  onClick={() => setGroupSearch('')}
+                  aria-label="Effacer"
+                >
+                  <IconX size={14} />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* If searching within this client's bills, display matching lines across bills */}
+          {groupSearch.trim() ? (
+            <div className="flex flex-col gap-2">
+              <div className="text-xs text-muted flex justify-between">
+                <span>{matchedLines.length} article(s) trouvé(s) chez {client}</span>
+                <button className="text-accent text-xs font-bold" onClick={() => setGroupSearch('')}>Voir les bons</button>
+              </div>
+              {matchedLines.length === 0 ? (
+                <div className="card text-center text-xs text-muted py-3">
+                  Aucun article correspondant dans les {bills.length} bons de {client}
+                </div>
+              ) : (
+                matchedLines.map((line) => {
+                  const parentBill = bills.find((b) => b.id === line.billId);
+                  return (
+                    <div
+                      key={line.id}
+                      className="product-card cursor-pointer"
+                      style={{ borderLeft: '4px solid var(--accent)' }}
+                      onClick={() => onSelectBill(line.billId)}
+                    >
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="badge" style={{ background: 'var(--accent-glow)', color: 'var(--accent)', fontWeight: 800 }}>
+                          {parentBill?.billNumber || `BL #${line.billId}`}
+                        </span>
+                        <span className="line-no">N°{line.no}</span>
+                      </div>
+                      <div className="line-designation font-bold text-sm">{line.designation}</div>
+                      <div className="flex justify-between items-center text-xs text-muted mt-1">
+                        <span>RÉF: {line.reference || 'Sans réf'}</span>
+                        <span className="font-bold text-primary">Attendu: {line.orderedQty}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          ) : (
+            bills.map((b) => (
+              <BillCard
+                key={b.id}
+                bill={b}
+                onClick={() => onSelectBill(b.id!)}
+                onArchive={onArchiveBill ? () => onArchiveBill(b.id!) : undefined}
+                onRestore={onRestoreBill ? () => onRestoreBill(b.id!) : undefined}
+              />
+            ))
+          )}
         </div>
       )}
     </div>
@@ -1742,6 +1818,8 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const lines = useBillLines(billId);
   const events = useBillEvents(billId);
   const overrides = useBillOverrides(billId);
+  const entityBills = useEntityBills(bill?.client);
+  const entityLines = useEntityLines(bill?.client);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const initialStage = (searchParams.get('stage') || sessionStorage.getItem(`pointage_stage_${billId}`) || 'preparation') as Stage;
@@ -1757,10 +1835,12 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
     }, { replace: true });
   };
   const [searchMode, setSearchMode] = useState<SearchMode>('smart');
+  const [searchScope, setSearchScope] = useState<'current' | 'all'>('current');
   const [searchQuery, setSearchQuery] = useState(() => sessionStorage.getItem(`pointage_search_${billId}`) || '');
   const [showProblemsOnly, setShowProblemsOnly] = useState(false);
   const [showQuantities, setShowQuantities] = useState(() => localStorage.getItem('pointage_show_quantities') === 'true');
   const [showQRSync, setShowQRSync] = useState(false);
+  const [unknownBarcodeModal, setUnknownBarcodeModal] = useState<string | null>(null);
 
   const handleSearchChange = (q: string) => {
     setSearchQuery(q);
@@ -1779,6 +1859,74 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
     });
   };
 
+  const siblingBills = React.useMemo(
+    () => (entityBills || []).filter((b) => b.id !== billId),
+    [entityBills, billId]
+  );
+  const siblingLines = React.useMemo(
+    () => (entityLines || []).filter((l) => l.billId !== billId),
+    [entityLines, billId]
+  );
+
+  // Hardware Bluetooth/Wedge Scanner Listener & Accelerators
+  useHardwareScanner({
+    onScan: (scannedCode) => {
+      const trimmed = scannedCode.trim();
+      if (!trimmed) return;
+
+      // 1. Search current bill lines
+      const currentMatches = searchLines(lines, trimmed, 'smart', billId, overrides);
+      if (currentMatches.length === 1) {
+        playSuccessChime();
+        nav(`/bill/${billId}/line/${currentMatches[0].id}?stage=${stage}`);
+        return;
+      }
+      if (currentMatches.length > 1) {
+        playSuccessChime();
+        handleSearchChange(trimmed);
+        showToast(`${currentMatches.length} articles trouvés dans ce bon`, setToast);
+        return;
+      }
+
+      // 2. Cross-bill search across sibling bills for this seller/client
+      const siblingMatchesNow = searchLines(siblingLines, trimmed, 'smart');
+      if (siblingMatchesNow.length === 1) {
+        playSuccessChime();
+        const match = siblingMatchesNow[0];
+        const pBill = entityBills?.find((b) => b.id === match.billId);
+        showToast(`Article trouvé sur ${pBill?.billNumber || 'autre bon'} (${bill?.client})`, setToast);
+        nav(`/bill/${match.billId}/line/${match.id}?stage=${stage}`);
+        return;
+      }
+      if (siblingMatchesNow.length > 1) {
+        playSuccessChime();
+        setSearchScope('all');
+        handleSearchChange(trimmed);
+        showToast(`${siblingMatchesNow.length} articles trouvés chez ${bill?.client}`, setToast);
+        return;
+      }
+
+      // 3. Not found anywhere for this entity -> Error tone + ruby red flash + assistive recovery
+      playErrorBeep();
+      setUnknownBarcodeModal(trimmed);
+    },
+    onSpace: () => {
+      nav(`/scan?billId=${billId}&stage=${stage}`);
+    },
+    onUndo: async () => {
+      const ok = await undoLastBillCount(billId, stage);
+      if (ok) {
+        playUndoBeep();
+        showToast('Dernier comptage annulé', setToast);
+      } else {
+        showToast('Rien à annuler pour ce bon', setToast);
+      }
+    },
+    onQuickExport: () => {
+      nav(`/bill/${billId}/summary?stage=${stage}`);
+    },
+  });
+
   const eventsByLine = new Map<number, CountEvent[]>();
   for (const e of events) {
     const arr = eventsByLine.get(e.orderLineId) || [];
@@ -1786,13 +1934,28 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
     eventsByLine.set(e.orderLineId, arr);
   }
 
+  // Active lines pool based on scope
+  const activeLinesPool = searchScope === 'all' && entityLines && entityLines.length > 0 ? entityLines : lines;
+
   // Filter and sort lines
-  let displayLines = [...lines];
+  let displayLines = [...activeLinesPool];
 
   // Search
   if (searchQuery.trim()) {
-    displayLines = searchLines(displayLines, searchQuery, searchMode, billId, overrides);
+    displayLines = searchLines(
+      displayLines,
+      searchQuery,
+      searchMode,
+      searchScope === 'current' ? billId : undefined,
+      searchScope === 'current' ? overrides : undefined
+    );
   }
+
+  // Sibling matches across other bills of the same client when in 'current' bill scope
+  const siblingMatches = React.useMemo(() => {
+    if (!searchQuery.trim() || searchScope === 'all' || siblingLines.length === 0) return [];
+    return searchLines(siblingLines, searchQuery, searchMode);
+  }, [siblingLines, searchQuery, searchMode, searchScope]);
 
   // Problems only
   if (showProblemsOnly) {
@@ -1908,6 +2071,28 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           )}
         </div>
 
+        {/* Scope Toggle when client has multiple bills */}
+        {entityBills && entityBills.length > 1 && (
+          <div className="flex gap-2 mb-2">
+            <button
+              type="button"
+              className={`btn btn-xs ${searchScope === 'current' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setSearchScope('current')}
+              style={{ flex: 1, padding: '6px 8px', fontSize: '0.78rem', fontWeight: 700 }}
+            >
+              Ce bon ({lines.length})
+            </button>
+            <button
+              type="button"
+              className={`btn btn-xs ${searchScope === 'all' ? 'btn-primary' : 'btn-secondary'} flex items-center justify-center gap-1`}
+              onClick={() => setSearchScope('all')}
+              style={{ flex: 1, padding: '6px 8px', fontSize: '0.78rem', fontWeight: 700 }}
+            >
+              <IconBuilding size={13} /> Tous les {entityBills.length} bons ({entityLines?.length || 0})
+            </button>
+          </div>
+        )}
+
         {/* Filters and Visibility Toggle */}
         <div className="flex justify-between items-center mb-3">
           <div className="flex gap-2">
@@ -1941,10 +2126,15 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             <div
               key={line.id}
               className="product-card"
-              onClick={() => nav(`/bill/${billId}/line/${line.id}?stage=${stage}`)}
+              onClick={() => nav(`/bill/${line.billId}/line/${line.id}?stage=${stage}`)}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1">
+                  {line.billId !== billId && (
+                    <span className="badge" style={{ background: 'var(--accent-glow)', color: 'var(--accent)', fontWeight: 800, fontSize: '0.72rem' }}>
+                      {entityBills?.find((b) => b.id === line.billId)?.billNumber || `BL #${line.billId}`}
+                    </span>
+                  )}
                   <span className="line-no">N°{line.no}</span>
                   {line.page != null && <span className="line-page">PAGE {line.page}</span>}
                 </div>
@@ -2018,7 +2208,48 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
 
         {displayLines.length === 0 && (
           <div className="empty-state">
-            <p>Aucune ligne trouvée</p>
+            <p>Aucune ligne trouvée dans ce bon</p>
+          </div>
+        )}
+
+        {/* Cross-bill matches from sibling bills of the same seller/client */}
+        {siblingMatches.length > 0 && searchScope === 'current' && (
+          <div className="mt-4 pt-3 mb-4" style={{ borderTop: '2px dashed var(--accent)' }}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <IconBuilding size={16} style={{ color: 'var(--accent)' }} />
+                <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
+                  Dans les autres bons de {bill.client} ({siblingMatches.length})
+                </span>
+              </div>
+              <span className="badge badge-exact">{siblingBills.length} autre{siblingBills.length > 1 ? 's' : ''} BL</span>
+            </div>
+            <div className="text-xs text-muted mb-2">
+              Cet article appartient à un autre bon de la même entité. Cliquez pour le pointer :
+            </div>
+            {siblingMatches.map((otherLine) => {
+              const parentBill = entityBills?.find((b) => b.id === otherLine.billId);
+              return (
+                <div
+                  key={otherLine.id}
+                  className="product-card cursor-pointer"
+                  style={{ borderLeft: '4px solid var(--accent)', margin: '0 0 8px 0' }}
+                  onClick={() => nav(`/bill/${otherLine.billId}/line/${otherLine.id}?stage=${stage}`)}
+                >
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="badge" style={{ background: 'var(--accent-glow)', color: 'var(--accent)', fontWeight: 800 }}>
+                      {parentBill?.billNumber || `BL #${otherLine.billId}`}
+                    </span>
+                    <span className="line-no font-bold">N°{otherLine.no}</span>
+                  </div>
+                  <div className="line-designation font-bold text-sm">{otherLine.designation}</div>
+                  <div className="flex justify-between items-center text-xs text-muted mt-1">
+                    <span>RÉF: {otherLine.reference || 'Sans réf'}</span>
+                    <span className="font-bold text-primary">Attendu: {otherLine.orderedQty}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -2046,6 +2277,55 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         billId={billId}
         setToast={setToast}
       />
+
+      {/* Assistive Recovery Modal when Hardware Laser scans an uncataloged barcode */}
+      {unknownBarcodeModal && (
+        <div className="modal-backdrop" onClick={() => setUnknownBarcodeModal(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="flex justify-between items-center mb-2">
+              <div className="font-bold text-sm text-danger flex items-center gap-1">
+                <IconWarning size={16} /> ARTICLE INTROUVABLE
+              </div>
+              <button className="btn btn-xs btn-ghost btn-icon" onClick={() => setUnknownBarcodeModal(null)}>
+                <IconX size={16} />
+              </button>
+            </div>
+
+            <div className="p-3 mb-3" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)' }}>
+              <div className="text-xs text-muted">Code-barres scanné :</div>
+              <div className="font-mono font-bold text-base text-accent">{unknownBarcodeModal}</div>
+              <div className="text-xs text-muted mt-1">
+                Aucun article correspondant dans les {entityBills?.length || 1} bons de <strong>{bill.client}</strong>.
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                className="btn btn-primary btn-full flex items-center justify-center gap-2"
+                onClick={() => {
+                  const code = unknownBarcodeModal;
+                  setUnknownBarcodeModal(null);
+                  nav(`/bill/${billId}/extras?stage=${stage}&ean=${encodeURIComponent(code)}`);
+                }}
+              >
+                <IconPlus size={16} /> Enregistrer comme Hors-BL / Extra
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary btn-full flex items-center justify-center gap-2"
+                onClick={() => {
+                  setUnknownBarcodeModal(null);
+                  nav(`/scan?billId=${billId}&stage=${stage}`);
+                }}
+              >
+                <IconScan size={16} /> Scanner via Caméra & Associer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -2090,6 +2370,14 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const [outcome, setOutcome] = useState<PointageOutcome>('accepted');
   const [refusalNote, setRefusalNote] = useState('');
 
+  // Substitution state
+  const allBillLines = useBillLines(billId);
+  const [showSubModal, setShowSubModal] = useState(false);
+  const [subSearch, setSubSearch] = useState('');
+  const [selectedSubLine, setSelectedSubLine] = useState<OrderLine | null>(null);
+  const [subPaidAdvance, setSubPaidAdvance] = useState(false);
+  const [subNotifyClient, setSubNotifyClient] = useState(true);
+  const [subCustomNote, setSubCustomNote] = useState('');
 
   // Edit mode
   const [editingQty, setEditingQty] = useState(false);
@@ -2144,7 +2432,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
       lineId,
       stage,
       batchQty,
-      stage === 'preparation' ? selectedContainer : null,
+      (stage === 'preparation' || stage === 'chargement') ? selectedContainer : null,
       stage === 'pointage' ? outcome : null,
       stage === 'pointage' && outcome !== 'accepted' ? refusalNote : null
     );
@@ -2840,12 +3128,19 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           )}
         </div>
 
-        {/* Transport */}
-        {stage === 'preparation' ? (
+        {/* Transport Containers (Carton & Chouala) */}
+        {(stage === 'preparation' || stage === 'chargement') ? (
           <div className="card">
-            <div className="section-title" style={{ marginTop: 0 }}>CARTON DE RANGEMENT</div>
+            <div className="flex justify-between items-center mb-2">
+              <div className="section-title" style={{ marginTop: 0, marginBottom: 0 }}>
+                COLIS DE RANGEMENT {stage === 'chargement' ? '(CHARGEMENT)' : ''}
+              </div>
+              <span className="text-xs text-muted">Cartons & Sacs (Conditionnement)</span>
+            </div>
+
             <div className="flex flex-wrap gap-2 mb-2">
               <button
+                type="button"
                 className={`container-tag ${selectedContainer === null ? 'selected' : ''}`}
                 style={{
                   padding: '6px 14px',
@@ -2860,31 +3155,37 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               >
                 <span className="flex items-center gap-1">
                   {selectedContainer === null && <IconCheck size={12} />}
-                  Hors Carton (Frac)
+                  Hors Colis (Vrac)
                 </span>
               </button>
-              {containers.map((c) => (
-                <button
-                  key={c.id}
-                  className={`container-tag ${selectedContainer === c.id ? 'selected' : ''}`}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: 'var(--radius-pill)',
-                    fontWeight: selectedContainer === c.id ? 700 : 500,
-                    borderColor: selectedContainer === c.id ? 'var(--accent)' : 'var(--border)',
-                    background: selectedContainer === c.id ? 'rgba(37, 99, 235, 0.2)' : undefined,
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => setSelectedContainer(selectedContainer === c.id ? null : c.id!)}
-                >
-                  <span className="flex items-center gap-1">
-                    {selectedContainer === c.id && <IconCheck size={12} />}
-                    <IconBox size={13} />
-                    {c.label}
-                  </span>
-                </button>
-              ))}
+
+              {containers.map((c) => {
+                const isChouala = c.type === 'chouala';
+                const isSelected = selectedContainer === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={`container-tag ${isChouala ? 'chouala' : ''} ${isSelected ? 'selected' : ''}`}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 'var(--radius-pill)',
+                      fontWeight: isSelected ? 700 : 500,
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => setSelectedContainer(isSelected ? null : c.id!)}
+                  >
+                    <span className="flex items-center gap-1">
+                      {isSelected && <IconCheck size={12} />}
+                      {isChouala ? <IconBag size={13} /> : <IconBox size={13} />}
+                      {c.label} (BL {bill.billNumber})
+                    </span>
+                  </button>
+                );
+              })}
+
               <button
+                type="button"
                 className="container-tag"
                 style={{
                   padding: '6px 12px',
@@ -2894,7 +3195,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   borderStyle: 'dashed',
                 }}
                 onClick={async () => {
-                  const c = await createTransportContainer(billId);
+                  const c = await createTransportContainer(billId, bill?.client, undefined, 'carton');
                   setSelectedContainer(c.id!);
                   showToast(`${c.label} créé`, setToast);
                 }}
@@ -2903,33 +3204,70 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   <IconPlus size={13} /> Nouveau Carton
                 </span>
               </button>
+
+              <button
+                type="button"
+                className="container-tag chouala"
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 'var(--radius-pill)',
+                  cursor: 'pointer',
+                  borderStyle: 'dashed',
+                }}
+                onClick={async () => {
+                  const c = await createTransportContainer(billId, bill?.client, undefined, 'chouala');
+                  setSelectedContainer(c.id!);
+                  showToast(`${c.label} créé`, setToast);
+                }}
+                title="Sac de transport / conditionnement en polypropylène tissé (Chouala)"
+              >
+                <span className="flex items-center gap-1">
+                  <IconPlus size={13} /> Nouveau Sac (Chouala)
+                </span>
+              </button>
             </div>
 
+            {/* Physical marker label hint for warehouse staff */}
+            {selectedContainer && (() => {
+              const curC = containers.find(c => c.id === selectedContainer);
+              if (!curC) return null;
+              return (
+                <div className="mt-2 p-2" style={{ background: 'rgba(255, 255, 255, 0.04)', borderRadius: 'var(--radius-sm)', border: '1px dashed var(--glass-border-bright)' }}>
+                  <div className="text-xs font-mono text-muted">🏷️ MARQUAGE AU FEUTRE DU COLIS :</div>
+                  <div className="text-xs font-mono font-bold text-accent">
+                    {bill.client || 'CLIENT'} — BL {bill.billNumber} — {curC.label}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Show transport breakdown for this line */}
-            {events.filter(e => e.stage === 'preparation' && !e.undone).length > 0 && (
+            {events.filter(e => (e.stage === 'preparation' || e.stage === 'chargement') && !e.undone).length > 0 && (
               <div className="mt-2 pt-2" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                <div className="text-xs text-muted mb-1">RÉPARTITION :</div>
+                <div className="text-xs text-muted mb-1">RÉPARTITION ACTUELLE :</div>
                 {containers.map((c) => {
                   const qty = events
-                    .filter(e => e.stage === 'preparation' && !e.undone && e.containerId === c.id)
+                    .filter(e => !e.undone && e.containerId === c.id)
                     .reduce((s, e) => s + e.quantity, 0);
                   if (qty === 0) return null;
                   return (
                     <div key={c.id} className="flex justify-between text-sm py-1">
-                      <span className="font-semibold text-accent">{c.label}</span>
+                      <span className="font-semibold text-accent flex items-center gap-1">
+                        {c.type === 'chouala' ? <IconBag size={13} /> : <IconBox size={13} />}
+                        {c.label} (BL {bill.billNumber})
+                      </span>
                       <span className="font-bold">{qty} unités</span>
                     </div>
                   );
                 })}
                 {(() => {
                   const noContainer = events
-                    .filter(e => e.stage === 'preparation' && !e.undone && !e.containerId)
+                    .filter(e => !e.undone && !e.containerId)
                     .reduce((s, e) => s + e.quantity, 0);
                   if (noContainer === 0) return null;
                   return (
                     <div className="flex justify-between text-sm py-1">
-                      <span className="text-muted">Hors Carton</span>
-
+                      <span className="text-muted">Hors Colis (Vrac)</span>
                       <span className="font-bold">{noContainer} unités</span>
                     </div>
                   );
@@ -2938,29 +3276,69 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             )}
           </div>
         ) : (
-          /* Chargement & Pointage: show transport cartons packed during preparation */
-          events.filter(e => e.stage === 'preparation' && !e.undone && e.containerId).length > 0 && (
-            <div className="card">
-              <div className="section-title" style={{ marginTop: 0 }}>CARTONS DE TRANSPORT</div>
-              <div className="flex flex-col gap-1">
-                {containers.map((c) => {
-                  const qty = events
-                    .filter(e => e.stage === 'preparation' && !e.undone && e.containerId === c.id)
-                    .reduce((s, e) => s + e.quantity, 0);
-                  if (qty === 0) return null;
-                  return (
-                    <div key={c.id} className="flex justify-between text-sm" style={{ padding: '4px 0' }}>
-                      <span className="container-tag">{c.label}</span>
-                      <span className="font-bold" style={{ fontSize: '1rem', alignSelf: 'center' }}>{qty} unités</span>
-                    </div>
-                  );
-                })}
-              </div>
+          /* Pointage: READ-ONLY view */
+          <div className="card">
+            <div className="flex justify-between items-center mb-2">
+              <div className="section-title" style={{ margin: 0 }}>COLIS DE RANGEMENT</div>
+              <span className="badge badge-secondary" style={{ fontSize: '0.68rem' }}>Lecture seule</span>
             </div>
-          )
+            <div className="flex flex-col gap-1">
+              {containers.map((c) => {
+                const qty = events
+                  .filter(e => !e.undone && e.containerId === c.id)
+                  .reduce((s, e) => s + e.quantity, 0);
+                if (qty === 0) return null;
+                return (
+                  <div key={c.id} className="flex justify-between text-sm py-1 border-b" style={{ borderColor: 'var(--glass-border-subtle)' }}>
+                    <span className="container-tag selected flex items-center gap-1" style={{ fontSize: '0.8rem' }}>
+                      {c.type === 'chouala' ? <IconBag size={12} /> : <IconBox size={12} />}
+                      {c.label} (BL {bill.billNumber})
+                    </span>
+                    <span className="font-bold font-mono text-base">{qty} unités</span>
+                  </div>
+                );
+              })}
+              {(() => {
+                const noContainer = events
+                  .filter(e => !e.undone && !e.containerId)
+                  .reduce((s, e) => s + e.quantity, 0);
+                if (noContainer === 0) return null;
+                return (
+                  <div className="flex justify-between text-sm py-1">
+                    <span className="text-muted">Hors Colis (Vrac)</span>
+                    <span className="font-bold font-mono text-base">{noContainer} unités</span>
+                  </div>
+                );
+              })()}
+              {events.filter(e => !e.undone).length === 0 && (
+                <div className="text-xs text-muted py-1">Aucun colis assigné en préparation</div>
+              )}
+            </div>
+          </div>
         )}
 
-        {/* Statut article (Cas particuliers & Annulation) */}
+        {/* Commercial Sample Card */}
+        <div className="card mb-3">
+          <div className="flex justify-between items-center">
+            <div>
+              <div className="section-title" style={{ marginTop: 0, marginBottom: 2 }}>ÉCHANTILLON COMMERCIAL</div>
+              <div className="text-xs text-muted">Pièce prélevée pour démonstration commerciale</div>
+            </div>
+            <button
+              type="button"
+              className={`btn btn-xs ${line.sampleTaken ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
+              onClick={async () => {
+                const nextVal = line.sampleTaken ? null : 1;
+                await db.orderLines.update(line.id!, { sampleTaken: nextVal, updatedAt: new Date().toISOString() });
+                if (setToast) setToast(nextVal ? 'Échantillon commercial noté (à réintégrer plus tard)' : 'Échantillon réintégré');
+              }}
+            >
+              {line.sampleTaken ? '1 pc prêtée' : 'Aucun'}
+            </button>
+          </div>
+        </div>
+
+        {/* Statut article (Cas particuliers & Annulation / Substitution) */}
         <div className="card mb-3">
           <div className="section-title" style={{ marginTop: 0 }}>STATUT ARTICLE (CAS PARTICULIERS)</div>
           {line.status === 'active' ? (
@@ -2977,6 +3355,17 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 </button>
                 <button
                   type="button"
+                  className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
+                  style={{ flex: 1, borderColor: 'var(--accent)' }}
+                  onClick={() => setShowSubModal(true)}
+                  title="Remplacer par un produit similaire ou équivalent"
+                >
+                  <IconLayers size={15} /> Remplacer
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
                   className="btn btn-sm btn-warning flex items-center justify-center gap-1"
                   style={{ flex: 1 }}
                   onClick={() => handleStatusChange('not_found')}
@@ -2984,8 +3373,6 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 >
                   <IconSearch size={15} /> Introuvable rayon
                 </button>
-              </div>
-              <div className="flex gap-2">
                 <button
                   type="button"
                   className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
@@ -2993,7 +3380,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   onClick={() => handleStatusChange('cancelled')}
                   title="Article annulé par le client ou le service commercial"
                 >
-                  <IconX size={15} /> Annulé par client
+                  <IconX size={15} /> Annulé
                 </button>
                 <button
                   type="button"
@@ -3015,16 +3402,154 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   line.status === 'cancelled' ? 'ANNULÉ PAR CLIENT' : line.status
                 }</strong>
               </div>
-              <button
-                type="button"
-                className="btn btn-sm btn-primary flex items-center justify-center gap-1 btn-full"
-                onClick={() => handleStatusChange('active')}
-              >
-                <IconUndo size={15} /> RÉACTIVER L'ARTICLE (ACTIF)
-              </button>
+
+              {line.substitutionNote && (
+                <div className="mb-2 p-2 text-xs" style={{ background: 'rgba(255, 255, 255, 0.04)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border-bright)' }}>
+                  <div className="font-bold text-accent mb-0.5">SUBSTITUTION ASSOCIÉE :</div>
+                  <div>{line.substitutionNote}</div>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary flex items-center justify-center gap-1 flex-1"
+                  onClick={() => handleStatusChange('active')}
+                >
+                  <IconUndo size={15} /> RÉACTIVER L'ARTICLE
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary flex items-center justify-center gap-1 flex-1"
+                  onClick={() => setShowSubModal(true)}
+                >
+                  <IconLayers size={15} /> Remplacer par un autre
+                </button>
+              </div>
             </div>
           )}
         </div>
+
+        {/* Modal Substitution Dialog */}
+        {showSubModal && (
+          <div className="modal-backdrop">
+            <div className="modal-card">
+              <div className="modal-header">
+                <h2 className="modal-title">Remplacement d'article en rupture</h2>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-icon"
+                  onClick={() => setShowSubModal(false)}
+                >
+                  <IconX size={16} />
+                </button>
+              </div>
+
+              <div className="mb-3 p-2 text-xs" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)' }}>
+                <div className="text-muted">ARTICLE D'ORIGINE :</div>
+                <div className="font-bold text-sm">{line.designation}</div>
+                <div className="text-muted">Prix : {line.unitPrice != null ? `${line.unitPrice.toFixed(2)} DA` : 'Non renseigné'} • Qté : {line.orderedQty}</div>
+              </div>
+
+              <div className="mb-3">
+                <label className="text-xs font-semibold text-muted mb-1 block">RECHERCHER L'ARTICLE DE REMPLACEMENT :</label>
+                <input
+                  type="text"
+                  className="input input-sm"
+                  style={{ width: '100%' }}
+                  placeholder="Désignation ou référence..."
+                  value={subSearch}
+                  onChange={(e) => setSubSearch(e.target.value)}
+                />
+              </div>
+
+              <div className="max-h-48 overflow-y-auto flex flex-col gap-1 mb-3" style={{ maxHeight: 180 }}>
+                {(allBillLines || [])
+                  .filter(l => l.id !== line.id && (!subSearch.trim() || l.designation.toLowerCase().includes(subSearch.toLowerCase()) || (l.reference && l.reference.toLowerCase().includes(subSearch.toLowerCase()))))
+                  .slice(0, 15)
+                  .map(l => {
+                    const isPicked = selectedSubLine?.id === l.id;
+                    const diff = (l.unitPrice || 0) - (line.unitPrice || 0);
+                    return (
+                      <div
+                        key={l.id}
+                        className={`p-2 rounded cursor-pointer border text-xs flex justify-between items-center ${isPicked ? 'border-accent bg-accent/10' : 'border-transparent'}`}
+                        style={{ background: isPicked ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)' }}
+                        onClick={() => setSelectedSubLine(l)}
+                      >
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div className="font-semibold truncate">{l.designation}</div>
+                          <div className="text-muted">Réf: {l.reference || '-'} • {l.unitPrice != null ? `${l.unitPrice.toFixed(2)} DA` : 'Prix libre'}</div>
+                        </div>
+                        <span className="font-bold font-mono ml-2" style={{ color: diff > 0 ? 'var(--danger)' : diff < 0 ? 'var(--success)' : 'inherit' }}>
+                          {diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)} DA
+                        </span>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              {selectedSubLine && (
+                <div className="flex flex-col gap-2 mb-3 p-2" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)' }}>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs">
+                    <input
+                      type="checkbox"
+                      checked={subPaidAdvance}
+                      onChange={(e) => setSubPaidAdvance(e.target.checked)}
+                    />
+                    <span>Le client a déjà payé à l'avance (Important)</span>
+                  </label>
+
+                  {subPaidAdvance && ((selectedSubLine.unitPrice || 0) !== (line.unitPrice || 0)) && (
+                    <div className="text-xs p-2" style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: 6, color: '#f59e0b' }}>
+                      ⚠️ <strong>Attention paiement d'avance :</strong> L'écart financier ({(selectedSubLine.unitPrice || 0) - (line.unitPrice || 0)} DA) nécessite validation ou régularisation avec le client.
+                    </div>
+                  )}
+
+                  <label className="flex items-center gap-2 cursor-pointer text-xs">
+                    <input
+                      type="checkbox"
+                      checked={subNotifyClient}
+                      onChange={(e) => setSubNotifyClient(e.target.checked)}
+                    />
+                    <span>Mentionner explicitement le remplacement sur le bon / facture</span>
+                  </label>
+
+                  <input
+                    type="text"
+                    className="input input-sm mt-1"
+                    placeholder="Note interne (optionnel)..."
+                    value={subCustomNote}
+                    onChange={(e) => setSubCustomNote(e.target.value)}
+                  />
+                </div>
+              )}
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowSubModal(false)}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={!selectedSubLine}
+                  onClick={async () => {
+                    if (!selectedSubLine) return;
+                    await substituteOrderLine(line.id!, selectedSubLine.id!, subPaidAdvance, subNotifyClient, subCustomNote);
+                    setShowSubModal(false);
+                    showToast('Substitution enregistrée avec succès', setToast);
+                  }}
+                >
+                  Confirmer le remplacement
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
 
         {/* Count history */}
@@ -3247,7 +3772,28 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
   const [selectedCameraId, setSelectedCameraId] = useState<string>(() => {
     return localStorage.getItem('pointage_preferred_camera_id') || '';
   });
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [qrSyncModalPayload, setQrSyncModalPayload] = useState<QRSyncPayload | null>(null);
+
+  const handleZoom = async (val: number) => {
+    setZoomLevel(val);
+    if (streamRef.current) {
+      const track = streamRef.current.getVideoTracks()[0];
+      if (track && 'applyConstraints' in track) {
+        try {
+          const caps = (track as any).getCapabilities ? (track as any).getCapabilities() : {};
+          if (caps.zoom) {
+            const minZ = caps.zoom.min || 1;
+            const maxZ = caps.zoom.max || 5;
+            const targetZ = Math.min(maxZ, Math.max(minZ, val));
+            await track.applyConstraints({ advanced: [{ zoom: targetZ } as any] });
+          }
+        } catch (e) {
+          console.warn('Manual zoom toggle failed:', e);
+        }
+      }
+    }
+  };
 
   // Start camera
   useEffect(() => {
@@ -3444,7 +3990,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
 
     // 2. Partial matches (reference substring, barcode substring, or clean alphanumeric substring)
     if (trimmed.length >= 2) {
-      return linesToSearch.filter(l =>
+      const partials = linesToSearch.filter(l =>
         l.reference?.toLowerCase().includes(lower) ||
         l.originalReference?.toLowerCase().includes(lower) ||
         (l.ean && (l.ean.toLowerCase().includes(lower) || (clean.length >= 3 && l.ean.replace(/[^a-z0-9]/gi, '').includes(clean)))) ||
@@ -3454,6 +4000,39 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
           (l.originalReference && l.originalReference.toLowerCase().replace(/[^a-z0-9]/gi, '').includes(clean))
         ))
       );
+      if (partials.length > 0) return partials;
+    }
+
+    // 3. Cross-bill seller search: If searching within a specific bill, also search sibling bills of the same client
+    if (billIdParam) {
+      const currentBill = bills.find((b) => b.id === Number(billIdParam));
+      const client = currentBill?.client?.trim();
+      if (client) {
+        const siblingBillIds = bills
+          .filter((b) => b.client && b.client.trim().toLowerCase() === client.toLowerCase() && b.id !== Number(billIdParam))
+          .map((b) => b.id!);
+        const siblingLines = allLines.filter((l) => siblingBillIds.includes(l.billId));
+        if (siblingLines.length > 0) {
+          const siblingExact = siblingLines.filter((l) =>
+            l.ean?.toLowerCase() === lower ||
+            l.originalEan?.toLowerCase() === lower ||
+            l.reference?.toLowerCase() === lower ||
+            l.originalReference?.toLowerCase() === lower ||
+            l.referenceAliases.some((a) => a.toLowerCase() === lower)
+          );
+          if (siblingExact.length > 0) return siblingExact;
+
+          if (trimmed.length >= 2) {
+            const siblingPartial = siblingLines.filter((l) =>
+              l.reference?.toLowerCase().includes(lower) ||
+              l.originalReference?.toLowerCase().includes(lower) ||
+              (l.ean && (l.ean.toLowerCase().includes(lower) || (clean.length >= 3 && l.ean.replace(/[^a-z0-9]/gi, '').includes(clean)))) ||
+              (l.originalEan && (l.originalEan.toLowerCase().includes(lower) || (clean.length >= 3 && l.originalEan.replace(/[^a-z0-9]/gi, '').includes(clean))))
+            );
+            if (siblingPartial.length > 0) return siblingPartial;
+          }
+        }
+      }
     }
 
     return [];
@@ -3524,6 +4103,22 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
         <>
           <video ref={videoRef} className="scanner-video" playsInline muted autoPlay />
           <div className="scanner-target" />
+          <div className="scanner-zoom-bar">
+            <button
+              type="button"
+              className={`scanner-zoom-btn ${zoomLevel === 1 ? 'active' : ''}`}
+              onClick={() => handleZoom(1)}
+            >
+              1×
+            </button>
+            <button
+              type="button"
+              className={`scanner-zoom-btn ${zoomLevel === 2 ? 'active' : ''}`}
+              onClick={() => handleZoom(2)}
+            >
+              2×
+            </button>
+          </div>
         </>
       )}
 
@@ -3553,7 +4148,9 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
           <div>
             <div className="flex justify-between items-start mb-2">
               <div>
-                <div className="text-xs font-bold text-muted">CODE INCONNU</div>
+                <div className="text-xs font-bold text-danger flex items-center gap-1">
+                  <IconWarning size={14} /> CODE INCONNU
+                </div>
                 <div className="font-bold text-lg" style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
                   {scanResult}
                 </div>
@@ -3563,8 +4160,20 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
               </button>
             </div>
 
+            {/* Instant 1-tap Assistive Recovery Action */}
+            {billIdParam && (
+              <button
+                type="button"
+                className="btn btn-primary btn-full flex items-center justify-center gap-2 mb-3"
+                style={{ minHeight: 48, fontWeight: 700, borderRadius: 14 }}
+                onClick={() => nav(`/bill/${billIdParam}/extras?stage=${stageParam}&ean=${encodeURIComponent(scanResult)}`)}
+              >
+                <IconPlus size={16} /> Enregistrer comme Hors-BL / Extra
+              </button>
+            )}
+
             <div className="text-xs text-secondary mb-2">
-              Associer à un article :
+              Ou associer à un article existant :
             </div>
 
             <input
@@ -3588,7 +4197,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
                   >
                     <div className="flex justify-between items-center">
                       <span className="line-no font-bold" style={{ fontSize: '0.95rem' }}>N°{line.no}</span>
-                      <span className="text-xs font-semibold text-accent">{b?.client}</span>
+                      <span className="text-xs font-semibold text-accent">{b?.billNumber || b?.client}</span>
                     </div>
                     <div className="text-sm font-semibold truncate">{line.designation}</div>
                     <div className="text-xs text-muted">
@@ -3598,15 +4207,6 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
                 );
               })}
             </div>
-
-            {billIdParam && (
-              <button
-                className="btn btn-secondary btn-full flex items-center justify-center gap-2 mt-2"
-                onClick={() => nav(`/bill/${billIdParam}/extras?stage=${stageParam}&ean=${scanResult}`)}
-              >
-                <IconPlus size={16} /> Produit Hors-BL
-              </button>
-            )}
           </div>
         )}
 
@@ -3697,6 +4297,19 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   const extras = useBillExtras(billId);
   const audit = useBillAudit(billId);
   const containers = useBillContainers(billId);
+  const entityBills = useEntityBills(bill?.client);
+  const entityLines = useEntityLines(bill?.client);
+  const entityEvents = useLiveQuery(
+    async () => {
+      if (!bill?.client) return [];
+      const siblingBills = await db.bills.where('client').equals(bill.client.trim()).toArray();
+      const siblingIds = siblingBills.map((b) => b.id!);
+      if (siblingIds.length === 0) return [];
+      return db.countEvents.where('billId').anyOf(siblingIds).toArray();
+    },
+    [bill?.client],
+    []
+  );
 
   const [searchParams] = useSearchParams();
   const urlStage = searchParams.get('stage') as Stage | null;
@@ -3736,22 +4349,18 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   const displayLines = summaryTab === 'all' ? lines : problemLines;
 
   // Summary stats
-  const totalLines = lines.length;
-  const activeLines = lines.filter(l => l.status === 'active').length;
   const cancelledLines = lines.filter(l => l.status === 'cancelled').length;
   const notFoundLines = lines.filter(l => l.status === 'not_found').length;
   const outOfStockLines = lines.filter(l => l.status === 'out_of_stock').length;
 
   const prep = calcBillProgress(lines, eventsByLine, 'preparation');
   const load = calcBillProgress(lines, eventsByLine, 'chargement');
-  const point = calcBillProgress(lines, eventsByLine, 'pointage');
 
   // Visual Quality Distribution metrics
-  const activeScopeStage: Stage = stageScope === 'auto' ? 'preparation' : stageScope;
   const conformeCount = lines.filter(l => {
     if (l.status !== 'active') return false;
     const evts = eventsByLine.get(l.id!) || [];
-    const stageTotal = sumStageEvents(evts, activeScopeStage);
+    const stageTotal = sumStageEvents(evts, stageScope);
     const disc = calcDiscrepancy(l, stageTotal);
     return disc.isExact && stageTotal > 0;
   }).length;
@@ -3759,7 +4368,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   const shortCount = lines.filter(l => {
     if (l.status !== 'active') return false;
     const evts = eventsByLine.get(l.id!) || [];
-    const stageTotal = sumStageEvents(evts, activeScopeStage);
+    const stageTotal = sumStageEvents(evts, stageScope);
     const disc = calcDiscrepancy(l, stageTotal);
     return disc.isShort && stageTotal > 0;
   }).length;
@@ -3767,20 +4376,16 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   const overCount = lines.filter(l => {
     if (l.status !== 'active') return false;
     const evts = eventsByLine.get(l.id!) || [];
-    const stageTotal = sumStageEvents(evts, activeScopeStage);
+    const stageTotal = sumStageEvents(evts, stageScope);
     const disc = calcDiscrepancy(l, stageTotal);
     return disc.isOver;
   }).length;
 
   const problemStatusCount = outOfStockLines + notFoundLines + cancelledLines;
-  const pctConforme = lines.length > 0 ? Math.round((conformeCount / lines.length) * 100) : 0;
-  const pctShort = lines.length > 0 ? Math.round((shortCount / lines.length) * 100) : 0;
-  const pctOver = lines.length > 0 ? Math.round((overCount / lines.length) * 100) : 0;
-  const pctProblem = lines.length > 0 ? Math.round((problemStatusCount / lines.length) * 100) : 0;
 
   // WhatsApp Discrepancy Report Generator
   const generateReport = () => {
-    const stageProblems = getStageProblemLines(lines, eventsByLine, stageScope === 'auto' ? 'preparation' : stageScope);
+    const stageProblems = getStageProblemLines(lines, eventsByLine, stageScope);
 
     const nowStr = new Date().toLocaleDateString('fr-FR', {
       day: '2-digit',
@@ -3847,10 +4452,25 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
     if (containers.length > 0) {
       text += `*RÉPARTITION DES COLIS :*\n`;
       containers.forEach((c) => {
-        const count = events
-          .filter((e) => e.stage === 'preparation' && !e.undone && e.containerId === c.id)
-          .reduce((s, e) => s + e.quantity, 0);
-        text += `• ${c.label} : ${count} unités\n`;
+        const eventsInCarton = (entityEvents || events).filter(
+          (e) => e.stage === 'preparation' && !e.undone && e.containerId === c.id
+        );
+        const count = eventsInCarton.reduce((s, e) => s + e.quantity, 0);
+        if (count === 0) return;
+
+        const uniqueBillIds = Array.from(new Set(eventsInCarton.map((e) => e.billId)));
+        if (uniqueBillIds.length > 1) {
+          const breakdownStr = uniqueBillIds
+            .map((bId) => {
+              const bNum = entityBills?.find((b) => b.id === bId)?.billNumber || `BL #${bId}`;
+              const bCount = eventsInCarton.filter((e) => e.billId === bId).reduce((s, e) => s + e.quantity, 0);
+              return `${bCount} du ${bNum}`;
+            })
+            .join(', ');
+          text += `• ${c.label} : ${count} unités (${breakdownStr})\n`;
+        } else {
+          text += `• ${c.label} : ${count} unités\n`;
+        }
       });
       text += `\n`;
     }
@@ -3862,23 +4482,6 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   const whatsappNumber = localStorage.getItem('pointage_whatsapp_number') || '+213556264976';
   const reportEmail = localStorage.getItem('pointage_report_email') || '';
 
-  const handleShareWhatsApp = () => {
-    const report = generateReport();
-    const cleanPhone = whatsappNumber.replace(/[^\d]/g, '');
-    const url = cleanPhone
-      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(report)}`
-      : `https://wa.me/?text=${encodeURIComponent(report)}`;
-    window.open(url, '_blank');
-  };
-
-  const handleSendEmail = () => {
-    const report = generateReport();
-    const subject = encodeURIComponent(`Pointage — Synthèse ${bill.billNumber} (${bill.client})`);
-    const body = encodeURIComponent(report);
-    window.location.href = `mailto:${reportEmail}?subject=${subject}&body=${body}`;
-  };
-
-
   const handleCopyReport = () => {
     const report = generateReport();
     navigator.clipboard.writeText(report);
@@ -3886,7 +4489,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   };
 
   const finalBillRows = buildFinalBillRows(lines, eventsByLine, {
-    stage: stageScope === 'auto' ? 'preparation' : stageScope,
+    stage: stageScope,
     onlyPresent: exportOnlyPresent,
   });
   const finalBillData = compileFinalBillData(bill, finalBillRows);
@@ -4077,8 +4680,8 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           </div>
         )}
 
-        {/* View Tabs — Segmented Apple Control */}
-        <div className="seg-control mb-3">
+        {/* View Tabs — Segmented Apple Control (100% Fit, Zero Overflow) */}
+        <div className="seg-control-fit mb-3">
           <button
             type="button"
             className={`seg-btn ${summaryTab === 'problems' ? 'active' : ''}`}
@@ -4105,7 +4708,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
             className={`seg-btn ${summaryTab === 'audit' ? 'active' : ''}`}
             onClick={() => setSummaryTab('audit')}
           >
-            Audit Logistique
+            Audit
           </button>
         </div>
 
@@ -4148,87 +4751,119 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
 
 
         {/* PAR CARTON View */}
-        {summaryTab === 'cartons' && (
-          <div>
-            {containers.map((c) => {
-              const linesInCarton = lines
-                .map(line => {
-                  const evts = eventsByLine.get(line.id!) || [];
-                  const qty = evts
-                    .filter(e => e.stage === 'preparation' && !e.undone && e.containerId === c.id)
-                    .reduce((s, e) => s + e.quantity, 0);
-                  return { line, qty };
-                })
-                .filter(item => item.qty > 0);
+        {summaryTab === 'cartons' && (() => {
+          const allRelevantLines = (entityLines && entityLines.length > 0) ? entityLines : lines;
+          const allRelevantEvents = (entityEvents && entityEvents.length > 0) ? entityEvents : events;
+          const allEventsByLine = new Map<number, CountEvent[]>();
+          for (const e of allRelevantEvents) {
+            const arr = allEventsByLine.get(e.orderLineId) || [];
+            arr.push(e);
+            allEventsByLine.set(e.orderLineId, arr);
+          }
+          const billMap = new Map<number, Bill>();
+          if (entityBills) {
+            for (const b of entityBills) {
+              if (b.id != null) billMap.set(b.id, b);
+            }
+          }
 
-              const totalUnits = linesInCarton.reduce((s, item) => s + item.qty, 0);
+          return (
+            <div>
+              {containers.map((c) => {
+                const linesInCarton = allRelevantLines
+                  .map(line => {
+                    const evts = allEventsByLine.get(line.id!) || [];
+                    const qty = evts
+                      .filter(e => e.stage === 'preparation' && !e.undone && e.containerId === c.id)
+                      .reduce((s, e) => s + e.quantity, 0);
+                    return { line, qty };
+                  })
+                  .filter(item => item.qty > 0);
 
-              return (
-                <div key={c.id} className="card mb-3">
-                  <div className="flex justify-between items-center mb-2">
-                    <div className="font-bold flex items-center gap-2">
-                      <span className="container-tag selected" style={{ fontSize: '0.9rem' }}>{c.label}</span>
-                      <span className="text-xs text-muted">
-                        {c.type === 'loose' ? 'Hors Carton' : c.type === 'large' ? 'Grand Colis' : 'Carton Standard'}
-                      </span>
+                const totalUnits = linesInCarton.reduce((s, item) => s + item.qty, 0);
+
+                return (
+                  <div key={c.id} className="card mb-3">
+                    <div className="flex justify-between items-center mb-2">
+                      <div className="font-bold flex items-center gap-2">
+                        <span className="container-tag selected" style={{ fontSize: '0.9rem' }}>{c.label}</span>
+                        <span className="text-xs text-muted">
+                          {c.type === 'chouala' ? 'Sac de conditionnement' : c.type === 'loose' ? 'Hors Colis (Vrac)' : c.type === 'large' ? 'Grand Colis' : 'Carton Standard'}
+                        </span>
+                      </div>
+                      <span className="badge badge-active font-mono">{totalUnits} unités</span>
                     </div>
-                    <span className="badge badge-active font-mono">{totalUnits} unités</span>
+                    {linesInCarton.length === 0 ? (
+                      <div className="text-xs text-muted py-1">{c.type === 'chouala' ? 'Sac vide' : 'Carton vide'}</div>
+                    ) : (
+                      linesInCarton.map(({ line, qty }) => {
+                        const isSibling = line.billId !== billId;
+                        const lineBill = isSibling ? billMap.get(line.billId) : bill;
+                        return (
+                          <div key={line.id} className="flex justify-between items-center py-1 border-t text-sm">
+                            <div style={{ minWidth: 0, flex: 1, paddingRight: 8 }}>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-accent">N°{line.no}</span>
+                                {isSibling && (
+                                  <span
+                                    className="badge badge-secondary font-mono"
+                                    style={{ fontSize: '0.7rem', padding: '1px 5px' }}
+                                    title={`Cet article provient du bon ${lineBill?.billNumber || line.billId}`}
+                                  >
+                                    BL {lineBill?.billNumber || `#${line.billId}`}
+                                  </span>
+                                )}
+                                {line.reference && <span className="text-xs text-muted">• REF: {line.reference}</span>}
+                              </div>
+                              <div className="truncate text-xs">{line.designation}</div>
+                            </div>
+                            <span className="font-bold text-base font-mono">{qty}</span>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
-                  {linesInCarton.length === 0 ? (
-                    <div className="text-xs text-muted py-1">Carton vide</div>
-                  ) : (
-                    linesInCarton.map(({ line, qty }) => (
+                );
+              })}
+
+              {/* Unassigned / Hors carton */}
+              {(() => {
+                const linesOutside = lines
+                  .map(line => {
+                    const evts = eventsByLine.get(line.id!) || [];
+                    const qty = evts
+                      .filter(e => e.stage === 'preparation' && !e.undone && !e.containerId)
+                      .reduce((s, e) => s + e.quantity, 0);
+                    return { line, qty };
+                  })
+                  .filter(item => item.qty > 0);
+
+                if (linesOutside.length === 0) return null;
+                const totalUnits = linesOutside.reduce((s, item) => s + item.qty, 0);
+
+                return (
+                  <div className="card mb-3" style={{ borderColor: 'var(--warning-border)' }}>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="container-tag" style={{ background: 'var(--bg-surface)' }}>HORS CARTON</span>
+
+                      <span className="badge badge-warning font-mono">{totalUnits} unités</span>
+                    </div>
+                    {linesOutside.map(({ line, qty }) => (
                       <div key={line.id} className="flex justify-between items-center py-1 border-t text-sm">
                         <div style={{ minWidth: 0, flex: 1, paddingRight: 8 }}>
-                          <span className="font-bold text-accent">N°{line.no}</span>
+                          <span className="font-bold text-warning">N°{line.no}</span>
                           {line.reference && <span className="text-xs text-muted"> • REF: {line.reference}</span>}
                           <div className="truncate text-xs">{line.designation}</div>
                         </div>
                         <span className="font-bold text-base font-mono">{qty}</span>
                       </div>
-                    ))
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Unassigned / Hors carton */}
-            {(() => {
-              const linesOutside = lines
-                .map(line => {
-                  const evts = eventsByLine.get(line.id!) || [];
-                  const qty = evts
-                    .filter(e => e.stage === 'preparation' && !e.undone && !e.containerId)
-                    .reduce((s, e) => s + e.quantity, 0);
-                  return { line, qty };
-                })
-                .filter(item => item.qty > 0);
-
-              if (linesOutside.length === 0) return null;
-              const totalUnits = linesOutside.reduce((s, item) => s + item.qty, 0);
-
-              return (
-                <div className="card mb-3" style={{ borderColor: 'var(--warning-border)' }}>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="container-tag" style={{ background: 'var(--bg-surface)' }}>HORS CARTON</span>
-
-                    <span className="badge badge-warning font-mono">{totalUnits} unités</span>
+                    ))}
                   </div>
-                  {linesOutside.map(({ line, qty }) => (
-                    <div key={line.id} className="flex justify-between items-center py-1 border-t text-sm">
-                      <div style={{ minWidth: 0, flex: 1, paddingRight: 8 }}>
-                        <span className="font-bold text-warning">N°{line.no}</span>
-                        {line.reference && <span className="text-xs text-muted"> • REF: {line.reference}</span>}
-                        <div className="truncate text-xs">{line.designation}</div>
-                      </div>
-                      <span className="font-bold text-base font-mono">{qty}</span>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-          </div>
-        )}
+                );
+              })()}
+            </div>
+          );
+        })()}
 
         {/* Calm Apple Glass Zero State for 0 Problems */}
         {summaryTab === 'problems' && problemLines.length === 0 && (
@@ -4431,7 +5066,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
                 .map((l) => {
                 const evts = eventsByLine.get(l.id!) || [];
                 const actualQty = evts
-                  .filter((e) => !e.undone && (stageScope === 'auto' ? e.stage === 'preparation' : e.stage === stageScope))
+                  .filter((e) => !e.undone && e.stage === stageScope)
                   .reduce((sum, e) => sum + e.quantity, 0);
 
                 const currentVal =
@@ -4459,9 +5094,9 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
                         <span>Col: {l.colisage || 1}</span>
                         <span
                           className="font-medium"
-                          style={{ color: actualQty < l.expectedQuantity ? 'var(--warning)' : 'inherit' }}
+                          style={{ color: actualQty < l.orderedQty ? 'var(--warning)' : 'inherit' }}
                         >
-                          Pointé: {actualQty} / {l.expectedQuantity}
+                          Pointé: {actualQty} / {l.orderedQty}
                         </span>
                       </div>
                     </div>

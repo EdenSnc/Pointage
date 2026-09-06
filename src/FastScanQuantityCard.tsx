@@ -427,7 +427,7 @@ export function FastScanQuantityCard({
               onPointerUp={stopHold}
               onPointerLeave={stopHold}
               aria-label="Diminuer (maintenir pour accélérer)"
-              style={{ width: 44, height: 44, fontSize: '1.4rem' }}
+              style={{ width: 48, height: 48, minWidth: 48, minHeight: 48, fontSize: '1.4rem' }}
             >
               -
             </button>
@@ -491,7 +491,7 @@ export function FastScanQuantityCard({
               onPointerUp={stopHold}
               onPointerLeave={stopHold}
               aria-label="Augmenter (maintenir pour accélérer)"
-              style={{ width: 44, height: 44, fontSize: '1.4rem' }}
+              style={{ width: 48, height: 48, minWidth: 48, minHeight: 48, fontSize: '1.4rem' }}
             >
               +
             </button>
