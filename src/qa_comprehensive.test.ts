@@ -511,6 +511,8 @@ describe('QA: Donut Chart Fulfillment & Accuracy Logic', () => {
     expect(pctProgress).toBe(100);
     expect(diffPieces).toBe(6);
     expect(hasSurplus).toBe(true);
+    expect(totalLines).toBe(6);
+    expect(conformeCount).toBe(3);
 
     let kpiVal = `${pctProgress}%`;
     let kpiSubText = '';
@@ -532,6 +534,7 @@ describe('QA: Donut Chart Fulfillment & Accuracy Logic', () => {
 
     expect(pctProgress).toBe(70);
     expect(diffPieces).toBe(-15);
+    expect(shortCount).toBe(2);
   });
 });
 

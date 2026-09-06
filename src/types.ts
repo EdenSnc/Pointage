@@ -70,6 +70,8 @@ export interface Bill {
   rc?: string | null;
   ai?: string | null;
   discountPercent?: number | null;
+  bcNumber?: string | null;
+  documentType?: 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -219,7 +221,15 @@ export interface ImportBillJSON {
   rc?: string | null;
   ai?: string | null;
   totalTtc?: number | null;
+  totalHt?: number | null;
+  totalHtNet?: number | null;
+  totalRemise?: number | null;
+  totalTva?: number | null;
+  totalRemPaiement?: number | null;
+  totalAvecRemise?: number | null;
   discountPercent?: number | null;
+  bcNumber?: string | null;
+  documentType?: 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | null;
   lines?: ImportLineJSON[];
 }
 
@@ -259,11 +269,20 @@ export interface FinalBillExportData {
   nis?: string | null;
   rc?: string | null;
   ai?: string | null;
+  bcNumber?: string | null;
+  documentType?: 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | null;
   totalOrderedQty: number;
   totalActualQty: number;
   totalDiffQty: number;
   totalAmountTtc: number;
   totalAmountWithDiscount?: number | null;
+  totalHt?: number | null;
+  totalHtNet?: number | null;
+  totalRemise?: number | null;
+  totalTva?: number | null;
+  totalRemPaiement?: number | null;
+  totalAvecRemise?: number | null;
+  amountInWords?: string | null;
   discountPercent?: number | null;
   isPriced: boolean;
   checksumValid: boolean;

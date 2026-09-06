@@ -8,8 +8,14 @@ import {
   buildFinalBillRows,
   compileFinalBillData,
   createFinalBillWorkbook,
+  createInvoiceWorkbook,
+  createDeliveryNoteWorkbook,
+  createWorkshopDeliveryWorkbook,
+  createOrderBillWorkbook,
+  resolveDocumentType,
   formatFinalBillWhatsAppMessage,
 } from './excelExport';
+import { formatDzdAmountInWords, numberToWordsFr } from './frenchNumberToWords';
 import { validateFinancialChecksum } from './ai/geminiProvider';
 import type { OrderLine, CountEvent, Bill } from './types';
 
@@ -650,3 +656,279 @@ describe('excelExport — Extensive Edge Cases Resilience', () => {
     expect(ws['A10'].s.border.bottom.style).toBe('thin');
   });
 });
+
+describe('excelExport — 1:1 Warehouse Document Replicas & Differentiation', () => {
+  const sajInvoiceData = {
+    billNumber: 'SAJ/2026/5435',
+    client: 'BLEU BLANC NAKHIL',
+    date: '06/09/2026',
+    agentName: 'ShowOr',
+    clientAddress: '95 ET 96 LOTS ZONE D\'ACTIVITE - BIR EL DJIR - ORAN',
+    paymentMode: 'GMS2026+++ GMS',
+    nif: '002131112400617',
+    rc: '21B 2124006-00/31',
+    bcNumber: '03885',
+    totalOrderedQty: 14,
+    totalActualQty: 14,
+    totalDiffQty: 0,
+    totalAmountTtc: 36555.22,
+    totalHt: 32209.00,
+    totalHtNet: 30718.67,
+    totalRemise: 1490.33,
+    totalTva: 5836.55,
+    totalRemPaiement: 1044.17,
+    totalAvecRemise: 35511.05,
+    amountInWords: 'TRENTE-SIX MILLE CINQ CENT CINQUANTE-CINQ DZD ET VINGT-DEUX CENTIMES',
+    isPriced: true,
+    checksumValid: true,
+    rows: [
+      {
+        no: '1',
+        code: '71662',
+        ean: '6941782115565',
+        designation: 'SAC A DOS MOYEN 22 L 4 MO 71662',
+        colisage: '0,06',
+        orderedQty: 3,
+        actualQty: 3,
+        diffQty: 0,
+        unitPrice: 3332.50,
+        discountPercent: 0,
+        totalTtc: 9997.50,
+        status: 'CONFORME' as const,
+        observation: 'Conforme',
+      },
+      {
+        no: '2',
+        code: '71706',
+        ean: '6941782116005',
+        designation: 'SAC A DOS PRESCOLAIRE 10 L 6 MO 71706',
+        colisage: '2,00',
+        orderedQty: 2,
+        actualQty: 2,
+        diffQty: 0,
+        unitPrice: 1526.75,
+        discountPercent: 15,
+        totalTtc: 2595.47,
+        status: 'CONFORME' as const,
+        observation: 'Conforme',
+      },
+      {
+        no: '3',
+        code: '71689',
+        ean: '6941782115831',
+        designation: 'SAC A DOS PRESCOLAIRE 8 L 5 MO 71689',
+        colisage: '0,10',
+        orderedQty: 5,
+        actualQty: 5,
+        diffQty: 0,
+        unitPrice: 1376.40,
+        discountPercent: 15,
+        totalTtc: 5849.70,
+        status: 'CONFORME' as const,
+        observation: 'Conforme',
+      },
+      {
+        no: '4',
+        code: '71660',
+        ean: '6941782115541',
+        designation: 'SAC A DOS PRIMAIRE 22 L 4 MO 71660',
+        colisage: '0,08',
+        orderedQty: 4,
+        actualQty: 4,
+        diffQty: 0,
+        unitPrice: 3069.00,
+        discountPercent: 0,
+        totalTtc: 12276.00,
+        status: 'CONFORME' as const,
+        observation: 'Conforme',
+      },
+    ],
+  };
+
+  it('correctly resolves document type based on bill numbers and item characteristics', () => {
+    // Invoice
+    expect(resolveDocumentType({ ...sajInvoiceData, billNumber: 'Invoice SAJ/2026/5435' })).toBe('invoice');
+    expect(resolveDocumentType({ ...sajInvoiceData, billNumber: 'FACT-2026-098' })).toBe('invoice');
+
+    // BL Officiel (starts with BL and contains valid EANs)
+    expect(resolveDocumentType({ ...sajInvoiceData, billNumber: 'BL/OU126/03615' })).toBe('bl_official');
+
+    // BL Atelier (starts with BL but no valid EANs)
+    const workshopData = {
+      ...sajInvoiceData,
+      billNumber: 'BL/OU126/03608',
+      rows: sajInvoiceData.rows.map((r) => ({ ...r, ean: null })),
+    };
+    expect(resolveDocumentType(workshopData)).toBe('bl_workshop');
+
+    // Bon de commande
+    expect(resolveDocumentType({ ...sajInvoiceData, billNumber: 'BC/OU126/03808' })).toBe('bon_commande');
+
+    // Explicit override takes precedence
+    expect(resolveDocumentType(workshopData, 'invoice')).toBe('invoice');
+  });
+
+  it('replicates Facture Commerciale (Invoice SAJ/2026/5435) 1:1 with formulas, totals & words', () => {
+    const wb = createInvoiceWorkbook(sajInvoiceData);
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    expect(ws).toBeDefined();
+
+    // Top Header
+    expect(ws['A1'].v).toContain('Invoice SAJ/2026/5435');
+    expect(ws['A3'].v).toBe('Par: ShowOr');
+    expect(ws['G1'].v).toContain('Bir El Djir , le : 06/09/2026');
+
+    // Client box
+    expect(ws['E2'].v).toContain('BLEU BLANC NAKHIL');
+    expect(ws['E6'].v).toContain('NIF : 002131112400617');
+    expect(ws['E7'].v).toContain('RC : 21B 2124006-00/31');
+
+    // Table Column Headers (Row 9)
+    expect(ws['A9'].v).toBe('N°');
+    expect(ws['B9'].v).toBe('CODE');
+    expect(ws['C9'].v).toBe('Désignation');
+    expect(ws['D9'].v).toBe('QTÉ');
+    expect(ws['E9'].v).toBe('Colisage');
+    expect(ws['F9'].v).toBe('Qté/Carton');
+    expect(ws['G9'].v).toBe('PU');
+    expect(ws['H9'].v).toBe('MONTANT HT');
+    expect(ws['I9'].v).toBe('TVA');
+    expect(ws['J9'].v).toBe('Rem(%)');
+    expect(ws['K9'].v).toBe('Rem. Paiement(%)');
+
+    // First Data Row (Row 10)
+    expect(ws['A10'].v).toBe('1');
+    expect(ws['B10'].v).toBe('71662');
+    expect(ws['C10'].v).toBe('SAC A DOS MOYEN 22 L 4 MO 71662');
+    expect(ws['D10'].v).toBe(3);
+    expect(ws['G10'].v).toBe(3332.50);
+    expect(ws['H10'].f).toBe('D10*G10');
+    expect(ws['H10'].v).toBe(9997.50);
+    expect(ws['I10'].v).toBe('19%');
+
+    // 7-line totals block on right
+    // TOTAL HT
+    expect(ws['G15'].v).toBe('TOTAL HT');
+    expect(ws['H15'].v).toBe(32209.00);
+    // TOTAL HT NET
+    expect(ws['G16'].v).toBe('TOTAL HT NET');
+    expect(ws['H16'].v).toBe(30718.67);
+    // REMISE
+    expect(ws['G17'].v).toBe('REMISE');
+    expect(ws['H17'].v).toBe(1490.33);
+    // TVA
+    expect(ws['G18'].v).toBe('TVA');
+    expect(ws['H18'].v).toBe(5836.55);
+    // TOTAL TTC
+    expect(ws['G19'].v).toBe('TOTAL TTC');
+    expect(ws['H19'].v).toBe(36555.22);
+    // REM PAIEMENT
+    expect(ws['G20'].v).toBe('REM PAIEMENT');
+    expect(ws['H20'].v).toBe(1044.17);
+    // TOTAL AVEC REMISE
+    expect(ws['G21'].v).toBe('TOTAL AVEC REMISE');
+    expect(ws['H21'].v).toBe(35511.05);
+
+    // Legal wording on left
+    expect(ws['A15'].v).toBe('Arrêté la Présente Facture à la Somme de:');
+    expect(ws['A16'].v).toContain('TRENTE-SIX MILLE CINQ CENT CINQUANTE-CINQ DZD ET VINGT-DEUX CENTIMES');
+    expect(ws['A18'].v).toContain('Conditions de règlement: GMS2026+++ GMS');
+  });
+
+  it('replicates Bon de Livraison Officiel (BL/OU126/03615) 1:1 with SARL SBM header and BC link', () => {
+    const wb = createDeliveryNoteWorkbook(sajInvoiceData);
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    expect(ws).toBeDefined();
+
+    // Company Header
+    expect(ws['A1'].v).toBe('SARL S.B.M IMP/EXP');
+    expect(ws['A2'].v).toContain('Capital Social');
+    expect(ws['D5'].v).toBe('RC: 09 B 0118597');
+    expect(ws['D7'].v).toBe('NIF: 000931011859707');
+
+    // Document and BC Number
+    expect(ws['A10'].v).toContain('BON DE LIVRAISON : SAJ/2026/5435');
+    expect(ws['D18'].v).toContain('N° BC:03885');
+
+    // Table Header (Row 20)
+    expect(ws['A20'].v).toBe('N°');
+    expect(ws['B20'].v).toBe('Référence');
+    expect(ws['C20'].v).toBe('EAN');
+    expect(ws['D20'].v).toBe('Désignation');
+    expect(ws['E20'].v).toBe('QTÉ');
+
+    // EAN stored strictly as string to prevent scientific notation (e.g. 6.94E+12)
+    const eanCell = ws['C21'];
+    expect(eanCell.t).toBe('s');
+    expect(eanCell.v).toBe('6941782115565');
+
+    // Total pieces
+    expect(ws['D26'].v).toBe('TOTAL QTÉ');
+    expect(ws['E26'].f).toBe('SUM(E21:E24)');
+    expect(ws['E26'].v).toBe(14);
+
+    // Amount in words
+    expect(ws['A28'].v).toContain('Arrêté le présent Bon de Livraison à la quantité de : QUATORZE PIÈCE(S)');
+
+    // Signatures
+    expect(ws['A30'].v).toBe('Accusé de Réception Client');
+    expect(ws['D30'].v).toBe('Cachet et Signature Magasin / Expédition');
+  });
+
+  it('replicates Bordereau Atelier (BL/OU126/03608) with LOT and Packages columns', () => {
+    const wb = createWorkshopDeliveryWorkbook(sajInvoiceData);
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    expect(ws).toBeDefined();
+
+    // Headers
+    expect(ws['A10'].v).toBe('N°');
+    expect(ws['B10'].v).toBe('Référence');
+    expect(ws['C10'].v).toBe('Désignation');
+    expect(ws['D10'].v).toBe('LOT');
+    expect(ws['E10'].v).toBe('QTÉ');
+    expect(ws['F10'].v).toBe('Packages');
+
+    // Data Row
+    expect(ws['A11'].v).toBe('1');
+    expect(ws['B11'].v).toBe('71662');
+    expect(ws['E11'].v).toBe(3);
+    expect(ws['F11'].v).toBe('0,06');
+
+    // Total and Visa
+    expect(ws['D16'].v).toBe('TOTAL QTÉ');
+    expect(ws['E16'].v).toBe(14);
+    expect(ws['A18'].v).toBe('Visa Préparateur / Chef d\'Atelier');
+  });
+
+  it('converts numbers to official Algerian DZD invoice words accurately', () => {
+    expect(formatDzdAmountInWords(36555.22)).toBe('TRENTE-SIX MILLE CINQ CENT CINQUANTE-CINQ DZD ET VINGT-DEUX CENTIMES');
+    expect(formatDzdAmountInWords(100)).toBe('CENT DZD');
+    expect(formatDzdAmountInWords(120)).toBe('CENT VINGT DZD');
+    expect(formatDzdAmountInWords(51)).toBe('CINQUANTE ET UN DZD');
+    expect(numberToWordsFr(51)).toBe('CINQUANTE ET UN');
+    expect(numberToWordsFr(14)).toBe('QUATORZE');
+    expect(numberToWordsFr(0)).toBe('ZÉRO');
+  });
+
+  it('formats WhatsApp message differently for Invoice vs BL Officiel', () => {
+    // Invoice message has financial totals
+    const invoiceMsg = formatFinalBillWhatsAppMessage(sajInvoiceData, 'invoice');
+    expect(invoiceMsg).toContain('FACTURE COMMERCIALE (SAJ / SHOWOR)');
+    expect(invoiceMsg).toContain('36 555,22 DA');
+    expect(invoiceMsg).toContain('TRENTE-SIX MILLE CINQ CENT CINQUANTE-CINQ DZD ET VINGT-DEUX CENTIMES');
+
+    // BL message has BC reference and pieces without prices
+    const blMsg = formatFinalBillWhatsAppMessage(sajInvoiceData, 'bl_official');
+    expect(blMsg).toContain('BON DE LIVRAISON OFFICIEL (SARL S.B.M IMP/EXP)');
+    expect(blMsg).toContain('N° Bon de Commande (BC) : *03885*');
+    expect(blMsg).toContain('Pieces receptionnees : *14*');
+  });
+
+  it('creates order bill workbook directly with createOrderBillWorkbook', () => {
+    const wb = createOrderBillWorkbook(sajInvoiceData);
+    expect(wb.SheetNames.length).toBe(1);
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    expect(ws['A1'].v).toContain('Bon de commande : SAJ/2026/5435');
+  });
+});
+

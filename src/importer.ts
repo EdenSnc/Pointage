@@ -333,7 +333,17 @@ export async function importBills(
         }
       }
 
-      if (addedForThisBill > 0) {
+      let updatedBillMeta = false;
+      if (billData.bcNumber && !matchingBill.bcNumber) {
+        matchingBill.bcNumber = billData.bcNumber;
+        updatedBillMeta = true;
+      }
+      if (billData.documentType && !matchingBill.documentType) {
+        matchingBill.documentType = billData.documentType;
+        updatedBillMeta = true;
+      }
+
+      if (addedForThisBill > 0 || updatedBillMeta) {
         matchingBill.updatedAt = now;
         await db.bills.put(matchingBill);
 
@@ -373,6 +383,8 @@ export async function importBills(
         rc: billData.rc || null,
         ai: billData.ai || null,
         discountPercent: billData.discountPercent != null ? billData.discountPercent : null,
+        bcNumber: billData.bcNumber || null,
+        documentType: billData.documentType || null,
         createdAt: now,
         updatedAt: now,
       };

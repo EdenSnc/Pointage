@@ -3,62 +3,73 @@ import type { ImportPayload } from '../types';
 import { optimizeDocumentImage } from './imageOptimizer';
 import { recordApiUsage } from './quotaTracker';
 
-const GEMINI_SYSTEM_INSTRUCTION = `Tu es un assistant expert en extraction optique de Bons de Livraison (BL) d'entrepôt et de notes manuscrites.
-Analyse l'image ou le texte et extrais toutes les lignes de produits sous forme de JSON strict.
+const GEMINI_SYSTEM_INSTRUCTION = `Tu es un assistant expert en extraction optique de documents logistiques d'entrepôt : Factures (Invoices), Bons de Livraison (BL), Bons de Commande (BC) et notes manuscrites d'atelier.
+Analyse l'image ou le texte et extrais toutes les données sous forme de JSON strict.
 
-RÈGLES CRITIQUES:
-1. "billNumber": le numéro du BL (ex: "BL-2026-001", "BC/0U126/03835"). Si absent sur note informelle, utilise "NOTE-MANUSCRITE".
-2. "client": le nom de l'enseigne ou destinataire. Si absent, utilise "NOTE INTERNE / DIVERS".
-3. "lines": liste ordonnée de tous les articles avec:
-   - "no": numéro de ligne séquentiel ("1", "2", "3"...). Si absent sur le papier, attribue-le automatiquement.
-   - "page": numéro de page où figure la ligne (défaut 1).
-   - "reference": LA RÉFÉRENCE EST L'IDENTIFIANT PRINCIPAL (ex: "70380/84", "CL-500", "99201"). Ne jamais tronquer ni omettre une référence.
-   - "ean": code-barres 13 chiffres si présent, sinon null (le code-barres est secondaire).
-   - "designation": nom ou description de l'article. Si non mentionné (ex: note manuscrite avec références seules), reprends la référence ou un libellé visible.
-   - "quantity": quantité numérique (nombre entier positif). Si une référence est listée sans quantité explicite, utilise 1 par défaut.
-   - "unitPrice": prix unitaire numérique (colonne "PU" ou "Prix Unitaire" en DA, ex: 42.50, 560.00). Si absent sur le papier, utilise null.
-   - "packagesRaw": colisage si présent (ex: "2CT/20"), sinon null.
-4. BONS MANUSCRITS & NOTES BROUILLON:
-   - Le document peut être une feuille manuscrite au stylo, un brouillon d'entrepôt ou une liste rapide de références.
-   - Extraire chaque ligne même avec une écriture imparfaite.
-5. BONS MULTI-PAGES:
-   - Si les photos ou pages correspondent au MÊME bon de livraison (même numéro de BL, même client, ou pages 1, 2, 3...), regroupe OBLIGATOIREMENT toutes les lignes sous un SEUL objet BL dans "bills" avec le même "billNumber".
-   - Assigne la propriété "page" (1, 2...) correspondante à chaque ligne.
-   - Ne crée plusieurs objets dans "bills" QUE s'il s'agit réellement de factures ou de clients distincts.
-6. TOTAUX IMPRIMÉS & EN-TÊTE DU BON:
-   - "totalTtc": montant total TTC numérique imprimé au bas du bon si présent (ex: 57644.00), sinon null.
-   - "discountPercent": remise éventuelle en pourcentage si mentionnée (ex: 6.00), sinon null.
-   - "paymentMode": mode de paiement imprimé (ex: "CLIENT 6%", "CLIENT 8%"), sinon null.
-   - "agentName": nom de l'agent imprimé après "Par:" (ex: "ZDjaber", "AMYassine"), sinon null.
-   - "clientAddress": adresse du client sous son nom dans le cadre client (ex: "ANGLE RUE A. RAMDANE N°5 ET A. IDIR N°4 SIDI BEL ABBES"), sinon null.
-   - "nif", "nis", "rc", "ai": identifiants légaux du client imprimés dans le cadre client, sinon null.
+TYPOLOGIE DES DOCUMENTS:
+- "invoice": Facture commerciale (ex: "Invoice SAJ/2026/5435") avec colonnes CODE, PU HT, TVA 19%, Remises et total TTC.
+- "bl_official": Bon de Livraison officiel avec en-tête complet (ex: "SARL S.B.M IMP/EXP"), colonnes Référence, EAN 13 chiffres et lien BC.
+- "bl_workshop": Bon de Livraison de préparation d'atelier (ex: "BL/OU126/03608") avec colonnes Référence, LOT, Packages et annotations au stylo.
+- "bon_commande": Bon de Commande client (ex: "BC:03885").
+
+RÈGLES CRITIQUES D'EXTRACTION:
+1. "billNumber": le numéro du document (ex: "Invoice SAJ/2026/5435", "BL/OU126/03615", "BL/OU126/03608", "BC/0U126/03835"). Si absent, utilise "NOTE-MANUSCRITE".
+2. "bcNumber": si un numéro de Bon de Commande est mentionné (ex: "BLEU BLANC NAKHIL N° BC:03885" -> "03885"), extrais-le.
+3. "documentType": "invoice" | "bl_official" | "bl_workshop" | "bon_commande".
+4. "client": nom du client (ex: "BLEU BLANC NAKHIL").
+5. "date": date au format YYYY-MM-DD (ex: "2026-09-06").
+6. "lines": liste ordonnée de tous les articles :
+   - "no": numéro de ligne séquentiel ("1", "2", "3"...).
+   - "page": numéro de page (défaut 1).
+   - "reference": LA RÉFÉRENCE OU LE CODE ARTICLE (ex: "71662", "29129", "70380/84"). Dans les factures, la colonne s'intitule "CODE".
+   - "ean": code-barres à 13 chiffres si présent dans la colonne "EAN" (ex: "6941782115831"), sinon null.
+   - "designation": nom complet de l'article (ex: "SAC A DOS MOYEN 22 L 4 MO 71662").
+   - "quantity": quantité numérique entière. ATTENTION : si le document comporte des annotations manuscrites d'atelier au stylo (ex: "-1" ou "-2" en marge, ou un nombre biffé), déduis la quantité corrigée finale réelle.
+   - "unitPrice": prix unitaire HT numérique (colonne "PU", ex: 3332.50). Si absent, null.
+   - "packagesRaw": colisage ou conditionnement (colonne "Packages", "Colisage" ou "Qté/Carton", ex: "0,04", "50,00", "1CT/50").
+   - "discountPercent": remise ligne en % (colonne "Rem(%)" ou "Rem. Paiement(%)", ex: 15.0), sinon null.
+7. TOTAUX & CADRE FINANCIER (si présents sur facture) :
+   - "totalHt": total HT brut (ex: 32209.00).
+   - "totalHtNet": total HT net après remise (ex: 30718.67).
+   - "totalRemise": montant total de la remise (ex: 1490.33).
+   - "totalTva": montant de la TVA (ex: 5836.55).
+   - "totalTtc": total TTC (ex: 36555.22).
+   - "totalRemPaiement": montant de l'escompte/remise paiement (ex: 1044.17).
+   - "totalAvecRemise": montant net final à payer (ex: 35511.05).
+   - "paymentMode": condition ou mode de règlement (ex: "GMS2026+++ GMS", "CLIENT 6%").
+   - "agentName": agent émetteur (ex: "ShowOr", "ZDjaber").
+   - "clientAddress", "nif", "nis", "rc", "ai": coordonnées fiscales imprimées du client.
 
 FORMAT JSON REQUIS:
 {
   "bills": [
     {
-      "billNumber": "BC/OU126/03808",
-      "client": "TROTEC",
-      "date": "2026-09-02",
-      "paymentMode": "CLIENT 6%",
-      "agentName": "ZDjaber",
-      "clientAddress": "SIDI BEL ABBES",
-      "nif": "000522019000363",
-      "nis": "000522010043958",
-      "rc": "05/B/0023021-00/22",
-      "ai": "22645403051",
-      "totalTtc": 57644.00,
-      "discountPercent": 6.00,
+      "billNumber": "Invoice SAJ/2026/5435",
+      "bcNumber": "03885",
+      "documentType": "invoice",
+      "client": "BLEU BLANC NAKHIL",
+      "date": "2026-09-06",
+      "agentName": "ShowOr",
+      "paymentMode": "GMS2026+++ GMS",
+      "clientAddress": "95 ET 96 LOTS ZONE D'ACTIVITE - BIR EL DJIR - ORAN",
+      "nif": "002131112400617",
+      "rc": "21B 2124006-00/31",
+      "totalHt": 32209.00,
+      "totalHtNet": 30718.67,
+      "totalRemise": 1490.33,
+      "totalTva": 5836.55,
+      "totalTtc": 36555.22,
+      "totalAvecRemise": 35511.05,
       "lines": [
         {
           "no": "1",
           "page": 1,
-          "reference": "REF-100",
-          "ean": "3760123456789",
-          "designation": "STYLO BILLE BLEU",
-          "quantity": 50,
-          "unitPrice": 42.50,
-          "packagesRaw": "1CT/50"
+          "reference": "71662",
+          "ean": "6941782115565",
+          "designation": "SAC A DOS MOYEN 22 L 4 MO 71662",
+          "quantity": 3,
+          "unitPrice": 3332.50,
+          "packagesRaw": "50,00"
         }
       ]
     }

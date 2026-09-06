@@ -126,6 +126,8 @@ import {
   downloadFinalBillExcel,
   shareFinalBillViaWhatsAppOrFile,
   formatFinalBillWhatsAppMessage,
+  resolveDocumentType,
+  type DocumentExportType,
 } from './excelExport';
 
 import { OnboardingWalkthrough } from './OnboardingWalkthrough';
@@ -1342,7 +1344,46 @@ function BillCard({
       <div className="card-header">
         <div>
           <div className="card-client">{bill.client}</div>
-          <div className="card-bill-number">{bill.billNumber}</div>
+          <div className="card-bill-number flex items-center gap-1.5 flex-wrap">
+            <span>{bill.billNumber}</span>
+            {bill.documentType && (
+              <span
+                style={{
+                  fontSize: '0.62rem',
+                  fontWeight: 700,
+                  padding: '1px 5px',
+                  borderRadius: 4,
+                  background: 'var(--accent-dim)',
+                  color: 'var(--accent)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                {bill.documentType === 'invoice'
+                  ? 'Facture'
+                  : bill.documentType === 'bl_official'
+                  ? 'BL Officiel'
+                  : bill.documentType === 'bl_workshop'
+                  ? 'Atelier'
+                  : 'BC'}
+              </span>
+            )}
+            {bill.bcNumber && (
+              <span
+                style={{
+                  fontSize: '0.62rem',
+                  fontWeight: 600,
+                  padding: '1px 5px',
+                  borderRadius: 4,
+                  background: 'rgba(59, 130, 246, 0.15)',
+                  color: '#3b82f6',
+                }}
+                title="Numéro Bon de Commande"
+              >
+                BC:{bill.bcNumber}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {bill.status === 'completed' ? (
@@ -2595,7 +2636,46 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         <button className="back-btn" onClick={() => nav('/')} aria-label="Retour"><IconArrowLeft size={18} /></button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="font-semibold truncate">{bill.client}</div>
-          <div className="text-xs text-muted truncate">{bill.billNumber}</div>
+          <div className="text-xs text-muted truncate flex items-center gap-1.5 flex-wrap">
+            <span>{bill.billNumber}</span>
+            {bill.documentType && (
+              <span
+                style={{
+                  fontSize: '0.62rem',
+                  fontWeight: 700,
+                  padding: '1px 5px',
+                  borderRadius: 4,
+                  background: 'var(--accent-dim)',
+                  color: 'var(--accent)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                {bill.documentType === 'invoice'
+                  ? 'Facture'
+                  : bill.documentType === 'bl_official'
+                  ? 'BL Officiel'
+                  : bill.documentType === 'bl_workshop'
+                  ? 'Atelier'
+                  : 'BC'}
+              </span>
+            )}
+            {bill.bcNumber && (
+              <span
+                style={{
+                  fontSize: '0.62rem',
+                  fontWeight: 600,
+                  padding: '1px 5px',
+                  borderRadius: 4,
+                  background: 'rgba(59, 130, 246, 0.15)',
+                  color: '#3b82f6',
+                }}
+                title="Numéro Bon de Commande"
+              >
+                BC:{bill.bcNumber}
+              </span>
+            )}
+          </div>
         </div>
         <AudioMuteButton />
         <button
@@ -5932,10 +6012,21 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   });
   const finalBillData = compileFinalBillData(bill, finalBillRows);
 
+  const [exportDocFormat, setExportDocFormat] = useState<DocumentExportType>('auto');
+  const resolvedDocType = resolveDocumentType(finalBillData, exportDocFormat);
+
   const handleDownloadFinalExcel = () => {
     try {
-      downloadFinalBillExcel(finalBillData);
-      if (setToast) setToast('Facture Excel (.xlsx) téléchargée');
+      downloadFinalBillExcel(finalBillData, undefined, exportDocFormat);
+      const label =
+        resolvedDocType === 'invoice'
+          ? 'Facture'
+          : resolvedDocType === 'bl_official'
+          ? 'Bon de Livraison'
+          : resolvedDocType === 'bl_workshop'
+          ? 'Bordereau Atelier'
+          : 'Bon de Commande';
+      if (setToast) setToast(`${label} Excel (.xlsx) téléchargé`);
     } catch (err: any) {
       if (setToast) setToast(`Erreur: ${err.message}`);
     }
@@ -5943,15 +6034,23 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
 
   const handleShareFinalWhatsApp = async () => {
     try {
-      await shareFinalBillViaWhatsAppOrFile(finalBillData, whatsappNumber);
+      await shareFinalBillViaWhatsAppOrFile(finalBillData, whatsappNumber, exportDocFormat);
     } catch (err: any) {
       if (setToast) setToast(`Erreur: ${err.message}`);
     }
   };
 
   const handleSendFinalEmail = () => {
-    const bodyText = formatFinalBillWhatsAppMessage(finalBillData);
-    const subject = encodeURIComponent(`Pointage Surface — Facture Finale ${bill.billNumber} (${bill.client})`);
+    const bodyText = formatFinalBillWhatsAppMessage(finalBillData, exportDocFormat);
+    const label =
+      resolvedDocType === 'invoice'
+        ? 'Facture Finale'
+        : resolvedDocType === 'bl_official'
+        ? 'Bon de Livraison'
+        : resolvedDocType === 'bl_workshop'
+        ? 'Bordereau Atelier'
+        : 'Bon de Commande';
+    const subject = encodeURIComponent(`Pointage Surface — ${label} ${bill.billNumber} (${bill.client})`);
     const body = encodeURIComponent(bodyText);
     window.location.href = `mailto:${reportEmail}?subject=${subject}&body=${body}`;
   };
@@ -6042,6 +6141,74 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
             >
               <IconLayers size={13} /> Sync QR
             </button>
+          </div>
+
+          {/* Document Replica Format Selector */}
+          <div className="mb-3">
+            <div className="text-xs font-semibold text-muted mb-1.5 flex items-center justify-between">
+              <span>Format du document :</span>
+              <span
+                style={{
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  padding: '1px 7px',
+                  background: 'var(--accent-dim)',
+                  color: 'var(--accent)',
+                  borderRadius: 4,
+                  letterSpacing: '0.02em',
+                }}
+              >
+                {resolvedDocType === 'invoice'
+                  ? '💰 Facture SAJ'
+                  : resolvedDocType === 'bl_official'
+                  ? '📋 BL Officiel (EAN)'
+                  : resolvedDocType === 'bl_workshop'
+                  ? '📦 Bordereau Atelier'
+                  : '🛒 Bon Commande'}
+              </span>
+            </div>
+            <div className="seg-control-fit" style={{ fontSize: '0.74rem' }}>
+              <button
+                type="button"
+                className={`seg-btn ${exportDocFormat === 'auto' ? 'active' : ''}`}
+                onClick={() => setExportDocFormat('auto')}
+                title="Détection automatique selon le bon"
+              >
+                Auto
+              </button>
+              <button
+                type="button"
+                className={`seg-btn ${exportDocFormat === 'invoice' ? 'active' : ''}`}
+                onClick={() => setExportDocFormat('invoice')}
+                title="Facture Commerciale (SAJ / ShowOr)"
+              >
+                Facture
+              </button>
+              <button
+                type="button"
+                className={`seg-btn ${exportDocFormat === 'bl_official' ? 'active' : ''}`}
+                onClick={() => setExportDocFormat('bl_official')}
+                title="Bon de Livraison Officiel avec EAN (SBM)"
+              >
+                BL Officiel
+              </button>
+              <button
+                type="button"
+                className={`seg-btn ${exportDocFormat === 'bl_workshop' ? 'active' : ''}`}
+                onClick={() => setExportDocFormat('bl_workshop')}
+                title="Bordereau Préparation Atelier (LOT / Packages)"
+              >
+                Atelier
+              </button>
+              <button
+                type="button"
+                className={`seg-btn ${exportDocFormat === 'bon_commande' ? 'active' : ''}`}
+                onClick={() => setExportDocFormat('bon_commande')}
+                title="Bon de Commande Standard (BC)"
+              >
+                BC
+              </button>
+            </div>
           </div>
 
           {/* Primary Action Buttons (Side by Side) */}
