@@ -1471,6 +1471,10 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
 
   const handleRemovePhoto = (id: string) => {
     setStagedPhotos((prev) => {
+      const removed = prev.find((p) => p.id === id);
+      if (removed?.previewUrl) {
+        URL.revokeObjectURL(removed.previewUrl);
+      }
       const remaining = prev.filter((p) => p.id !== id);
       return remaining.map((p, idx) => ({
         ...p,
@@ -3314,12 +3318,28 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const isSubmittingRef = useRef(false);
   const lastSubmitTimeRef = useRef(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const activeTimeoutsRef = useRef<number[]>([]);
+
+  const safeTimeout = (fn: () => void, ms: number) => {
+    const id = window.setTimeout(fn, ms);
+    activeTimeoutsRef.current.push(id);
+    return id;
+  };
+
+  useEffect(() => {
+    return () => {
+      activeTimeoutsRef.current.forEach(id => clearTimeout(id));
+      activeTimeoutsRef.current = [];
+    };
+  }, []);
 
   const handleBack = () => {
-    if (fromParam === 'home') {
-      nav('/');
+    if (fromParam === 'scan') {
+      nav(`/bill/${billId}/scan?stage=${stage}`, { replace: true });
+    } else if (fromParam === 'home') {
+      nav('/', { replace: true });
     } else {
-      nav(`/bill/${billId}?stage=${stage}`);
+      nav(`/bill/${billId}?stage=${stage}`, { replace: true });
     }
   };
 
@@ -3481,21 +3501,21 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
       const autoReturn = localStorage.getItem('pointage_auto_return_after_add') !== 'false';
 
       if (targetNextLineId) {
-        // Sequential picking: advance directly to next line
-        setTimeout(() => {
-          nav(`/bill/${billId}/line/${targetNextLineId}?stage=${stage}${fromParam ? `&from=${fromParam}` : ''}`);
+        // Sequential picking: advance directly to next line without memory leaks / history bloat
+        safeTimeout(() => {
+          nav(`/bill/${billId}/line/${targetNextLineId}?stage=${stage}${fromParam ? `&from=${fromParam}` : ''}`, { replace: true });
         }, 180);
       } else if (autoReturn) {
         // Ergonomic auto-return: leave page after brief sensory confirmation window
-        setTimeout(() => {
+        safeTimeout(() => {
           handleBack();
-        }, 220);
+        }, 200);
       }
     } finally {
-      setTimeout(() => {
+      safeTimeout(() => {
         setIsSubmitting(false);
         isSubmittingRef.current = false;
-      }, 500);
+      }, 450);
     }
   };
 
@@ -4920,7 +4940,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           <IconCheck size={20} />
           {isSubmitting
             ? 'ENREGISTRÉ !'
-            : `AJOUTER ${batchQty > 0 ? batchQty : ''} ${stage === 'preparation' ? 'PRÉPARÉ' : stage === 'chargement' ? 'CHARGÉ' : 'POINTÉ'}`}
+            : `AJOUTER ${batchQty > 0 ? batchQty : ''} ${stage === 'preparation' ? 'PRÉPARÉ' : stage === 'chargement' ? 'CHARGÉ' : 'POINTÉ'} & RETOURNER`}
         </button>
 
         {nextLine && (
@@ -4931,11 +4951,11 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               if (batchQty > 0 && line.status === 'active') {
                 handleAddCount(nextLine.id);
               } else {
-                nav(`/bill/${billId}/line/${nextLine.id}?stage=${stage}${fromParam ? `&from=${fromParam}` : ''}`);
+                nav(`/bill/${billId}/line/${nextLine.id}?stage=${stage}${fromParam ? `&from=${fromParam}` : ''}`, { replace: true });
               }
             }}
             title={batchQty > 0 ? `Enregistrer et passer à l'article suivant N°${nextLine.no}` : `Passer à l'article suivant N°${nextLine.no}`}
-            style={{ padding: '0 16px', fontWeight: 800 }}
+            style={{ padding: stage === 'pointage' ? '0 12px' : '0 16px', fontWeight: 800, flexShrink: 0 }}
           >
             <span>N°{nextLine.no}</span>
             <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>›</span>
@@ -5358,7 +5378,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
   };
 
   const navigateToLine = (line: OrderLine) => {
-    nav(`/bill/${line.billId}/line/${line.id}?stage=${stageParam}`);
+    nav(`/bill/${line.billId}/line/${line.id}?stage=${stageParam}&from=scan`);
   };
 
   const handleClose = () => {
