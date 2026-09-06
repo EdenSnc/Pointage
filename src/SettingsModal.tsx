@@ -34,6 +34,9 @@ export function SettingsModal({
   const [reportEmail, setReportEmail] = useState(
     () => localStorage.getItem('pointage_report_email') || ''
   );
+  const [autoReturn, setAutoReturn] = useState(
+    () => localStorage.getItem('pointage_auto_return_after_add') !== 'false'
+  );
 
   if (!isOpen) return null;
 
@@ -78,6 +81,30 @@ export function SettingsModal({
                   <IconMoon size={15} /> Sombre
                 </>
               )}
+            </button>
+          </div>
+        </div>
+
+        {/* Ergonomie & Navigation */}
+        <div className="card mb-3" style={{ background: 'var(--bg-surface)' }}>
+          <div className="flex justify-between items-center">
+            <div style={{ flex: 1, paddingRight: 12 }}>
+              <div className="font-bold text-sm">Retour auto après ajout</div>
+              <div className="text-xs text-muted">
+                Quitter l'article et revenir au bon dès confirmation
+              </div>
+            </div>
+            <button
+              type="button"
+              className={`btn btn-sm ${autoReturn ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => {
+                const next = !autoReturn;
+                setAutoReturn(next);
+                localStorage.setItem('pointage_auto_return_after_add', String(next));
+              }}
+              style={{ minWidth: 80, fontWeight: 700 }}
+            >
+              {autoReturn ? 'Activé' : 'Désactivé'}
             </button>
           </div>
         </div>

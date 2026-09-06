@@ -416,4 +416,54 @@ describe('Workflow 9: Accidental Tap Correction via Decrement Chips (-1, -5)', (
   });
 });
 
+describe('Workflow 10: Auto-Return After Adding Count & Sequential Picking Navigation', () => {
+  it('defaults auto-return to true when not explicitly disabled in storage', () => {
+    const isAutoReturnEnabled = (storedValue: string | null) => storedValue !== 'false';
+
+    // Standard default when key is absent (null)
+    expect(isAutoReturnEnabled(null)).toBe(true);
+
+    // Explicitly enabled ('true')
+    expect(isAutoReturnEnabled('true')).toBe(true);
+
+    // Explicitly disabled by operator ('false')
+    expect(isAutoReturnEnabled('false')).toBe(false);
+  });
+
+  it('determines appropriate navigation destination between bill view and sequential next line', () => {
+    const billId = 42;
+    const stage = 'preparation';
+    const currentLineId = 101;
+    const nextLineId = 102;
+
+    const computeTargetUrl = (
+      targetNextId?: number,
+      autoReturn: boolean = true,
+      fromHome: boolean = false
+    ) => {
+      if (targetNextId) {
+        return `/bill/${billId}/line/${targetNextId}?stage=${stage}`;
+      }
+      if (autoReturn) {
+        return fromHome ? '/' : `/bill/${billId}?stage=${stage}`;
+      }
+      // Stay on page
+      return `/bill/${billId}/line/${currentLineId}?stage=${stage}`;
+    };
+
+    // Case 1: Standard "Ajouter" with default auto-return -> goes back to bill view
+    expect(computeTargetUrl(undefined, true, false)).toBe('/bill/42?stage=preparation');
+
+    // Case 2: Opened from home search -> goes back to home
+    expect(computeTargetUrl(undefined, true, true)).toBe('/');
+
+    // Case 3: Sequential picking next button tapped with quantity -> advances to next line
+    expect(computeTargetUrl(nextLineId, true, false)).toBe('/bill/42/line/102?stage=preparation');
+
+    // Case 4: Operator disabled auto-return in settings -> stays on product screen
+    expect(computeTargetUrl(undefined, false, false)).toBe('/bill/42/line/101?stage=preparation');
+  });
+});
+
+
 

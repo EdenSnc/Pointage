@@ -3125,7 +3125,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
 
   const pointageTotals = getStageTotals(events, 'pointage');
 
-  const handleAddCount = async () => {
+  const handleAddCount = async (targetNextLineId?: number) => {
     const now = Date.now();
     if (now - lastSubmitTimeRef.current < 600) return;
     if (isSubmittingRef.current || batchQty <= 0) return;
@@ -3178,6 +3178,20 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
         playSuccessChime();
       }
       showToast(`+${qtyAdded} enregistré`, setToast);
+
+      const autoReturn = localStorage.getItem('pointage_auto_return_after_add') !== 'false';
+
+      if (targetNextLineId) {
+        // Sequential picking: advance directly to next line
+        setTimeout(() => {
+          nav(`/bill/${billId}/line/${targetNextLineId}?stage=${stage}${fromParam ? `&from=${fromParam}` : ''}`);
+        }, 180);
+      } else if (autoReturn) {
+        // Ergonomic auto-return: leave page after brief sensory confirmation window
+        setTimeout(() => {
+          handleBack();
+        }, 220);
+      }
     } finally {
       setTimeout(() => {
         setIsSubmitting(false);
@@ -4371,7 +4385,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
       <div className="bottom-bar flex gap-2">
         <button
           className="btn btn-success btn-lg flex-1 flex items-center justify-center gap-2"
-          onClick={handleAddCount}
+          onClick={() => handleAddCount()}
           disabled={isSubmitting || batchQty <= 0 || line.status !== 'active'}
         >
           <IconCheck size={20} />
@@ -4384,8 +4398,14 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           <button
             type="button"
             className="btn btn-secondary btn-lg flex items-center justify-center gap-1"
-            onClick={() => nav(`/bill/${billId}/line/${nextLine.id}?stage=${stage}${fromParam ? `&from=${fromParam}` : ''}`)}
-            title={`Passer à l'article suivant N°${nextLine.no}`}
+            onClick={() => {
+              if (batchQty > 0 && line.status === 'active') {
+                handleAddCount(nextLine.id);
+              } else {
+                nav(`/bill/${billId}/line/${nextLine.id}?stage=${stage}${fromParam ? `&from=${fromParam}` : ''}`);
+              }
+            }}
+            title={batchQty > 0 ? `Enregistrer et passer à l'article suivant N°${nextLine.no}` : `Passer à l'article suivant N°${nextLine.no}`}
             style={{ padding: '0 16px', fontWeight: 800 }}
           >
             <span>N°{nextLine.no}</span>
