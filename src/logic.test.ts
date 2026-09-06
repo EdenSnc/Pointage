@@ -14,6 +14,8 @@ import {
   roundDownToPack,
   getStageProblemLines,
   parsePackagingString,
+  calcClosestPackRecommendation,
+  isDimensionInDesignation,
   serializeCountsForQR,
   parseQRSyncPayload,
   planQRMerge,
@@ -380,6 +382,97 @@ describe('parsePackagingString', () => {
 
     const res2 = parsePackagingString(null, 'MARQUEUR FLUORESCENT EN PRESENTOIR 36 PCS 81216');
     expect(res2.innerPackSize).toBe(36);
+  });
+
+  it('rejects dimensions and measurement units (CM, MM, PAGES, ML, GR) from being parsed as packaging', () => {
+    // User issue: "REGLE DE 30 CM CRISTAL" should NEVER be parsed as a 30-unit pack!
+    expect(parsePackagingString(null, 'REGLE DE 30 CM CRISTAL').innerPackSize).toBeNull();
+    expect(parsePackagingString('0,20', 'REGLE DE 30 CM CRISTAL').innerPackSize).toBeNull();
+    expect(parsePackagingString(null, 'REGLE 20 CM CRISTAL').innerPackSize).toBeNull();
+    expect(parsePackagingString(null, 'CAHIER DE 96 PAGES SEYES').innerPackSize).toBeNull();
+    expect(parsePackagingString(null, 'COLLE TRANSPARENTE DE 50 ML').innerPackSize).toBeNull();
+    expect(parsePackagingString(null, 'PAPIER PHOTO DE 240 GR').innerPackSize).toBeNull();
+    expect(parsePackagingString(null, 'ROULEAU ADHESIF DE 50 M').innerPackSize).toBeNull();
+    expect(parsePackagingString(null, 'RUBAN DE 19 MM').innerPackSize).toBeNull();
+
+    // Legitimate packaging units must still be accepted
+    expect(parsePackagingString(null, 'BOITE DE 24 FEUTRES').innerPackSize).toBe(24);
+    expect(parsePackagingString(null, 'LOT DE 6 CRAYONS HB').innerPackSize).toBe(6);
+    expect(parsePackagingString(null, 'SACHET DE 100 ELASTIQUES').innerPackSize).toBe(100);
+  });
+
+  it('isDimensionInDesignation correctly identifies physical measurement units', () => {
+    expect(isDimensionInDesignation(30, 'REGLE DE 30 CM CRISTAL')).toBe(true);
+    expect(isDimensionInDesignation(20, 'REGLE 20 CM')).toBe(true);
+    expect(isDimensionInDesignation(96, 'CAHIER DE 96 PAGES')).toBe(true);
+    expect(isDimensionInDesignation(30, 'PEINTURE PANDA DE 30 34140')).toBe(false);
+  });
+});
+
+describe('calcClosestPackRecommendation (Wholesale Nearest-Pack Optimizer)', () => {
+  it('user scenario 1: ordered 96 with pack of 30 -> closest is 90 (3 packs, -6 loose removed)', () => {
+    const rec = calcClosestPackRecommendation(96, 30);
+    expect(rec).not.toBeNull();
+    expect(rec?.isExactMultiple).toBe(false);
+    expect(rec?.lowerPacks).toBe(3);
+    expect(rec?.lowerQty).toBe(90);
+    expect(rec?.lowerDiff).toBe(-6);
+    expect(rec?.upperPacks).toBe(4);
+    expect(rec?.upperQty).toBe(120);
+    expect(rec?.upperDiff).toBe(24);
+    // Closest is 90 (distance 6 vs 24)
+    expect(rec?.closestPacks).toBe(3);
+    expect(rec?.closestQty).toBe(90);
+    expect(rec?.closestDiff).toBe(-6);
+    expect(rec?.closestAction).toBe('round_down');
+  });
+
+  it('user scenario 2: ordered 115 with pack of 30 -> closest is 120 (4 packs, +5 added to complete pack)', () => {
+    const rec = calcClosestPackRecommendation(115, 30);
+    expect(rec).not.toBeNull();
+    expect(rec?.isExactMultiple).toBe(false);
+    expect(rec?.lowerPacks).toBe(3);
+    expect(rec?.lowerQty).toBe(90);
+    expect(rec?.lowerDiff).toBe(-25);
+    expect(rec?.upperPacks).toBe(4);
+    expect(rec?.upperQty).toBe(120);
+    expect(rec?.upperDiff).toBe(5);
+    // Closest is 120 (distance 5 vs 25)
+    expect(rec?.closestPacks).toBe(4);
+    expect(rec?.closestQty).toBe(120);
+    expect(rec?.closestDiff).toBe(5);
+    expect(rec?.closestAction).toBe('round_up');
+  });
+
+  it('handles exact multiples cleanly with no adjustment', () => {
+    const rec = calcClosestPackRecommendation(90, 30);
+    expect(rec).not.toBeNull();
+    expect(rec?.isExactMultiple).toBe(true);
+    expect(rec?.closestPacks).toBe(3);
+    expect(rec?.closestQty).toBe(90);
+    expect(rec?.closestDiff).toBe(0);
+    expect(rec?.closestAction).toBe('exact');
+  });
+
+  it('handles tie breaker (equidistant between lower and upper) by safely rounding down', () => {
+    // 105 with pack of 30: 90 (-15) vs 120 (+15)
+    const rec = calcClosestPackRecommendation(105, 30);
+    expect(rec?.closestAction).toBe('round_down');
+    expect(rec?.closestQty).toBe(90);
+  });
+
+  it('handles pack size 12 with 32 and 28', () => {
+    // 32 / 12 -> 24 (-8) vs 36 (+4) -> closest 36
+    expect(calcClosestPackRecommendation(32, 12)?.closestQty).toBe(36);
+    // 28 / 12 -> 24 (-4) vs 36 (+8) -> closest 24
+    expect(calcClosestPackRecommendation(28, 12)?.closestQty).toBe(24);
+  });
+
+  it('returns null for invalid inputs (packSize <= 1 or targetQty <= 0)', () => {
+    expect(calcClosestPackRecommendation(0, 30)).toBeNull();
+    expect(calcClosestPackRecommendation(-10, 30)).toBeNull();
+    expect(calcClosestPackRecommendation(50, 1)).toBeNull();
+    expect(calcClosestPackRecommendation(50, null)).toBeNull();
   });
 });
 

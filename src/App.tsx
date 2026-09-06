@@ -50,7 +50,8 @@ import {
   calcDiscrepancy,
   calcBillProgress,
   getStageTotals,
-  calcPackBreakdown,
+  calcClosestPackRecommendation,
+  isDimensionInDesignation,
   getStageProblemLines,
   parsePackagingString,
   serializeCountsForQR,
@@ -3372,8 +3373,25 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   useEffect(() => {
     if (line) {
       const parsed = parsePackagingString(line.packagesRaw, line.designation);
-      const outer = line.outerPackSize ?? profile?.outerPackSize ?? parsed.outerPackSize ?? null;
-      const inner = line.innerPackSize ?? profile?.innerPackSize ?? parsed.innerPackSize ?? null;
+      let outer = line.outerPackSize ?? profile?.outerPackSize ?? parsed.outerPackSize ?? null;
+      let inner = line.innerPackSize ?? profile?.innerPackSize ?? parsed.innerPackSize ?? null;
+
+      // Auto-heal legacy false positives (e.g. 30 cm ruler saved as 30-unit pack)
+      if (inner && parsed.innerPackSize === null && isDimensionInDesignation(inner, line.designation)) {
+        inner = null;
+        db.orderLines.update(line.id!, { innerPackSize: null });
+        if (line.reference) {
+          saveProductProfile(line.reference, { innerPackSize: null });
+        }
+      }
+      if (outer && parsed.outerPackSize === null && isDimensionInDesignation(outer, line.designation)) {
+        outer = null;
+        db.orderLines.update(line.id!, { outerPackSize: null });
+        if (line.reference) {
+          saveProductProfile(line.reference, { outerPackSize: null });
+        }
+      }
+
       setOuterPack(outer);
       setInnerPack(inner);
     }
@@ -3503,6 +3521,48 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     playUndoBeep();
     hapticTap('medium');
     showToast('Comptage réinitialisé à 0', setToast);
+  };
+
+  const handleApplyPackQty = (qty: number, packsCount: number, pSize?: number | null, isLooseOnly?: boolean) => {
+    hapticTap('medium');
+    playSuccessChime();
+    if (useDirectEntry) {
+      setDirectTotal(String(qty));
+    } else {
+      if (isLooseOnly) {
+        setLoose(qty);
+        setOuterCount(0);
+        setInnerCount(0);
+      } else if (pSize === innerPack) {
+        setInnerCount(packsCount);
+        setOuterCount(0);
+        setLoose(0);
+      } else {
+        setOuterCount(packsCount);
+        setInnerCount(0);
+        setLoose(0);
+      }
+    }
+    showToast(`Quantité réglée à ${qty} pièces (${packsCount} colis)`, setToast);
+  };
+
+  const handleClearPackaging = async () => {
+    setOuterPack(null);
+    setInnerPack(null);
+    setOuterCount(0);
+    setInnerCount(0);
+    hapticTap('light');
+    await db.orderLines.update(lineId, {
+      outerPackSize: null,
+      innerPackSize: null,
+    });
+    if (line.reference) {
+      await saveProductProfile(line.reference, {
+        outerPackSize: null,
+        innerPackSize: null,
+      });
+    }
+    showToast('Colisage effacé', setToast);
   };
 
   const handleSaveExactCount = async () => {
@@ -3811,9 +3871,13 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             </div>
           )}
 
-          {/* Visual pack breakdown illustration */}
-          {innerPack && showQuantities && disc.remaining > 0 && (() => {
-            const breakdown = calcPackBreakdown(disc.remaining, innerPack);
+          {/* Visual pack breakdown illustration & Nearest-Pack Recommendation */}
+          {(innerPack || outerPack) && showQuantities && disc.remaining > 0 && (() => {
+            const activePack = innerPack || outerPack;
+            if (!activePack || activePack <= 1) return null;
+            const rec = calcClosestPackRecommendation(disc.remaining, activePack);
+            if (!rec) return null;
+
             return (
               <div
                 className="mt-2.5 p-2.5"
@@ -3823,45 +3887,129 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   border: '1px solid var(--border)',
                 }}
               >
-                <div className="text-xs font-semibold text-muted mb-1.5 flex items-center gap-1.5">
-                  <IconBox size={13} style={{ color: 'var(--accent)' }} />
-                  <span>DÉCOMPOSITION DU RELIQUAT ({disc.remaining} pièces) :</span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-bold text-muted flex items-center gap-1.5">
+                    <IconBox size={14} style={{ color: 'var(--accent)' }} />
+                    <span>COLISAGE DU RELIQUAT ({disc.remaining} pcs) :</span>
+                  </div>
+                  <span
+                    className="badge"
+                    style={{
+                      fontSize: '0.68rem',
+                      padding: '2px 6px',
+                      background: rec.isExactMultiple ? 'rgba(34, 197, 94, 0.15)' : 'rgba(37, 99, 235, 0.15)',
+                      color: rec.isExactMultiple ? 'var(--success)' : 'var(--accent)',
+                      border: `1px solid ${rec.isExactMultiple ? 'rgba(34, 197, 94, 0.3)' : 'rgba(37, 99, 235, 0.3)'}`,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {rec.isExactMultiple ? '✓ Multiple exact' : '🎯 Règle du plus proche'}
+                  </span>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap text-xs">
-                  {breakdown.fullPacks > 0 && (
-                    <div
-                      className="flex items-center gap-1 px-2 py-1"
-                      style={{
-                        background: 'rgba(37, 99, 235, 0.12)',
-                        border: '1px solid rgba(37, 99, 235, 0.3)',
-                        borderRadius: 'var(--radius-badge)',
-                        color: 'var(--accent)',
-                        fontWeight: 700,
-                      }}
-                    >
+
+                {rec.isExactMultiple ? (
+                  <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
+                    <div className="flex items-center gap-1.5 font-bold" style={{ color: 'var(--success)' }}>
                       <IconBox size={14} />
-                      <span>{breakdown.fullPacks} × Colis ({innerPack} pcs)</span>
-                      <span className="text-muted font-normal">= {breakdown.fullPacks * innerPack}</span>
+                      <span>{rec.closestPacks} × Colis ({activePack} pcs) = {rec.closestQty} pcs</span>
                     </div>
-                  )}
-                  {breakdown.fullPacks > 0 && breakdown.loose > 0 && (
-                    <span className="font-bold text-muted">+</span>
-                  )}
-                  {breakdown.loose > 0 && (
+                    <button
+                      type="button"
+                      className="btn btn-xs btn-primary flex items-center gap-1"
+                      onClick={() => handleApplyPackQty(rec.closestQty, rec.closestPacks, activePack)}
+                    >
+                      <IconCheck size={12} /> Appliquer {rec.closestQty} pcs
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    {/* Nearest Recommendation Box */}
                     <div
-                      className="flex items-center gap-1 px-2 py-1"
+                      className="p-2 mb-2 flex items-center justify-between gap-2 flex-wrap"
                       style={{
-                        background: 'rgba(234, 179, 8, 0.12)',
-                        border: '1px solid rgba(234, 179, 8, 0.3)',
-                        borderRadius: 'var(--radius-badge)',
-                        color: 'var(--warning)',
-                        fontWeight: 700,
+                        background: rec.closestAction === 'round_down'
+                          ? 'rgba(234, 179, 8, 0.10)'
+                          : 'rgba(37, 99, 235, 0.10)',
+                        border: `1px solid ${rec.closestAction === 'round_down' ? 'rgba(234, 179, 8, 0.3)' : 'rgba(37, 99, 235, 0.3)'}`,
+                        borderRadius: 'var(--radius-sm)',
                       }}
                     >
-                      <span>{breakdown.loose} Unité{breakdown.loose > 1 ? 's' : ''} Vrac</span>
+                      <div>
+                        <div className="text-xs font-extrabold flex items-center gap-1.5">
+                          <span style={{ color: rec.closestAction === 'round_down' ? 'var(--warning)' : 'var(--accent)' }}>
+                            🎯 Recommandé : {rec.closestPacks} Colis = {rec.closestQty} pcs
+                          </span>
+                          <span
+                            style={{
+                              fontSize: '0.68rem',
+                              fontWeight: 700,
+                              padding: '1px 5px',
+                              borderRadius: 4,
+                              background: rec.closestAction === 'round_down' ? 'rgba(234, 179, 8, 0.2)' : 'rgba(37, 99, 235, 0.2)',
+                              color: rec.closestAction === 'round_down' ? 'var(--warning)' : 'var(--accent)',
+                            }}
+                          >
+                            {rec.closestDiff < 0 ? `${rec.closestDiff} vrac retiré` : `+${rec.closestDiff} pcs (+1 colis)`}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted mt-0.5">
+                          Au plus proche ({Math.abs(rec.closestDiff)} pcs d'écart vs {rec.closestAction === 'round_down' ? rec.upperDiff : Math.abs(rec.lowerDiff)} pcs)
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="btn btn-xs btn-primary flex items-center gap-1"
+                        style={{ fontWeight: 800, padding: '4px 10px' }}
+                        onClick={() => handleApplyPackQty(rec.closestQty, rec.closestPacks, activePack)}
+                        title="Pré-remplir la quantité au plus proche"
+                      >
+                        <span>⚡ Appliquer {rec.closestQty} pcs</span>
+                      </button>
                     </div>
-                  )}
-                </div>
+
+                    {/* Options Breakdown Chips */}
+                    <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                      <button
+                        type="button"
+                        className={`btn btn-xs ${rec.closestAction === 'round_down' ? 'btn-secondary' : 'btn-ghost'}`}
+                        style={{
+                          fontSize: '0.7rem',
+                          border: rec.closestAction === 'round_down' ? '1px solid var(--border)' : '1px dashed var(--border)',
+                        }}
+                        onClick={() => handleApplyPackQty(rec.lowerQty, rec.lowerPacks, activePack)}
+                        title={`Colis complets inférieurs : ${rec.lowerQty} pcs`}
+                      >
+                        📦 {rec.lowerPacks} Colis ({rec.lowerQty} pcs)
+                        <span className="text-muted ml-1">({rec.lowerDiff} pcs)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`btn btn-xs ${rec.closestAction === 'round_up' ? 'btn-secondary' : 'btn-ghost'}`}
+                        style={{
+                          fontSize: '0.7rem',
+                          border: rec.closestAction === 'round_up' ? '1px solid var(--border)' : '1px dashed var(--border)',
+                        }}
+                        onClick={() => handleApplyPackQty(rec.upperQty, rec.upperPacks, activePack)}
+                        title={`Colis complets supérieurs : ${rec.upperQty} pcs`}
+                      >
+                        📦 {rec.upperPacks} Colis ({rec.upperQty} pcs)
+                        <span className="text-muted ml-1">(+{rec.upperDiff} pcs)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-xs btn-ghost text-muted"
+                        style={{ fontSize: '0.7rem' }}
+                        onClick={() => handleApplyPackQty(disc.remaining, 0, activePack, true)}
+                        title={`Conserver exactement ${disc.remaining} pièces en vrac`}
+                      >
+                        ✋ Vrac exact ({disc.remaining} pcs)
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -3882,7 +4030,19 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
 
         {/* Packaging setup */}
         <div className="card">
-          <div className="section-title" style={{ marginTop: 0 }}>EMBALLAGES</div>
+          <div className="flex items-center justify-between" style={{ marginTop: 0, marginBottom: 8 }}>
+            <div className="section-title" style={{ margin: 0 }}>EMBALLAGES</div>
+            {(outerPack != null || innerPack != null) && (
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost text-danger flex items-center gap-1"
+                onClick={handleClearPackaging}
+                title="Effacer le colisage et rétablir le comptage par unité"
+              >
+                <IconTrash size={12} /> Effacer colisage
+              </button>
+            )}
+          </div>
           {profile && (profile.innerPackSize || profile.outerPackSize) && !line.innerPackSize && !line.outerPackSize && (
             <div className="mb-2 p-2" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)' }}>
               <div className="text-xs text-muted">Mémorisé:</div>
@@ -4130,17 +4290,39 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               -5
             </button>
 
-            {/* STRICT BLIND COUNT: Only show SOLDE when quantities are VISIBLE */}
-            {showQuantities && disc.remaining > 0 && (
-              <button className="btn btn-xs btn-primary flex items-center gap-1" onClick={() => {
-                hapticTap('medium');
-                playExactMatchChime();
-                if (useDirectEntry) setDirectTotal(String(disc.remaining));
-                else setLoose(disc.remaining);
-              }}>
-                <IconBolt size={13} /> SOLDE ({disc.remaining})
-              </button>
-            )}
+            {/* STRICT BLIND COUNT: Only show SOLDE / AU PLUS PROCHE when quantities are VISIBLE */}
+            {showQuantities && disc.remaining > 0 && (() => {
+              const activePack = innerPack || outerPack;
+              const rec = activePack && activePack > 1 ? calcClosestPackRecommendation(disc.remaining, activePack) : null;
+              return (
+                <>
+                  {rec && !rec.isExactMultiple && (
+                    <button
+                      type="button"
+                      className="btn btn-xs flex items-center gap-1"
+                      style={{
+                        background: 'rgba(37, 99, 235, 0.15)',
+                        border: '1px solid rgba(37, 99, 235, 0.35)',
+                        color: 'var(--accent)',
+                        fontWeight: 700,
+                      }}
+                      onClick={() => handleApplyPackQty(rec.closestQty, rec.closestPacks, activePack)}
+                      title={`Régler au plus proche : ${rec.closestQty} pcs (${rec.closestPacks} colis)`}
+                    >
+                      <IconBox size={13} /> AU PLUS PROCHE ({rec.closestQty})
+                    </button>
+                  )}
+                  <button className="btn btn-xs btn-primary flex items-center gap-1" onClick={() => {
+                    hapticTap('medium');
+                    playExactMatchChime();
+                    if (useDirectEntry) setDirectTotal(String(disc.remaining));
+                    else setLoose(disc.remaining);
+                  }}>
+                    <IconBolt size={13} /> SOLDE ({disc.remaining})
+                  </button>
+                </>
+              );
+            })()}
           </div>
 
           {/* Batch preview */}

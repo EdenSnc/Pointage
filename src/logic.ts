@@ -115,6 +115,99 @@ export function roundDownToPack(
   return { servedQty, missingQty };
 }
 
+export interface PackRecommendation {
+  packSize: number;
+  targetQty: number;
+  isExactMultiple: boolean;
+  lowerPacks: number;
+  lowerQty: number;
+  lowerDiff: number; // e.g. -6
+  upperPacks: number;
+  upperQty: number;
+  upperDiff: number; // e.g. +24 or +5
+  closestPacks: number;
+  closestQty: number;
+  closestDiff: number;
+  closestAction: 'round_down' | 'round_up' | 'exact';
+  recommendationLabel: string;
+}
+
+/**
+ * Wholesale Packaging Nearest-Pack Optimizer ("Au plus proche")
+ * Rule: Wholesalers avoid opening sealed packages. When an order quantity does not match
+ * an exact multiple of the pack size:
+ * - If remaining loose units are closer to lower full pack: round DOWN (e.g. 96 with pack of 30 -> 90, -6 loose removed).
+ * - If remaining loose units are closer to upper full pack: round UP (e.g. 115 with pack of 30 -> 120, +5 added to complete pack).
+ */
+export function calcClosestPackRecommendation(
+  targetQty: number,
+  packSize: number | null | undefined
+): PackRecommendation | null {
+  if (!packSize || isNaN(packSize) || packSize <= 1 || isNaN(targetQty) || targetQty <= 0) {
+    return null;
+  }
+
+  const remainder = targetQty % packSize;
+  const lowerPacks = Math.floor(targetQty / packSize);
+  const lowerQty = lowerPacks * packSize;
+  const lowerDiff = lowerQty - targetQty; // <= 0
+
+  if (remainder === 0) {
+    return {
+      packSize,
+      targetQty,
+      isExactMultiple: true,
+      lowerPacks,
+      lowerQty,
+      lowerDiff: 0,
+      upperPacks: lowerPacks,
+      upperQty: targetQty,
+      upperDiff: 0,
+      closestPacks: lowerPacks,
+      closestQty: targetQty,
+      closestDiff: 0,
+      closestAction: 'exact',
+      recommendationLabel: `${lowerPacks} Colis (${packSize} pcs) = ${targetQty} pcs (Multiple exact)`,
+    };
+  }
+
+  const upperPacks = lowerPacks + 1;
+  const upperQty = upperPacks * packSize;
+  const upperDiff = upperQty - targetQty; // > 0
+
+  const distDown = remainder; // distance to lower multiple
+  const distUp = upperDiff;   // distance to upper multiple
+
+  // Rule: go for the closest one. In case of exact tie (distDown === distUp), round down.
+  const isDownClosest = distDown <= distUp;
+
+  const closestPacks = isDownClosest ? lowerPacks : upperPacks;
+  const closestQty = isDownClosest ? lowerQty : upperQty;
+  const closestDiff = isDownClosest ? lowerDiff : upperDiff;
+  const closestAction: 'round_down' | 'round_up' = isDownClosest ? 'round_down' : 'round_up';
+
+  const label = isDownClosest
+    ? `${lowerPacks} Colis (${lowerQty} pcs) recommandés (${lowerDiff} pcs)`
+    : `${upperPacks} Colis (${upperQty} pcs) recommandés (+${upperDiff} pcs)`;
+
+  return {
+    packSize,
+    targetQty,
+    isExactMultiple: false,
+    lowerPacks,
+    lowerQty,
+    lowerDiff,
+    upperPacks,
+    upperQty,
+    upperDiff,
+    closestPacks,
+    closestQty,
+    closestDiff,
+    closestAction,
+    recommendationLabel: label,
+  };
+}
+
 /**
  * Check if a line should block stage completion.
  */
@@ -349,6 +442,19 @@ export function smartSearchScore(
   return -1;
 }
 
+// Common units of measurement and non-packaging dimensions in product descriptions:
+// e.g. "30 CM", "15 MM", "50 M", "80 G", "240 GR", "1 KG", "50 ML", "75 CL", "1 L", "96 PAGES", "100 F", "80 MICRONS", "12 V", "5000 MAH"
+export const MEASUREMENT_UNIT_PATTERN = /^(?:cm|mm|m\b|km|gr?|grammes?|kg|kilos?|mg|oz|lbs?|ml|cl|dl|litres?|l\b|pages?|feuilles?|p\b|f\b|microns?|µm|µ|gsm|g\/m2|volts?|v\b|watts?|w\b|mah|ah|hz|khz|mhz|pouces?|inch(?:es)?|"|'|°|deg|degres?|ans?|mois|jours?|heures?|h\b|min\b|sec\b)/i;
+
+/**
+ * Returns true if a number in a designation is followed by a unit of measurement.
+ */
+export function isDimensionInDesignation(num: number, designation?: string | null): boolean {
+  if (!designation || typeof designation !== 'string') return false;
+  const regex = new RegExp(`\\b${num}\\s*(?:cm|mm|m\\b|km|gr?|grammes?|kg|ml|cl|dl|litres?|l\\b|pages?|feuilles?|microns?|µm|volts?|v\\b|watts?|w\\b|mah|ah|hz|pouces?|"|'|°|deg)`, 'i');
+  return regex.test(designation);
+}
+
 /**
  * Automatically parse packaging sizes from raw document strings or designations.
  * e.g. "18 (3x6)" -> { outerPackSize: 18, innerPackSize: 6 }
@@ -421,12 +527,46 @@ export function parsePackagingString(
 
   // Check designation (e.g. "PEINTURE PANDA DE 12 34140" or "PRESENTOIR 36 PCS 81216")
   if (designation && typeof designation === 'string') {
-    const packInDesig = designation.match(/\b(?:de|x|pack\s*de|boite\s*de|présentoir\s*de)\s*(\d+)\b/i) ||
-                        designation.match(/\b(\d+)\s*(?:pcs|pièces|pieces)\b/i);
-    if (packInDesig) {
-      const n = parseInt(packInDesig[1], 10);
+    const d = designation.trim();
+
+    // 1. Explicit pieces / units suffix: "36 PCS", "24 PIÈCES", "100 UNITÉS"
+    const pcsMatch = d.match(/\b(\d+)\s*(?:pcs|pièces|pieces|unités|unites)\b/i);
+    if (pcsMatch) {
+      const n = parseInt(pcsMatch[1], 10);
       if (n > 1 && n <= 1000) {
         inner = n;
+      }
+    }
+
+    // 2. Packaging container keywords: "PACK DE 12", "BOITE DE 24", "LOT DE 6", "PRESENTOIR DE 36", "SACHET DE 50", etc.
+    if (!inner) {
+      const packKeywordMatch = d.match(
+        /\b(?:pack|boite|bte|bt|présentoir|presentoir|carton|ct|sachet|sac|paquet|pqt|blister|blist|lot|set)\s*(?:de)?\s*(\d+)\b/i
+      );
+      if (packKeywordMatch) {
+        const afterNum = d.slice(packKeywordMatch.index! + packKeywordMatch[0].length).trim();
+        // Disqualify if followed by measurement unit (e.g. "boite de 30 cm")
+        if (!MEASUREMENT_UNIT_PATTERN.test(afterNum)) {
+          const n = parseInt(packKeywordMatch[1], 10);
+          if (n > 1 && n <= 1000) {
+            inner = n;
+          }
+        }
+      }
+    }
+
+    // 3. Fallback generic "DE (\d+)" (e.g. "PEINTURE PANDA DE 12 34140")
+    // STRICT REQUIREMENT: MUST NOT be followed by a unit of measurement (e.g. "REGLE DE 30 CM")!
+    if (!inner) {
+      const deMatch = d.match(/\bde\s*(\d+)\b/i);
+      if (deMatch) {
+        const afterNum = d.slice(deMatch.index! + deMatch[0].length).trim();
+        if (!MEASUREMENT_UNIT_PATTERN.test(afterNum)) {
+          const n = parseInt(deMatch[1], 10);
+          if (n > 1 && n <= 1000) {
+            inner = n;
+          }
+        }
       }
     }
   }
