@@ -47,25 +47,29 @@ describe('Multimodal Audio & Haptic Feedback Engine', () => {
     });
 
     playSuccessChime();
-    expect(vibrateMock).toHaveBeenCalledWith(55);
+    expect(vibrateMock).toHaveBeenCalledWith(12);
 
     playWarningBeep();
-    expect(vibrateMock).toHaveBeenCalledWith([70, 50, 70]);
+    expect(vibrateMock).toHaveBeenCalledWith([25, 45, 25]);
 
     playErrorBeep();
-    expect(vibrateMock).toHaveBeenCalledWith(140);
+    expect(vibrateMock).toHaveBeenCalledWith([30, 45, 30]);
   });
 
   it('synthesizes Web Audio oscillator and gain nodes when AudioContext is mocked', () => {
     const setValueAtTimeMock = vi.fn();
     const exponentialRampToValueAtTimeMock = vi.fn();
+    const linearRampToValueAtTimeMock = vi.fn();
     const connectMock = vi.fn();
     const startMock = vi.fn();
     const stopMock = vi.fn();
 
     const mockOscillator = {
       type: 'sine',
-      frequency: { setValueAtTime: setValueAtTimeMock },
+      frequency: {
+        setValueAtTime: setValueAtTimeMock,
+        exponentialRampToValueAtTime: exponentialRampToValueAtTimeMock,
+      },
       connect: connectMock,
       start: startMock,
       stop: stopMock,
@@ -74,6 +78,7 @@ describe('Multimodal Audio & Haptic Feedback Engine', () => {
     const mockGain = {
       gain: {
         setValueAtTime: setValueAtTimeMock,
+        linearRampToValueAtTime: linearRampToValueAtTimeMock,
         exponentialRampToValueAtTime: exponentialRampToValueAtTimeMock,
       },
       connect: connectMock,
@@ -106,10 +111,13 @@ describe('Multimodal Audio & Haptic Feedback Engine', () => {
     });
 
     hapticTap('light');
-    expect(vibrateMock).toHaveBeenCalledWith(15);
+    expect(vibrateMock).toHaveBeenCalledWith(8);
 
     hapticTap('medium');
-    expect(vibrateMock).toHaveBeenCalledWith(28);
+    expect(vibrateMock).toHaveBeenCalledWith(16);
+
+    hapticTap('heavy');
+    expect(vibrateMock).toHaveBeenCalledWith(26);
   });
 
   it('manages audio mute preferences in localStorage', () => {

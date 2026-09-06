@@ -161,6 +161,7 @@
 html {
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
 }
 
 body {
@@ -173,9 +174,49 @@ body {
   background-attachment: fixed;
   color: var(--text-primary);
   min-height: 100dvh;
+  min-height: 100svh;
   overflow-x: hidden;
+  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
+}
+
+/* Zero-latency mobile touch directives (120Hz & 60Hz Super AMOLED) */
+button,
+a,
+input,
+select,
+textarea,
+.btn,
+.card,
+.seg-btn,
+.stage-tab,
+.stepper-btn,
+.header-icon-btn,
+.product-card,
+.donut-card,
+.transmission-card,
+.btn-pill-primary,
+.btn-pill-whatsapp,
+.btn-pill-glass,
+[role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+button,
+.btn,
+.seg-btn,
+.stage-tab,
+.stepper-btn,
+.header-icon-btn,
+.btn-pill-primary,
+.btn-pill-whatsapp,
+.btn-pill-glass,
+[role="button"] {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 #root {
@@ -488,8 +529,7 @@ body {
    ============================================================ */
 .app-content {
   flex: 1;
-  padding: 22px 18px;
-  padding-bottom: 125px; /* Space for floating bottom dock */
+  padding: 22px max(16px, env(safe-area-inset-right, 0px)) max(142px, calc(122px + env(safe-area-inset-bottom, 0px))) max(16px, env(safe-area-inset-left, 0px));
   max-width: 520px;
   margin: 0 auto;
   width: 100%;
@@ -498,25 +538,25 @@ body {
 }
 
 /* ============================================================
-   FLOATING DOCK / BOTTOM BAR — Apple Island Style
+   FLOATING DOCK / BOTTOM BAR — Apple Island Style & One UI Gesture Buffer
    ============================================================ */
 .bottom-bar {
   position: fixed;
-  bottom: max(14px, env(safe-area-inset-bottom));
-  left: 14px;
-  right: 14px;
+  bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 14px));
+  left: max(16px, env(safe-area-inset-left, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
   max-width: 492px;
   margin: 0 auto;
   z-index: 100;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px;
-  background: rgba(15, 20, 32, 0.82);
+  padding: 8px 10px;
+  background: rgba(15, 20, 32, 0.88);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: var(--glass-border-bright);
-  border-radius: 28px;
+  border-radius: 30px;
   box-shadow: var(--glass-shadow-lg);
 }
 
@@ -1353,6 +1393,7 @@ body {
   border: var(--glass-border-bright);
   border-radius: 28px 28px 0 0;
   padding: 24px 20px;
+  padding-bottom: max(32px, calc(env(safe-area-inset-bottom, 0px) + 20px));
   width: 100%;
   max-width: 520px;
   max-height: 85dvh;

@@ -29,17 +29,17 @@ function getAudioContext(): AudioContext | null {
 
 /**
  * Instant sensory confirmation for a successful barcode scan or count increment:
- * Crisp ascending two-tone chime (880 Hz -> 1320 Hz) + 55ms tactile vibration
+ * Crisp ascending two-tone chime (D5 587.33 Hz -> A5 880 Hz) + 12ms tactile micro-pulse
  */
 export function playSuccessChime() {
-  // 1. Tactile haptic pulse (feels solid in palm on Samsung A54)
+  // 1. Tactile haptic pulse (crisp mechanical switch feel on Samsung A54)
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
     try {
-      navigator.vibrate(55);
+      navigator.vibrate(12);
     } catch {}
   }
 
-  // 2. Synthesized high-frequency industrial chime
+  // 2. Synthesized acoustic-like chime (soft attack to eliminate pops)
   if (isAudioMuted()) return;
   const ctx = getAudioContext();
   if (!ctx) return;
@@ -47,39 +47,42 @@ export function playSuccessChime() {
   try {
     const now = ctx.currentTime;
 
-    // First tone (A5 - 880 Hz)
+    // First tone (D5 - 587.33 Hz)
     const osc1 = ctx.createOscillator();
     const gain1 = ctx.createGain();
     osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(880, now);
-    gain1.gain.setValueAtTime(0.16, now);
+    osc1.frequency.setValueAtTime(587.33, now);
+    gain1.gain.setValueAtTime(0.001, now);
+    gain1.gain.linearRampToValueAtTime(0.12, now + 0.005);
     gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
     osc1.connect(gain1);
     gain1.connect(ctx.destination);
     osc1.start(now);
     osc1.stop(now + 0.08);
 
-    // Second harmonic chime (E6 - 1320 Hz)
+    // Second harmonic chime (A5 - 880 Hz)
     const osc2 = ctx.createOscillator();
     const gain2 = ctx.createGain();
     osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(1320, now + 0.06);
-    gain2.gain.setValueAtTime(0.20, now + 0.06);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+    osc2.frequency.setValueAtTime(880, now + 0.05);
+    gain2.gain.setValueAtTime(0.001, now + 0.05);
+    gain2.gain.linearRampToValueAtTime(0.14, now + 0.055);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.20);
     osc2.connect(gain2);
     gain2.connect(ctx.destination);
-    osc2.start(now + 0.06);
-    osc2.stop(now + 0.22);
+    osc2.start(now + 0.05);
+    osc2.stop(now + 0.20);
   } catch {}
 }
 
 /**
- * Cautionary amber tone (440 Hz triangle wave) for duplicate/overfill warning
+ * Cautionary amber tone (370 Hz warm prompt) for duplicate/overfill warning
+ * Haptic: distinct double pulse [25ms, 45ms, 25ms]
  */
 export function playWarningBeep() {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
     try {
-      navigator.vibrate([70, 50, 70]);
+      navigator.vibrate([25, 45, 25]);
     } catch {}
   }
 
@@ -91,14 +94,15 @@ export function playWarningBeep() {
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(440, now);
-    gain.gain.setValueAtTime(0.18, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(370, now);
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.14, now + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.20);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start(now);
-    osc.stop(now + 0.24);
+    osc.stop(now + 0.20);
   } catch {}
 }
 
@@ -106,10 +110,10 @@ export function playWarningBeep() {
  * Micro-tactile click for keypad taps, chip selections, and stepper adjustments
  * Specially tuned for Samsung Galaxy A54 5G linear resonant haptic motor
  */
-export function hapticTap(intensity: 'light' | 'medium' = 'light') {
+export function hapticTap(intensity: 'light' | 'medium' | 'heavy' = 'light') {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
     try {
-      navigator.vibrate(intensity === 'light' ? 15 : 28);
+      navigator.vibrate(intensity === 'light' ? 8 : intensity === 'medium' ? 16 : 26);
     } catch {}
   }
 }
@@ -142,13 +146,14 @@ export function setAudioMuted(muted: boolean): void {
 }
 
 /**
- * Glorious triad celebration chime (880 Hz -> 1108 Hz -> 1320 Hz)
+ * Glorious major chord celebration chime (C6 -> E6 -> G6)
  * Triggered when a product line hits 100% exact target count!
+ * Haptic: triumphant rhythmic sequence [12ms, 35ms, 18ms]
  */
 export function playExactMatchChime() {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
     try {
-      navigator.vibrate([40, 50, 75]);
+      navigator.vibrate([12, 35, 18]);
     } catch {}
   }
 
@@ -158,30 +163,32 @@ export function playExactMatchChime() {
 
   try {
     const now = ctx.currentTime;
-    const freqs = [880, 1108.73, 1320]; // A5, C#6, E6 major chord triad
+    const freqs = [1046.5, 1318.51, 1567.98]; // C6, E6, G6 major triad
     freqs.forEach((freq, idx) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      const startTime = now + idx * 0.05;
+      const startTime = now + idx * 0.045;
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, startTime);
-      gain.gain.setValueAtTime(0.18, startTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.35);
+      gain.gain.setValueAtTime(0.001, startTime);
+      gain.gain.linearRampToValueAtTime(0.13, startTime + 0.004);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.32);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(startTime);
-      osc.stop(startTime + 0.35);
+      osc.stop(startTime + 0.32);
     });
   } catch {}
 }
 
 /**
- * Descending subtle chime (660 Hz -> 440 Hz) for undo or reset operations
+ * Descending subtle chime (520 Hz -> 370 Hz) for undo or reset operations
+ * Haptic: 14ms crisp release
  */
 export function playUndoBeep() {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
     try {
-      navigator.vibrate(28);
+      navigator.vibrate(14);
     } catch {}
   }
 
@@ -194,24 +201,26 @@ export function playUndoBeep() {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(660, now);
-    osc.frequency.exponentialRampToValueAtTime(440, now + 0.12);
-    gain.gain.setValueAtTime(0.15, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+    osc.frequency.setValueAtTime(520, now);
+    osc.frequency.exponentialRampToValueAtTime(370, now + 0.10);
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.12, now + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start(now);
-    osc.stop(now + 0.14);
+    osc.stop(now + 0.12);
   } catch {}
 }
 
 /**
- * Low-frequency alert tone (220 Hz sawtooth) for unrecognized barcodes, refusals, or errors
+ * Refined low dual thud alert tone (180 Hz -> 120 Hz) for unrecognized barcodes or errors
+ * Haptic: crisp alert pattern [30ms, 45ms, 30ms] (replaces harsh 140ms continuous buzz)
  */
 export function playErrorBeep() {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
     try {
-      navigator.vibrate(140);
+      navigator.vibrate([30, 45, 30]);
     } catch {}
   }
 
@@ -223,14 +232,16 @@ export function playErrorBeep() {
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(220, now);
-    gain.gain.setValueAtTime(0.14, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(180, now);
+    osc.frequency.exponentialRampToValueAtTime(120, now + 0.18);
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.15, now + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start(now);
-    osc.stop(now + 0.28);
+    osc.stop(now + 0.22);
   } catch {}
 }
 
