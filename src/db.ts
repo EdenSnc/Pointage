@@ -29,7 +29,7 @@ export class PointageDB extends Dexie {
   auditEvents!: Table<AuditEvent, number>;
 
   constructor() {
-    super('pointage-db');
+    super('pointage-surface-db');
 
     this.version(1).stores({
       workSessions: '++id, status, createdAt',

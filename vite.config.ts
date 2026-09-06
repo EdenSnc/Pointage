@@ -15,9 +15,9 @@ export default defineConfig({
         'maskable-icon-512x512.png',
       ],
       manifest: {
-        name: 'Pointage',
-        short_name: 'Pointage',
-        description: 'Pointage — Moteur local-first d’inspection et de gestion des bons de livraison en entrepôt.',
+        name: 'Pointage Surface',
+        short_name: 'Surface v1.4',
+        description: 'Pointage Surface — Moteur d\'inspection, facturation et export Excel.',
         theme_color: '#ffffff',
         background_color: '#ffffff',
         display: 'standalone',
