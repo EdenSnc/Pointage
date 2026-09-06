@@ -61,6 +61,14 @@ export interface Bill {
   client: string;
   date?: string;
   status: BillStatus;
+  paymentMode?: string | null;
+  agentName?: string | null;
+  clientAddress?: string | null;
+  nif?: string | null;
+  nis?: string | null;
+  rc?: string | null;
+  ai?: string | null;
+  discountPercent?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -183,6 +191,9 @@ export interface ImportLineJSON {
   designation?: string;
   quantity?: number;
   unitPrice?: number | null;
+  um?: string | null;
+  colisage?: string | null;
+  discountPercent?: number | null;
   packagesRaw?: string | null;
 }
 
@@ -190,6 +201,13 @@ export interface ImportBillJSON {
   billNumber?: string;
   client?: string;
   date?: string | null;
+  paymentMode?: string | null;
+  agentName?: string | null;
+  clientAddress?: string | null;
+  nif?: string | null;
+  nis?: string | null;
+  rc?: string | null;
+  ai?: string | null;
   totalTtc?: number | null;
   discountPercent?: number | null;
   lines?: ImportLineJSON[];

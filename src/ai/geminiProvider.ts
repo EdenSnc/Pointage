@@ -25,17 +25,28 @@ RÈGLES CRITIQUES:
    - Si les photos ou pages correspondent au MÊME bon de livraison (même numéro de BL, même client, ou pages 1, 2, 3...), regroupe OBLIGATOIREMENT toutes les lignes sous un SEUL objet BL dans "bills" avec le même "billNumber".
    - Assigne la propriété "page" (1, 2...) correspondante à chaque ligne.
    - Ne crée plusieurs objets dans "bills" QUE s'il s'agit réellement de factures ou de clients distincts.
-6. TOTAUX IMPRIMÉS & CONTRÔLE FINANCIER:
+6. TOTAUX IMPRIMÉS & EN-TÊTE DU BON:
    - "totalTtc": montant total TTC numérique imprimé au bas du bon si présent (ex: 57644.00), sinon null.
    - "discountPercent": remise éventuelle en pourcentage si mentionnée (ex: 6.00), sinon null.
+   - "paymentMode": mode de paiement imprimé (ex: "CLIENT 6%", "CLIENT 8%"), sinon null.
+   - "agentName": nom de l'agent imprimé après "Par:" (ex: "ZDjaber", "AMYassine"), sinon null.
+   - "clientAddress": adresse du client sous son nom dans le cadre client (ex: "ANGLE RUE A. RAMDANE N°5 ET A. IDIR N°4 SIDI BEL ABBES"), sinon null.
+   - "nif", "nis", "rc", "ai": identifiants légaux du client imprimés dans le cadre client, sinon null.
 
 FORMAT JSON REQUIS:
 {
   "bills": [
     {
-      "billNumber": "BL-EXEMPLE",
-      "client": "NOM CLIENT",
-      "date": "2026-09-03",
+      "billNumber": "BC/OU126/03808",
+      "client": "TROTEC",
+      "date": "2026-09-02",
+      "paymentMode": "CLIENT 6%",
+      "agentName": "ZDjaber",
+      "clientAddress": "SIDI BEL ABBES",
+      "nif": "000522019000363",
+      "nis": "000522010043958",
+      "rc": "05/B/0023021-00/22",
+      "ai": "22645403051",
       "totalTtc": 57644.00,
       "discountPercent": 6.00,
       "lines": [
