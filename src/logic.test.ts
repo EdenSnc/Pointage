@@ -18,6 +18,7 @@ import {
   parseQRSyncPayload,
   planQRMerge,
   findNormalBackCamera,
+  getAvailableBackCameras,
   QRSyncPayload,
 } from './logic';
 
@@ -501,6 +502,28 @@ describe('findNormalBackCamera (1x camera selection)', () => {
 
   it('handles empty device list gracefully', () => {
     expect(findNormalBackCamera([])).toBeNull();
+  });
+
+  it('selects standard wide camera when ultra-wide is also present', () => {
+    const devices = [
+      { deviceId: 'uw', label: 'camera2 0, facing back, Ultra-Wide 0.5x', kind: 'videoinput' },
+      { deviceId: 'main', label: 'camera2 1, facing back, Wide Angle', kind: 'videoinput' },
+      { deviceId: 'macro', label: 'camera2 3, facing back, Macro', kind: 'videoinput' },
+    ];
+    expect(findNormalBackCamera(devices)).toBe('main');
+  });
+
+  it('getAvailableBackCameras correctly tags and lists rear sensors', () => {
+    const devices = [
+      { deviceId: 'uw', label: 'camera2 0, facing back, Ultra Wide', kind: 'videoinput' },
+      { deviceId: 'front', label: 'camera2 1, facing front', kind: 'videoinput' },
+      { deviceId: 'main', label: 'camera2 2, facing back', kind: 'videoinput' },
+    ];
+    const result = getAvailableBackCameras(devices);
+    expect(result.length).toBe(2);
+    expect(result.some(r => r.deviceId === 'main' && r.isLikely1x)).toBe(true);
+    expect(result.find(r => r.deviceId === 'main')?.cleanName).toContain('Principal 1×');
+    expect(result.find(r => r.deviceId === 'uw')?.cleanName).toContain('0.5×');
   });
 });
 

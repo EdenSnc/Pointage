@@ -638,13 +638,24 @@ export function planQRMerge(
  * Automatically select the standard/normal (1x) rear camera,
  * discarding any 0.5x Ultra-Wide, wide-angle, macro, or front-facing cameras.
  */
+export interface BackCameraInfo {
+  deviceId: string;
+  label: string;
+  isLikely1x: boolean;
+  cleanName: string;
+}
+
+/**
+ * Automatically select the standard/normal (1x) rear camera,
+ * discarding any 0.5x Ultra-Wide, wide-angle, macro, or front-facing cameras.
+ */
 export function findNormalBackCamera(
   devices: Array<{ deviceId: string; label: string; kind?: string }>
 ): string | null {
   const videoDevs = devices.filter(d => !d.kind || d.kind === 'videoinput');
   if (videoDevs.length === 0) return null;
 
-  // Filter out front/selfie cameras
+  // 1. Filter out front/selfie cameras
   const backDevs = videoDevs.filter(d => {
     const lbl = (d.label || '').toLowerCase();
     return (
@@ -658,65 +669,106 @@ export function findNormalBackCamera(
   const candidates = backDevs.length > 0 ? backDevs : videoDevs;
   if (candidates.length === 1) return candidates[0].deviceId;
 
-  // 1. Explicitly filter out wide / ultra / macro / depth / 0.5 / 0.6
-  const nonWideCandidates = candidates.filter(d => {
+  // 2. Discard macro, depth, virtual, and ultra-wide / 0.5x cameras
+  const nonAuxCandidates = candidates.filter(d => {
     const lbl = (d.label || '').toLowerCase();
-    return (
-      !lbl.includes('ultra') &&
-      !lbl.includes('0.5') &&
-      !lbl.includes('0.6') &&
-      !lbl.includes('macro') &&
-      !lbl.includes('depth') &&
-      !lbl.includes('wide')
-    );
+    const isUltraWide = lbl.includes('ultra') || lbl.includes('0.5') || lbl.includes('0.6');
+    const isMacroOrDepth = lbl.includes('macro') || lbl.includes('depth') || lbl.includes('bokeh');
+    return !isUltraWide && !isMacroOrDepth;
   });
 
-  if (nonWideCandidates.length === 1) {
-    return nonWideCandidates[0].deviceId;
-  }
+  const pool = nonAuxCandidates.length > 0 ? nonAuxCandidates : candidates;
+  if (pool.length === 1) return pool[0].deviceId;
 
-  // 2. Look for explicit main / standard / primary / 1x labels
-  const explicitMain = candidates.find(d => {
+  // 3. Look for explicit main / standard / primary / 1x labels
+  const explicitMain = pool.find(d => {
     const lbl = (d.label || '').toLowerCase();
     return (
       lbl.includes('main') ||
       lbl.includes('standard') ||
       lbl.includes('primary') ||
-      lbl.includes('1x')
+      lbl.includes('1x') ||
+      lbl.includes('principal')
     );
   });
   if (explicitMain) return explicitMain.deviceId;
 
-  // 3. Samsung Galaxy Camera2 HAL pattern:
-  // On Samsung phones with Camera2 API, the cameras are numbered:
-  // camera2 0 = 0.5x Ultra-Wide / Logical Wide
-  // camera2 2 = Main 1x Sensor (50MP standard lens)
-  // camera2 3 = Macro Sensor
-  // If camera2 2 is present, it is ALWAYS the physical 1x main sensor!
-  const samsungMain = candidates.find(d => {
+  // 4. Samsung Galaxy Camera2 HAL pattern:
+  // On Samsung phones (e.g. Galaxy A54, A53, S21-S24):
+  // camera2 0 = 0.5x Ultra-Wide / Logical Multi-Camera
+  // camera2 2 = Physical 1x Main Sensor (50MP standard lens)
+  // camera2 1 = Front (or secondary rear)
+  // camera2 3 = Macro
+  // Look for camera2 2 first:
+  const samsungMain = pool.find(d => {
     const lbl = (d.label || '').toLowerCase();
     return lbl.includes('camera2 2') || lbl.includes('camera 2');
   });
   if (samsungMain) return samsungMain.deviceId;
 
-  // 4. If the first back camera is camera2 0, and there are other back cameras,
-  // the second back camera (index 1) is the main sensor (Camera 2) on Samsung:
-  if (
-    candidates.length >= 2 &&
-    (candidates[0].label || '').toLowerCase().includes('camera2 0')
-  ) {
-    return candidates[1].deviceId;
+  // 5. Look for camera2 1 (if not front)
+  const samsungCam1 = pool.find(d => {
+    const lbl = (d.label || '').toLowerCase();
+    return lbl.includes('camera2 1') || lbl.includes('camera 1');
+  });
+  if (samsungCam1) return samsungCam1.deviceId;
+
+  // 6. Look for "wide" without "ultra" (standard 1x wide lens)
+  const wideNonUltra = pool.find(d => {
+    const lbl = (d.label || '').toLowerCase();
+    return lbl.includes('wide') && !lbl.includes('ultra');
+  });
+  if (wideNonUltra) return wideNonUltra.deviceId;
+
+  // 7. Avoid camera2 0 or index 0 if multiple back candidates exist
+  // Because index 0 on Android is almost always the ultra-wide!
+  if (pool.length >= 2) {
+    const nonZeroCandidate = pool.find(d => {
+      const lbl = (d.label || '').toLowerCase();
+      return !lbl.includes('camera2 0') && !lbl.includes('camera 0');
+    });
+    if (nonZeroCandidate) return nonZeroCandidate.deviceId;
+    return pool[1].deviceId;
   }
 
-  // 5. Fallback: if candidates[0] has '0' in label and candidate 1 exists, prefer candidate 1
-  if (
-    candidates.length >= 2 &&
-    (candidates[0].label || '').toLowerCase().includes('0')
-  ) {
-    return candidates[1].deviceId;
-  }
+  return pool[0].deviceId;
+}
 
-  return (nonWideCandidates[0] || candidates[0]).deviceId;
+export function getAvailableBackCameras(
+  devices: Array<{ deviceId: string; label: string; kind?: string }>
+): BackCameraInfo[] {
+  const videoDevs = devices.filter(d => !d.kind || d.kind === 'videoinput');
+  const backDevs = videoDevs.filter(d => {
+    const lbl = (d.label || '').toLowerCase();
+    return (
+      !lbl.includes('front') &&
+      !lbl.includes('avant') &&
+      !lbl.includes('selfie') &&
+      !lbl.includes('user')
+    );
+  });
+
+  const normalId = findNormalBackCamera(devices);
+
+  return backDevs.map((d, index) => {
+    const lbl = d.label || '';
+    const is1x = d.deviceId === normalId;
+    let cleanName = `Capteur ${index + 1}`;
+    const l = lbl.toLowerCase();
+    if (l.includes('ultra') || l.includes('0.5') || l.includes('0.6')) {
+      cleanName = `Capteur ${index + 1} (Ultra-Grand Angle 0.5×)`;
+    } else if (l.includes('macro')) {
+      cleanName = `Capteur ${index + 1} (Macro)`;
+    } else if (is1x || l.includes('main') || l.includes('camera2 2')) {
+      cleanName = `Capteur ${index + 1} (Principal 1×)`;
+    }
+    return {
+      deviceId: d.deviceId,
+      label: d.label || `Caméra ${index + 1}`,
+      isLikely1x: is1x,
+      cleanName,
+    };
+  });
 }
 
 

@@ -53,6 +53,8 @@ import {
   parseQRSyncPayload,
   planQRMerge,
   findNormalBackCamera,
+  getAvailableBackCameras,
+  BackCameraInfo,
   QRSyncPayload,
 } from './logic';
 import { parseImportJSON, importBills, getOrCreateSession, validateImport } from './importer';
@@ -107,6 +109,7 @@ import {
   IconVolumeX,
   IconTrash,
   IconBag,
+  IconRotate,
 } from './icons';
 
 import {
@@ -3892,6 +3895,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
   const [selectedCameraId, setSelectedCameraId] = useState<string>(() => {
     return localStorage.getItem('pointage_preferred_camera_id') || '';
   });
+  const [availableCameras, setAvailableCameras] = useState<BackCameraInfo[]>([]);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [qrSyncModalPayload, setQrSyncModalPayload] = useState<QRSyncPayload | null>(null);
 
@@ -3913,6 +3917,20 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
         }
       }
     }
+  };
+
+  const handleCycleCamera = () => {
+    if (availableCameras.length <= 1) {
+      showToast('1 seul capteur arrière détecté', setToast);
+      return;
+    }
+    const currentIndex = availableCameras.findIndex(c => c.deviceId === selectedCameraId);
+    const nextIndex = (currentIndex + 1) % availableCameras.length;
+    const nextCam = availableCameras[nextIndex];
+    setSelectedCameraId(nextCam.deviceId);
+    localStorage.setItem('pointage_preferred_camera_id', nextCam.deviceId);
+    localStorage.setItem('pointage_camera_user_selected', 'true');
+    showToast(`Capteur : ${nextCam.cleanName}`, setToast);
   };
 
   // Start camera
@@ -3942,14 +3960,28 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
 
         // If we haven't resolved a normal camera device ID yet, inspect devices first
         let activeDeviceId = selectedCameraId;
-        if (!activeDeviceId && navigator.mediaDevices?.enumerateDevices) {
+        if (navigator.mediaDevices?.enumerateDevices) {
           try {
             const devices = await navigator.mediaDevices.enumerateDevices();
+            const backCams = getAvailableBackCameras(devices);
+            if (backCams.length > 0) {
+              setAvailableCameras(backCams);
+            }
             const normalId = findNormalBackCamera(devices);
-            if (normalId) {
+            const userManuallyChose = localStorage.getItem('pointage_camera_user_selected') === 'true';
+
+            const currentCam = backCams.find(c => c.deviceId === activeDeviceId);
+            const isCurrentUltraWide = currentCam && !currentCam.isLikely1x && (
+              currentCam.label.toLowerCase().includes('0.5') ||
+              currentCam.label.toLowerCase().includes('ultra') ||
+              currentCam.label.toLowerCase().includes('camera2 0')
+            );
+
+            if (normalId && (!activeDeviceId || isCurrentUltraWide || (!userManuallyChose && activeDeviceId !== normalId))) {
               activeDeviceId = normalId;
               setSelectedCameraId(normalId);
               localStorage.setItem('pointage_preferred_camera_id', normalId);
+              localStorage.removeItem('pointage_camera_user_selected');
             }
           } catch (e) {
             console.warn('Initial device enumeration skipped:', e);
@@ -3983,7 +4015,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
             }
           );
 
-          // Configure Samsung Galaxy continuous autofocus & force zoom >= 1.0x (anti-wide)
+          // Configure Samsung Galaxy continuous autofocus & apply current zoomLevel
           if (videoRef.current?.srcObject) {
             const stream = videoRef.current.srcObject as MediaStream;
             streamRef.current = stream;
@@ -3995,9 +4027,9 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
                 adv.focusMode = 'continuous';
               }
               if (caps.zoom) {
-                // If the hardware starts at 0.5x or 0.6x, zoom directly to 1.0x (standard 1x lens view)
                 const minZoom = caps.zoom.min || 1;
-                adv.zoom = Math.max(1.0, minZoom);
+                const maxZoom = caps.zoom.max || 5;
+                adv.zoom = Math.min(maxZoom, Math.max(minZoom, zoomLevel));
               }
               if (Object.keys(adv).length > 0) {
                 track.applyConstraints({ advanced: [adv] }).catch(() => {});
@@ -4010,10 +4042,25 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
           if (navigator.mediaDevices?.enumerateDevices) {
             try {
               const devices = await navigator.mediaDevices.enumerateDevices();
+              const backCams = getAvailableBackCameras(devices);
+              if (backCams.length > 0) {
+                setAvailableCameras(backCams);
+              }
               const normalId = findNormalBackCamera(devices);
-              if (normalId && normalId !== activeDeviceId) {
+              const userManuallyChose = localStorage.getItem('pointage_camera_user_selected') === 'true';
+
+              const currentCam = backCams.find(c => c.deviceId === activeDeviceId);
+              const isCurrentUltraWide = currentCam && !currentCam.isLikely1x && (
+                currentCam.label.toLowerCase().includes('0.5') ||
+                currentCam.label.toLowerCase().includes('ultra') ||
+                currentCam.label.toLowerCase().includes('camera2 0')
+              );
+
+              if (normalId && (isCurrentUltraWide || (!userManuallyChose && normalId !== activeDeviceId))) {
+                console.info('[Camera] Auto-locking onto verified 1x camera sensor:', normalId);
                 setSelectedCameraId(normalId);
                 localStorage.setItem('pointage_preferred_camera_id', normalId);
+                localStorage.removeItem('pointage_camera_user_selected');
                 return; // Will re-run effect with the guaranteed 1x camera
               }
             } catch (e) {
@@ -4217,27 +4264,44 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
     return bills[0]?.id || 0;
   }, [billIdParam, qrSyncModalPayload, bills]);
 
+  const currentCameraInfo = availableCameras.find(c => c.deviceId === selectedCameraId) ||
+    availableCameras.find(c => c.isLikely1x) ||
+    availableCameras[0];
+
   return (
     <div className="scanner-overlay">
       {scanning && (
         <>
           <video ref={videoRef} className="scanner-video" playsInline muted autoPlay />
           <div className="scanner-target" />
-          <div className="scanner-zoom-bar">
-            <button
-              type="button"
-              className={`scanner-zoom-btn ${zoomLevel === 1 ? 'active' : ''}`}
-              onClick={() => handleZoom(1)}
-            >
-              1×
-            </button>
-            <button
-              type="button"
-              className={`scanner-zoom-btn ${zoomLevel === 2 ? 'active' : ''}`}
-              onClick={() => handleZoom(2)}
-            >
-              2×
-            </button>
+          <div className="scanner-controls-bar">
+            {availableCameras.length > 1 && (
+              <button
+                type="button"
+                className="scanner-cam-switch-btn"
+                onClick={handleCycleCamera}
+                title="Changer de capteur photo"
+              >
+                <IconRotate size={14} />
+                <span>{currentCameraInfo?.cleanName || 'Capteur'}</span>
+              </button>
+            )}
+            <div className="scanner-zoom-bar">
+              <button
+                type="button"
+                className={`scanner-zoom-btn ${zoomLevel === 1 ? 'active' : ''}`}
+                onClick={() => handleZoom(1)}
+              >
+                1×
+              </button>
+              <button
+                type="button"
+                className={`scanner-zoom-btn ${zoomLevel === 2 ? 'active' : ''}`}
+                onClick={() => handleZoom(2)}
+              >
+                2×
+              </button>
+            </div>
           </div>
         </>
       )}

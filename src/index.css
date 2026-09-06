@@ -911,21 +911,53 @@ button,
   color: #f59e0b;
 }
 
-/* Scanner Zoom Controls */
-.scanner-zoom-bar {
+/* Scanner Camera & Zoom Controls */
+.scanner-controls-bar {
   position: absolute;
   top: 16px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 120;
+  max-width: 95%;
+}
+
+.scanner-cam-switch-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 5px 12px;
+  border-radius: 9999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s ease;
+}
+
+.scanner-cam-switch-btn:active {
+  transform: scale(0.96);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.scanner-zoom-bar {
+  display: flex;
   gap: 4px;
-  background: rgba(15, 23, 42, 0.8);
+  background: rgba(15, 23, 42, 0.85);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   padding: 3px 6px;
   border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  z-index: 120;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
 }
 
 .scanner-zoom-btn {
