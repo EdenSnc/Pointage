@@ -302,7 +302,8 @@ export interface ChecksumValidationResult {
  */
 export function validateFinancialChecksum(
   lines: Array<{ quantity?: number; unitPrice?: number | null }>,
-  printedTotal?: number | null
+  printedTotal?: number | null,
+  discountPercent?: number | null
 ): ChecksumValidationResult {
   let hasPrices = false;
   let computedTotal = 0;
@@ -327,9 +328,19 @@ export function validateFinancialChecksum(
     };
   }
 
-  const discrepancy = Math.round((computedTotal - printedTotal + Number.EPSILON) * 100) / 100;
+  let discrepancy = Math.round((computedTotal - printedTotal + Number.EPSILON) * 100) / 100;
   // Allow at most 0.10 DA due to rounding of decimals on line totals
-  const isValid = Math.abs(discrepancy) <= 0.10;
+  let isValid = Math.abs(discrepancy) <= 0.10;
+
+  // If direct sum has discrepancy but a discount was reported on the invoice, check discounted total
+  if (!isValid && typeof discountPercent === 'number' && discountPercent > 0 && discountPercent < 100) {
+    const discountedComputed = Math.round((computedTotal * (1 - discountPercent / 100) + Number.EPSILON) * 100) / 100;
+    const discountDisc = Math.round((discountedComputed - printedTotal + Number.EPSILON) * 100) / 100;
+    if (Math.abs(discountDisc) <= 0.10) {
+      isValid = true;
+      discrepancy = discountDisc;
+    }
+  }
 
   return {
     hasPrices,

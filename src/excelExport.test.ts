@@ -303,4 +303,292 @@ describe('ai — validateFinancialChecksum (0% Error Guardrail)', () => {
     expect(result.warning).toBeDefined();
     expect(result.warning).toContain('Écart de calcul détecté');
   });
+
+  it('validates invoice totals when supplier applied a discount percentage (remise)', () => {
+    // 100 * 100 = 10,000 DA gross total. 5% discount -> 9,500 DA net TTC.
+    const lines = [
+      { quantity: 100, unitPrice: 100.00 },
+    ];
+
+    const result = validateFinancialChecksum(lines, 9500.00, 5);
+    expect(result.isValid).toBe(true);
+    expect(result.computedTotal).toBe(10000.00);
+    expect(result.discrepancy).toBe(0);
+  });
+
+  it('handles rounding differences within 0.10 DA tolerance', () => {
+    // 3 lines with slight centime rounding difference
+    const lines = [
+      { quantity: 3, unitPrice: 33.33 }, // 99.99
+    ];
+    // Printed total on document says 100.00 (0.01 DA difference)
+    const result = validateFinancialChecksum(lines, 100.00);
+    expect(result.isValid).toBe(true);
+    expect(result.discrepancy).toBe(-0.01);
+  });
+
+  it('handles empty lines, missing prices, and null printed totals gracefully', () => {
+    expect(validateFinancialChecksum([], 100.00).isValid).toBe(true);
+    expect(validateFinancialChecksum([{ quantity: 10 }], null).isValid).toBe(true);
+    expect(validateFinancialChecksum([{ quantity: 10, unitPrice: null }], 100.00).isValid).toBe(true);
+  });
+});
+
+describe('excelExport — Extensive Edge Cases Resilience', () => {
+  const dummyBill: Bill = {
+    id: 99,
+    sessionId: 1,
+    billNumber: 'BC/OU126/03808',
+    client: 'TEST & CO "DISTRIB" / BLIDA',
+    date: '2026-09-06',
+    status: 'active',
+    createdAt: '2026-09-06T10:00:00Z',
+    updatedAt: '2026-09-06T10:00:00Z',
+  };
+
+  it('handles an empty bill with 0 lines without crashing or producing corrupt formulas', () => {
+    const rows = buildFinalBillRows([], new Map());
+    expect(rows).toEqual([]);
+
+    const data = compileFinalBillData(dummyBill, rows);
+    expect(data.totalOrderedQty).toBe(0);
+    expect(data.totalActualQty).toBe(0);
+    expect(data.totalDiffQty).toBe(0);
+    expect(data.totalAmountTtc).toBe(0);
+    expect(data.isPriced).toBe(false);
+
+    const wb = createFinalBillWorkbook(data);
+    expect(wb.SheetNames).toContain('BL_FINAL_SURFACE');
+    const ws = wb.Sheets['BL_FINAL_SURFACE'];
+    expect(ws['A6'].v).toBe('-');
+    expect(ws['B6'].v).toBe('AUCUN ARTICLE');
+    // Ensure no broken SUM(F6:F5) was generated
+    expect(ws['F6'].v).toBe(0);
+  });
+
+  it('handles onlyPresent filter when all counts are 0', () => {
+    const lines: OrderLine[] = [
+      {
+        id: 1,
+        billId: 99,
+        originalNo: '1',
+        originalPage: 1,
+        originalReference: 'REF-01',
+        originalEan: null,
+        originalDesignation: 'Article 1',
+        originalOrderedQty: 10,
+        originalUnitPrice: null,
+        no: '1',
+        page: 1,
+        reference: 'REF-01',
+        ean: null,
+        designation: 'Article 1',
+        orderedQty: 10,
+        unitPrice: null,
+        status: 'active',
+        outerPackSize: null,
+        innerPackSize: null,
+        warehouseZone: null,
+        packagesRaw: null,
+        referenceAliases: [],
+        createdAt: '2026-09-06T10:00:00Z',
+        updatedAt: '2026-09-06T10:00:00Z',
+      },
+    ];
+
+    // No events recorded -> actualQty = 0
+    const rows = buildFinalBillRows(lines, new Map(), { onlyPresent: true });
+    expect(rows.length).toBe(0);
+
+    const data = compileFinalBillData(dummyBill, rows);
+    const wb = createFinalBillWorkbook(data);
+    expect(wb.Sheets['BL_FINAL_SURFACE']).toBeDefined();
+  });
+
+  it('handles missing line references, designations, colisage, and EANs with safe fallbacks', () => {
+    const lines: OrderLine[] = [
+      {
+        id: 50,
+        billId: 99,
+        originalNo: '5',
+        originalPage: 1,
+        originalReference: null,
+        originalEan: null,
+        originalDesignation: '',
+        originalOrderedQty: 5,
+        originalUnitPrice: null,
+        no: '5',
+        page: 1,
+        reference: null as any,
+        ean: null,
+        designation: '',
+        orderedQty: 5,
+        unitPrice: null,
+        status: 'active',
+        outerPackSize: null,
+        innerPackSize: null,
+        warehouseZone: null,
+        packagesRaw: null,
+        referenceAliases: [],
+        createdAt: '2026-09-06T10:00:00Z',
+        updatedAt: '2026-09-06T10:00:00Z',
+      },
+    ];
+
+    const rows = buildFinalBillRows(lines, new Map());
+    expect(rows.length).toBe(1);
+    expect(rows[0].code).toBe('ART-5');
+    expect(rows[0].designation).toBe('Article sans désignation');
+    expect(rows[0].ean).toBeNull();
+    expect(rows[0].colisage).toBeNull();
+  });
+
+  it('handles item added on the fly (orderedQty = 0, actualQty > 0) as SURPLUS', () => {
+    const lines: OrderLine[] = [
+      {
+        id: 77,
+        billId: 99,
+        originalNo: '99',
+        originalPage: 1,
+        originalReference: 'EXTRA-01',
+        originalEan: '6131234567890',
+        originalDesignation: 'Article Extra Hors Bon',
+        originalOrderedQty: 0,
+        originalUnitPrice: 250.00,
+        no: '99',
+        page: 1,
+        reference: 'EXTRA-01',
+        ean: '6131234567890',
+        designation: 'Article Extra Hors Bon',
+        orderedQty: 0,
+        unitPrice: 250.00,
+        status: 'active',
+        outerPackSize: null,
+        innerPackSize: null,
+        warehouseZone: null,
+        packagesRaw: null,
+        referenceAliases: [],
+        createdAt: '2026-09-06T10:00:00Z',
+        updatedAt: '2026-09-06T10:00:00Z',
+      },
+    ];
+
+    const eventsMap = new Map<number, CountEvent[]>([
+      [
+        77,
+        [
+          {
+            id: 1,
+            billId: 99,
+            orderLineId: 77,
+            stage: 'preparation',
+            quantity: 15,
+            packType: 'units',
+            outcome: 'accepted',
+            undone: false,
+            createdAt: '2026-09-06T10:05:00Z',
+          },
+        ],
+      ],
+    ]);
+
+    const rows = buildFinalBillRows(lines, eventsMap);
+    expect(rows[0].orderedQty).toBe(0);
+    expect(rows[0].actualQty).toBe(15);
+    expect(rows[0].diffQty).toBe(15);
+    expect(rows[0].status).toBe('SURPLUS');
+    expect(rows[0].observation).toContain('Article hors bon / surplus (+15)');
+    expect(rows[0].totalTtc).toBe(3750.00);
+  });
+
+  it('handles refused and damaged count events properly', () => {
+    const lines: OrderLine[] = [
+      {
+        id: 88,
+        billId: 99,
+        originalNo: '1',
+        originalPage: 1,
+        originalReference: 'REF-AVARIE',
+        originalEan: null,
+        originalDesignation: 'Carton Endommagé',
+        originalOrderedQty: 10,
+        originalUnitPrice: 100.00,
+        no: '1',
+        page: 1,
+        reference: 'REF-AVARIE',
+        ean: null,
+        designation: 'Carton Endommagé',
+        orderedQty: 10,
+        unitPrice: 100.00,
+        status: 'active',
+        outerPackSize: null,
+        innerPackSize: null,
+        warehouseZone: null,
+        packagesRaw: null,
+        referenceAliases: [],
+        createdAt: '2026-09-06T10:00:00Z',
+        updatedAt: '2026-09-06T10:00:00Z',
+      },
+    ];
+
+    const eventsMap = new Map<number, CountEvent[]>([
+      [
+        88,
+        [
+          {
+            id: 2,
+            billId: 99,
+            orderLineId: 88,
+            stage: 'preparation',
+            quantity: 5,
+            packType: 'units',
+            outcome: 'damaged_refused',
+            undone: false,
+            createdAt: '2026-09-06T10:10:00Z',
+          },
+        ],
+      ],
+    ]);
+
+    const rows = buildFinalBillRows(lines, eventsMap);
+    expect(rows[0].status).toBe('AVARIE');
+    expect(rows[0].observation).toContain('Marchandise avariée / refusée au pointage');
+  });
+
+  it('caps long WhatsApp message anomaly lists at 20 items to prevent URL overflow', () => {
+    // Generate 35 anomaly rows
+    const rows = Array.from({ length: 35 }, (_, idx) => ({
+      no: String(idx + 1),
+      code: `REF-${idx + 1}`,
+      ean: null,
+      designation: `Produit Anormal ${idx + 1}`,
+      colisage: null,
+      orderedQty: 10,
+      actualQty: 0,
+      diffQty: -10,
+      unitPrice: 50.00,
+      totalTtc: 0,
+      status: 'MANQUANT' as const,
+      observation: 'Non reçu (0 / 10)',
+    }));
+
+    const data = {
+      billNumber: 'BC/OU126/03808',
+      client: 'TEST',
+      date: '2026-09-06',
+      totalOrderedQty: 350,
+      totalActualQty: 0,
+      totalDiffQty: -350,
+      totalAmountTtc: 0,
+      isPriced: true,
+      checksumValid: true,
+      rows,
+    };
+
+    const msg = formatFinalBillWhatsAppMessage(data);
+    expect(msg).toContain('DETAIL DES ANOMALIES & ECARTS (35)');
+    expect(msg).toContain('20. [REF-20]');
+    expect(msg).not.toContain('21. [REF-21]');
+    expect(msg).toContain('... et 15 autres anomalies (voir fichier Excel .xlsx complet ci-joint)');
+  });
 });

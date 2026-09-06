@@ -33,10 +33,11 @@ export function buildFinalBillRows(
 
   for (const line of lines) {
     const lineEvents = eventsByLine.get(line.id!) || [];
-    const actualQty = sumStageEvents(lineEvents, stage);
-    const orderedQty = line.orderedQty;
+    const rawActual = sumStageEvents(lineEvents, stage);
+    const actualQty = typeof rawActual === 'number' && !isNaN(rawActual) ? Math.max(0, rawActual) : 0;
+    const orderedQty = typeof line.orderedQty === 'number' && !isNaN(line.orderedQty) ? Math.max(0, line.orderedQty) : 0;
     const diffQty = actualQty - orderedQty;
-    const unitPrice = line.unitPrice != null && line.unitPrice >= 0 ? line.unitPrice : null;
+    const unitPrice = typeof line.unitPrice === 'number' && !isNaN(line.unitPrice) && line.unitPrice >= 0 ? line.unitPrice : null;
 
     // Strict 2-decimal financial calculation
     const totalTtc = unitPrice != null
@@ -60,6 +61,9 @@ export function buildFinalBillRows(
     } else if (hasRefused) {
       status = 'AVARIE';
       observation = 'Marchandise avariée / refusée au pointage';
+    } else if (orderedQty === 0 && actualQty > 0) {
+      status = 'SURPLUS';
+      observation = `Article hors bon / surplus (+${actualQty})`;
     } else if (actualQty === 0 && orderedQty > 0) {
       status = 'MANQUANT';
       observation = `Non reçu (0 / ${orderedQty})`;
@@ -78,12 +82,16 @@ export function buildFinalBillRows(
       continue;
     }
 
+    const safeColisage = line.packagesRaw || (line.outerPackSize ? `${line.outerPackSize}/CT` : (line.colisage ? `${line.colisage}` : null));
+    const safeCode = line.reference || line.originalReference || (line.no ? `ART-${line.no}` : '-');
+    const safeDesignation = line.designation || line.originalDesignation || 'Article sans désignation';
+
     rows.push({
-      no: line.no,
-      code: line.reference || line.originalReference || line.no,
+      no: line.no || line.originalNo || String(rows.length + 1),
+      code: safeCode,
       ean: line.ean || line.originalEan || null,
-      designation: line.designation,
-      colisage: line.packagesRaw || (line.outerPackSize ? `${line.outerPackSize}/CT` : null),
+      designation: safeDesignation,
+      colisage: safeColisage,
       orderedQty,
       actualQty,
       diffQty,
@@ -121,8 +129,8 @@ export function compileFinalBillData(
   }
 
   return {
-    billNumber: bill.billNumber,
-    client: bill.client,
+    billNumber: bill.billNumber || 'SANS_NUMERO',
+    client: bill.client || 'Client Inconnu',
     date: bill.date || new Date().toISOString().split('T')[0],
     totalOrderedQty,
     totalActualQty,
@@ -145,8 +153,8 @@ export function createFinalBillWorkbook(data: FinalBillExportData): XLSX.WorkBoo
   const wsData: (string | number | null)[][] = [
     // Header block
     ['POINTAGE DE SURFACE — FACTURE ET BON DE RECEPTION DEFINITIF'],
-    [`Client : ${data.client}`, '', '', `Date : ${data.date}`, '', '', `Statut : RECEPTION VERIFIEE EN SURFACE`],
-    [`N° Bon d'origine : ${data.billNumber}`, '', '', `Version : Pointage Surface v1.4 (Document de Controle)`],
+    [`Client : ${data.client || 'Client Inconnu'}`, '', '', `Date : ${data.date || ''}`, '', '', `Statut : RECEPTION VERIFIEE EN SURFACE`],
+    [`N° Bon d'origine : ${data.billNumber || 'Sans Numéro'}`, '', '', `Version : Pointage Surface v1.4 (Document de Controle)`],
     [], // Spacer row
     // Column Headers
     [
@@ -196,8 +204,23 @@ export function createFinalBillWorkbook(data: FinalBillExportData): XLSX.WorkBoo
   const lastDataRowIdx = firstDataRowIdx + rows.length - 1;
   const totalsRowIdx = lastDataRowIdx + 1;
 
-  // Bottom Summary Row with Excel Formulas
-  if (rows.length > 0) {
+  // Bottom Summary Row or Empty state
+  if (rows.length === 0) {
+    wsData.push([
+      '-',
+      'AUCUN ARTICLE',
+      '',
+      'Aucun article dans cette sélection (filtre actif ou bon vide)',
+      '',
+      0,
+      0,
+      0,
+      '',
+      '',
+      'CONFORME',
+      'Rien à signaler',
+    ]);
+  } else {
     wsData.push([
       'TOTAL GENERAL',
       '',
@@ -234,6 +257,22 @@ export function createFinalBillWorkbook(data: FinalBillExportData): XLSX.WorkBoo
     { wch: 35 }, // Observation
   ];
 
+  // Apply number formatting
+  if (rows.length > 0) {
+    for (let r = firstDataRowIdx; r <= totalsRowIdx; r++) {
+      const cellF = ws[`F${r}`];
+      if (cellF && (typeof cellF.v === 'number' || cellF.f)) cellF.z = '#,##0';
+      const cellG = ws[`G${r}`];
+      if (cellG && (typeof cellG.v === 'number' || cellG.f)) cellG.z = '#,##0';
+      const cellH = ws[`H${r}`];
+      if (cellH && (typeof cellH.v === 'number' || cellH.f)) cellH.z = '#,##0';
+      const cellI = ws[`I${r}`];
+      if (cellI && (typeof cellI.v === 'number' || cellI.f)) cellI.z = '#,##0.00';
+      const cellJ = ws[`J${r}`];
+      if (cellJ && (typeof cellJ.v === 'number' || cellJ.f)) cellJ.z = '#,##0.00';
+    }
+  }
+
   XLSX.utils.book_append_sheet(wb, ws, 'BL_FINAL_SURFACE');
   return wb;
 }
@@ -243,8 +282,9 @@ export function createFinalBillWorkbook(data: FinalBillExportData): XLSX.WorkBoo
  */
 export function downloadFinalBillExcel(data: FinalBillExportData, filename?: string): void {
   const wb = createFinalBillWorkbook(data);
-  const cleanBillNo = data.billNumber.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const safeFilename = filename || `BL_FINAL_${cleanBillNo}_${data.date}.xlsx`;
+  const cleanBillNo = (data.billNumber || 'BON').replace(/[^a-zA-Z0-9_-]/g, '_') || 'BON';
+  const safeDate = (data.date || new Date().toISOString().split('T')[0]).replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safeFilename = filename || `BL_FINAL_${cleanBillNo}_${safeDate}.xlsx`;
   XLSX.writeFile(wb, safeFilename);
 }
 
@@ -270,9 +310,9 @@ export function formatCurrencyFR(val: number, decimals: number = 2): string {
 
 export function formatFinalBillWhatsAppMessage(data: FinalBillExportData): string {
   let msg = `*FACTURE ET BON DE RECEPTION DEFINITIF (POINTAGE SURFACE)*\n`;
-  msg += `Client : *${data.client}*\n`;
-  msg += `N° Bon / Commande : *${data.billNumber}*\n`;
-  msg += `Date : ${data.date}\n`;
+  msg += `Client : *${data.client || 'Client Inconnu'}*\n`;
+  msg += `N° Bon / Commande : *${data.billNumber || 'Sans Numéro'}*\n`;
+  msg += `Date : ${data.date || ''}\n`;
   msg += `------------------------------------\n`;
   msg += `Total articles : ${data.rows.length}\n`;
   msg += `Pieces commandees : ${data.totalOrderedQty}\n`;
@@ -290,11 +330,14 @@ export function formatFinalBillWhatsAppMessage(data: FinalBillExportData): strin
   }
   msg += `------------------------------------\n\n`;
 
-  // List discrepancies or all items
+  // List discrepancies or all items (capped at 20 to prevent WhatsApp URL overflow)
   const anomalies = data.rows.filter((r) => r.status !== 'CONFORME');
+  const MAX_ANOMALIES_DISPLAY = 20;
+
   if (anomalies.length > 0) {
     msg += `*DETAIL DES ANOMALIES & ECARTS (${anomalies.length}) :*\n`;
-    anomalies.forEach((a, idx) => {
+    const toDisplay = anomalies.slice(0, MAX_ANOMALIES_DISPLAY);
+    toDisplay.forEach((a, idx) => {
       msg += `${idx + 1}. [${a.code}] ${a.designation}\n`;
       msg += `   Recu : ${a.actualQty} / ${a.orderedQty} (Ecart: ${a.diffQty > 0 ? `+${a.diffQty}` : a.diffQty})\n`;
       if (a.unitPrice != null) {
@@ -302,6 +345,10 @@ export function formatFinalBillWhatsAppMessage(data: FinalBillExportData): strin
       }
       msg += `   Statut : ${a.status} (${a.observation})\n\n`;
     });
+
+    if (anomalies.length > MAX_ANOMALIES_DISPLAY) {
+      msg += `_... et ${anomalies.length - MAX_ANOMALIES_DISPLAY} autres anomalies (voir fichier Excel .xlsx complet ci-joint)._\n\n`;
+    }
   } else {
     msg += `*Toutes les lignes sont conformes au pointage de surface.*\n\n`;
   }
@@ -325,7 +372,7 @@ export async function shareFinalBillViaWhatsAppOrFile(
   if (typeof navigator !== 'undefined' && typeof navigator.share === 'function' && typeof navigator.canShare === 'function') {
     try {
       const blob = getFinalBillExcelBlob(data);
-      const cleanBillNo = data.billNumber.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const cleanBillNo = (data.billNumber || 'BON').replace(/[^a-zA-Z0-9_-]/g, '_') || 'BON';
       const file = new File([blob], `BL_FINAL_${cleanBillNo}.xlsx`, {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });
@@ -338,8 +385,11 @@ export async function shareFinalBillViaWhatsAppOrFile(
         });
         return { method: 'share', success: true };
       }
-    } catch {
-      // Fallback to direct WhatsApp URL if share cancelled or unsupported
+    } catch (err: any) {
+      // User cancelled native share prompt -> not an error
+      if (err && err.name === 'AbortError') {
+        return { method: 'share', success: false };
+      }
     }
   }
 
