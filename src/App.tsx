@@ -15,6 +15,7 @@ import {
   useLineEvents,
   useBillEvents,
   useBillContainers,
+  useEntityContainers,
   useBillAudit,
   useBillOverrides,
   useAllSessionOverrides,
@@ -25,6 +26,7 @@ import {
   useEntityLines,
   useEntityEvents,
   addCountEvent,
+  batchAssignContainerAndCount,
   undoLastCount,
   undoLastBillCount,
   resetLineStageCount,
@@ -69,6 +71,7 @@ import type {
   PointageOutcome,
   ChangeReason,
   SearchMode,
+  TransportContainer,
 } from './types';
 
 import {
@@ -110,6 +113,7 @@ import {
   IconTrash,
   IconBag,
   IconRotate,
+  IconTag,
 } from './icons';
 
 import {
@@ -1906,6 +1910,201 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
 }
 
 // ============================================================
+// BATCH CONTAINER MODAL (Mise en Colis / Chouala groupée)
+// ============================================================
+function BatchContainerModal({
+  isOpen,
+  onClose,
+  billId,
+  client,
+  stage,
+  selectedLines,
+  containers,
+  onSuccess,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  billId: number;
+  client?: string;
+  stage: Stage;
+  selectedLines: OrderLine[];
+  containers: TransportContainer[];
+  onSuccess: (processedCount: number, unitsAdded: number, label: string) => void;
+}) {
+  const [targetContainerId, setTargetContainerId] = useState<number | null | 'unselected'>('unselected');
+  const [qtyMode, setQtyMode] = useState<'remaining' | 'full'>('remaining');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleCreateContainer = async (type: 'chouala' | 'carton') => {
+    const newC = await createTransportContainer(billId, client, undefined, type);
+    setTargetContainerId(newC.id!);
+  };
+
+  const handleConfirm = async () => {
+    if (targetContainerId === 'unselected' || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const containerId = targetContainerId;
+      const res = await batchAssignContainerAndCount(selectedLines, stage, containerId, {
+        mode: qtyMode,
+      });
+
+      let label = 'Hors Colis (Vrac)';
+      if (containerId !== null) {
+        const found = containers.find((c) => c.id === containerId);
+        label = found ? found.label : `Colis #${containerId}`;
+      }
+
+      onSuccess(res.processedCount, res.unitsAdded, label);
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const selectedContainerObj =
+    targetContainerId !== 'unselected' && targetContainerId !== null
+      ? containers.find((c) => c.id === targetContainerId)
+      : null;
+  const targetLabel =
+    targetContainerId === null
+      ? 'Hors Colis (Vrac)'
+      : selectedContainerObj
+      ? selectedContainerObj.label
+      : '';
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+        <div className="flex justify-between items-center mb-2">
+          <div className="font-bold text-base flex items-center gap-2">
+            <IconBag size={18} style={{ color: 'var(--accent)' }} />
+            <span>Rangement groupé ({selectedLines.length} articles)</span>
+          </div>
+          <button className="btn btn-xs btn-ghost btn-icon" onClick={onClose} aria-label="Fermer">
+            <IconX size={16} />
+          </button>
+        </div>
+
+        <p className="text-xs text-muted mb-3">
+          Affecter ces {selectedLines.length} article{selectedLines.length > 1 ? 's' : ''} à un sac (Chouala), un carton ou en vrac.
+        </p>
+
+        {/* Section 1: Destination Colis */}
+        <div className="mb-3">
+          <div className="text-xs font-bold text-muted mb-2">1. CHOISIR LE COLIS DE DESTINATION :</div>
+          <div className="flex flex-wrap gap-2 mb-2">
+            <button
+              type="button"
+              className={`container-tag ${targetContainerId === null ? 'selected' : ''}`}
+              style={{ padding: '6px 12px', borderRadius: 'var(--radius-pill)', cursor: 'pointer' }}
+              onClick={() => setTargetContainerId(null)}
+            >
+              <span className="flex items-center gap-1">
+                {targetContainerId === null && <IconCheck size={12} />}
+                <IconTag size={12} />
+                <span>Hors Colis (Vrac)</span>
+              </span>
+            </button>
+
+            {containers.map((c) => {
+              const isChouala = c.type === 'chouala';
+              const isSelected = targetContainerId === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`container-tag ${isChouala ? 'chouala' : ''} ${isSelected ? 'selected' : ''}`}
+                  style={{ padding: '6px 12px', borderRadius: 'var(--radius-pill)', cursor: 'pointer' }}
+                  onClick={() => setTargetContainerId(c.id!)}
+                >
+                  <span className="flex items-center gap-1">
+                    {isSelected && <IconCheck size={12} />}
+                    {isChouala ? <IconBag size={13} /> : <IconBox size={13} />}
+                    <span>{c.label}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-2 mt-2">
+            <button
+              type="button"
+              className="btn btn-xs btn-secondary flex items-center gap-1"
+              style={{ borderStyle: 'dashed' }}
+              onClick={() => handleCreateContainer('chouala')}
+            >
+              <IconPlus size={12} /> Nouveau Sac (Chouala)
+            </button>
+            <button
+              type="button"
+              className="btn btn-xs btn-secondary flex items-center gap-1"
+              style={{ borderStyle: 'dashed' }}
+              onClick={() => handleCreateContainer('carton')}
+            >
+              <IconPlus size={12} /> Nouveau Carton
+            </button>
+          </div>
+        </div>
+
+        {/* Section 2: Mode de Quantité */}
+        <div className="mb-3 pt-2" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          <div className="text-xs font-bold text-muted mb-2">2. QUANTITÉ À VALIDER :</div>
+          <div className="flex flex-col gap-2">
+            <label className="flex items-start gap-2 cursor-pointer text-sm">
+              <input
+                type="radio"
+                name="qtyMode"
+                checked={qtyMode === 'remaining'}
+                onChange={() => setQtyMode('remaining')}
+                style={{ marginTop: 2 }}
+              />
+              <div>
+                <div className="font-semibold">Compléter la quantité commandée (Reliquat restant)</div>
+                <div className="text-xs text-muted">Valide les unités manquantes pour chaque article sélectionné</div>
+              </div>
+            </label>
+            <label className="flex items-start gap-2 cursor-pointer text-sm">
+              <input
+                type="radio"
+                name="qtyMode"
+                checked={qtyMode === 'full'}
+                onChange={() => setQtyMode('full')}
+                style={{ marginTop: 2 }}
+              />
+              <div>
+                <div className="font-semibold">Quantité totale commandée (Forcer 100%)</div>
+                <div className="text-xs text-muted">Ajoute directement la totalité de la commande pour chacun</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        {/* Section 3: Action Confirmation */}
+        <button
+          type="button"
+          className="btn btn-primary btn-full btn-lg mt-2 flex items-center justify-center gap-2"
+          disabled={targetContainerId === 'unselected' || isSubmitting}
+          onClick={handleConfirm}
+        >
+          <IconCheck size={18} />
+          <span>
+            {isSubmitting
+              ? 'Enregistrement...'
+              : targetContainerId === 'unselected'
+              ? 'Choisissez un colis ci-dessus'
+              : `VALIDER DANS ${targetLabel.toUpperCase()}`}
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // BILL SCREEN
 // ============================================================
 function BillScreen({ setToast }: { setToast: (m: string) => void }) {
@@ -1916,13 +2115,20 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const lines = useBillLines(billId);
   const events = useBillEvents(billId);
   const overrides = useBillOverrides(billId);
+  const containers = useBillContainers(billId);
   const entityBills = useEntityBills(bill?.client);
   const entityLines = useEntityLines(bill?.client);
   const entityEvents = useEntityEvents(bill?.client);
+  const entityContainers = useEntityContainers(bill?.client);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const initialStage = (searchParams.get('stage') || sessionStorage.getItem(`pointage_stage_${billId}`) || 'preparation') as Stage;
   const [stage, setStage] = useState<Stage>(initialStage);
+
+  const [selectedContainerFilter, setSelectedContainerFilter] = useState<number | 'all' | 'loose'>('all');
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedLineIds, setSelectedLineIds] = useState<Set<number>>(new Set());
+  const [showBatchModal, setShowBatchModal] = useState(false);
 
   const handleStageChange = (s: Stage) => {
     setStage(s);
@@ -2050,6 +2256,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
     },
   });
 
+  const activeContainers = searchScope === 'all' && entityContainers && entityContainers.length > 0 ? entityContainers : containers;
   const activeEvents = searchScope === 'all' && entityEvents && entityEvents.length > 0 ? entityEvents : events;
   const eventsByLine = new Map<number, CountEvent[]>();
   for (const e of activeEvents) {
@@ -2061,8 +2268,99 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   // Active lines pool based on scope
   const activeLinesPool = searchScope === 'all' && entityLines && entityLines.length > 0 ? entityLines : lines;
 
+  // Map lineId -> array of container labels or ['VRAC', 'HORS COLIS']
+  const lineContainerMap = React.useMemo(() => {
+    const map = new Map<number, string[]>();
+    const containerMap = new Map<number, TransportContainer>();
+    for (const c of activeContainers) {
+      if (c.id != null) containerMap.set(c.id, c);
+    }
+
+    for (const line of activeLinesPool) {
+      if (!line.id) continue;
+      const evts = eventsByLine.get(line.id) || [];
+      const activeEvts = evts.filter((e) => !e.undone && e.quantity > 0);
+      const containerNames = new Set<string>();
+      let hasLoose = false;
+
+      for (const e of activeEvts) {
+        if (e.containerId) {
+          const c = containerMap.get(e.containerId);
+          if (c) {
+            containerNames.add(c.label);
+            if (c.type === 'chouala') {
+              containerNames.add('CHOUALA');
+              containerNames.add('SAC');
+            } else {
+              containerNames.add('CARTON');
+            }
+          }
+        } else {
+          hasLoose = true;
+        }
+      }
+
+      if (hasLoose || activeEvts.length === 0) {
+        containerNames.add('HORS COLIS');
+        containerNames.add('VRAC');
+      }
+
+      map.set(line.id, Array.from(containerNames));
+    }
+    return map;
+  }, [activeContainers, activeLinesPool, eventsByLine]);
+
+  // Colis stats for the filter pills
+  const containerStats = React.useMemo(() => {
+    const stats = new Map<number | 'loose', { linesCount: number; totalUnits: number }>();
+    for (const c of activeContainers) {
+      if (c.id != null) stats.set(c.id, { linesCount: 0, totalUnits: 0 });
+    }
+    stats.set('loose', { linesCount: 0, totalUnits: 0 });
+
+    for (const line of activeLinesPool) {
+      if (!line.id) continue;
+      const evts = eventsByLine.get(line.id) || [];
+      const activeEvts = evts.filter((e) => !e.undone && e.quantity > 0);
+      const seenContainers = new Set<number | 'loose'>();
+
+      for (const e of activeEvts) {
+        if (e.containerId && stats.has(e.containerId)) {
+          seenContainers.add(e.containerId);
+          stats.get(e.containerId)!.totalUnits += e.quantity;
+        } else {
+          seenContainers.add('loose');
+          stats.get('loose')!.totalUnits += e.quantity;
+        }
+      }
+
+      if (activeEvts.length === 0) {
+        seenContainers.add('loose');
+      }
+
+      for (const cId of seenContainers) {
+        const s = stats.get(cId);
+        if (s) s.linesCount += 1;
+      }
+    }
+
+    return stats;
+  }, [activeContainers, activeLinesPool, eventsByLine]);
+
   // Filter and sort lines
   let displayLines = [...activeLinesPool];
+
+  // Container pill filter
+  if (selectedContainerFilter !== 'all') {
+    if (selectedContainerFilter === 'loose') {
+      displayLines = displayLines.filter((l) => lineContainerMap.get(l.id!)?.includes('VRAC'));
+    } else {
+      const targetC = activeContainers.find((c) => c.id === selectedContainerFilter);
+      if (targetC) {
+        displayLines = displayLines.filter((l) => lineContainerMap.get(l.id!)?.includes(targetC.label));
+      }
+    }
+  }
 
   // Search
   if (searchQuery.trim()) {
@@ -2071,7 +2369,8 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
       searchQuery,
       searchMode,
       searchScope === 'current' ? billId : undefined,
-      searchScope === 'current' ? overrides : undefined
+      searchScope === 'current' ? overrides : undefined,
+      lineContainerMap
     );
   }
 
@@ -2218,6 +2517,52 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         )}
 
+        {/* Transport Containers Filter Pills (Chouala, Carton & Vrac) */}
+        {activeContainers.length > 0 && (
+          <div className="colis-filter-bar">
+            <button
+              type="button"
+              className={`colis-filter-pill ${selectedContainerFilter === 'all' ? 'active' : ''}`}
+              onClick={() => setSelectedContainerFilter('all')}
+            >
+              <span>Tous</span>
+              <span className="colis-pill-badge">{activeLinesPool.length}</span>
+            </button>
+
+            {activeContainers.map((c) => {
+              const st = containerStats.get(c.id!) || { linesCount: 0, totalUnits: 0 };
+              const isChouala = c.type === 'chouala';
+              const isSelected = selectedContainerFilter === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`colis-filter-pill ${isChouala ? 'chouala' : ''} ${isSelected ? 'active' : ''}`}
+                  onClick={() => setSelectedContainerFilter(isSelected ? 'all' : c.id!)}
+                >
+                  <span className="flex items-center gap-1">
+                    {isChouala ? <IconBag size={12} /> : <IconBox size={12} />}
+                    <span>{c.label}</span>
+                  </span>
+                  <span className="colis-pill-badge">{st.linesCount}</span>
+                </button>
+              );
+            })}
+
+            <button
+              type="button"
+              className={`colis-filter-pill loose ${selectedContainerFilter === 'loose' ? 'active' : ''}`}
+              onClick={() => setSelectedContainerFilter(selectedContainerFilter === 'loose' ? 'all' : 'loose')}
+            >
+              <span className="flex items-center gap-1">
+                <IconTag size={12} />
+                <span>Hors Colis</span>
+              </span>
+              <span className="colis-pill-badge">{containerStats.get('loose')?.linesCount || 0}</span>
+            </button>
+          </div>
+        )}
+
         {/* Filters and Visibility Toggle */}
         <div className="flex justify-between items-center mb-3">
           <div className="flex gap-2">
@@ -2235,6 +2580,22 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               {showQuantities ? <IconEye size={15} /> : <IconEyeOff size={15} />}
               <span>{showQuantities ? 'Visibles' : 'Masquées'}</span>
             </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${isSelectionMode ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
+              onClick={() => {
+                if (isSelectionMode) {
+                  setIsSelectionMode(false);
+                  setSelectedLineIds(new Set());
+                } else {
+                  setIsSelectionMode(true);
+                }
+              }}
+              title="Sélection multiple d'articles"
+            >
+              <IconCheck size={14} />
+              <span>{isSelectionMode ? 'Terminer' : 'Sélectionner'}</span>
+            </button>
           </div>
           <span className="text-xs text-muted font-bold" style={{ alignSelf: 'center' }}>
             {searchScope === 'all'
@@ -2243,92 +2604,203 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </span>
         </div>
 
+        {/* Selection Toolbar when in multi-select mode */}
+        {isSelectionMode && (
+          <div
+            className="selection-toolbar flex items-center justify-between p-2 mb-2"
+            style={{
+              background: 'rgba(16, 185, 129, 0.1)',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+            }}
+          >
+            <button
+              type="button"
+              className="btn btn-xs btn-ghost"
+              style={{ fontWeight: 700, color: 'var(--accent)' }}
+              onClick={() => {
+                const allDisplayedIds = displayLines.map((l) => l.id!).filter(Boolean);
+                const allSelected =
+                  allDisplayedIds.length > 0 && allDisplayedIds.every((id) => selectedLineIds.has(id));
+                if (allSelected) {
+                  setSelectedLineIds(new Set());
+                } else {
+                  setSelectedLineIds(new Set(allDisplayedIds));
+                }
+              }}
+            >
+              {displayLines.length > 0 && displayLines.every((l) => selectedLineIds.has(l.id!))
+                ? 'Tout décocher'
+                : `Tout cocher (${displayLines.length})`}
+            </button>
+            <span className="text-xs font-bold" style={{ color: 'var(--accent)' }}>
+              {selectedLineIds.size} sélectionné{selectedLineIds.size > 1 ? 's' : ''}
+            </span>
+            <button
+              type="button"
+              className="btn btn-xs btn-ghost text-muted"
+              onClick={() => {
+                setIsSelectionMode(false);
+                setSelectedLineIds(new Set());
+              }}
+            >
+              Annuler
+            </button>
+          </div>
+        )}
+
         {/* Lines */}
         {displayLines.map((line) => {
           const evts = eventsByLine.get(line.id!) || [];
           const stageTotal = sumStageEvents(evts, stage);
           const disc = calcDiscrepancy(line, stageTotal);
+          const isSelected = selectedLineIds.has(line.id!);
+
+          const handleCardClick = () => {
+            if (isSelectionMode) {
+              hapticTap('light');
+              setSelectedLineIds((prev) => {
+                const next = new Set(prev);
+                if (next.has(line.id!)) {
+                  next.delete(line.id!);
+                } else {
+                  next.add(line.id!);
+                }
+                return next;
+              });
+            } else {
+              nav(`/bill/${line.billId}/line/${line.id}?stage=${stage}`);
+            }
+          };
 
           return (
             <div
               key={line.id}
               id={`line-${line.id}`}
-              className={`product-card ${line.id === lastUpdatedLineId ? 'just-updated-card' : ''}`}
-              onClick={() => nav(`/bill/${line.billId}/line/${line.id}?stage=${stage}`)}
+              className={`product-card ${isSelected ? 'selected-line-card' : ''} ${line.id === lastUpdatedLineId ? 'just-updated-card' : ''}`}
+              onClick={handleCardClick}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1">
-                  {line.billId !== billId && (
-                    <span className="badge" style={{ background: 'var(--accent-glow)', color: 'var(--accent)', fontWeight: 800, fontSize: '0.72rem' }}>
-                      {entityBills?.find((b) => b.id === line.billId)?.billNumber || `BL #${line.billId}`}
+              <div className="flex items-start gap-2">
+                {isSelectionMode && (
+                  <div
+                    className={`selection-checkbox ${isSelected ? 'checked' : ''}`}
+                    style={{ marginTop: 2 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCardClick();
+                    }}
+                  >
+                    {isSelected && <IconCheck size={13} />}
+                  </div>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {line.billId !== billId && (
+                        <span className="badge" style={{ background: 'var(--accent-glow)', color: 'var(--accent)', fontWeight: 800, fontSize: '0.72rem' }}>
+                          {entityBills?.find((b) => b.id === line.billId)?.billNumber || `BL #${line.billId}`}
+                        </span>
+                      )}
+                      <span className="line-no">N°{line.no}</span>
+                      {line.page != null && <span className="line-page">PAGE {line.page}</span>}
+                    </div>
+                    <div className="flex gap-1 flex-wrap">
+                      {line.status !== 'active' && (
+                        <span className={`badge badge-${line.status === 'out_of_stock' ? 'out-of-stock' : line.status === 'cancelled' ? 'cancelled' : line.status === 'not_found' ? 'not-found' : 'removed'} flex items-center gap-1`}>
+                          {line.status === 'out_of_stock' ? <><IconBan size={11} /> RUPTURE</> :
+                           line.status === 'cancelled' ? <><IconBan size={11} /> ANNULÉ</> :
+                           line.status === 'not_found' ? <><IconSearch size={11} /> INTROUVABLE</> : <><IconX size={11} /> SUPPRIMÉ</>}
+                        </span>
+                      )}
+                      {disc.isModified && <span className="badge badge-modified flex items-center gap-1"><IconPencil size={11} /> MODIFIÉ</span>}
+                      {line.status === 'active' && disc.isExact && stageTotal > 0 && (
+                        <span className="badge badge-exact flex items-center gap-1"><IconCheck size={11} /> EXACT</span>
+                      )}
+                      {line.status === 'active' && disc.isShort && (
+                        <span className="badge badge-short flex items-center gap-1"><IconWarning size={11} /> {showQuantities ? `${disc.remaining} MANQ` : 'MANQUANT'}</span>
+                      )}
+                      {line.status === 'active' && disc.isOver && (
+                        <span className="badge badge-over">{showQuantities ? `${disc.over} EXCÉD` : 'EXCÉDENT'}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {line.reference && <div className="line-ref">REF: {line.reference}</div>}
+                  <div className="line-designation">{line.designation}</div>
+
+                  {/* Packaging Container Badges */}
+                  {(() => {
+                    const lineContainers = lineContainerMap.get(line.id!) || [];
+                    const matched = activeContainers.filter((c) => lineContainers.includes(c.label));
+                    if (matched.length > 0) {
+                      return (
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          {matched.map((c) => (
+                            <span
+                              key={c.id}
+                              className={`badge ${c.type === 'chouala' ? 'badge-chouala' : 'badge-carton'} flex items-center gap-1`}
+                              title={`Emballé dans ${c.label}`}
+                            >
+                              {c.type === 'chouala' ? <IconBag size={11} /> : <IconBox size={11} />}
+                              <span>{c.label}</span>
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    } else if (stage !== 'preparation' && stageTotal > 0) {
+                      return (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className="badge badge-loose flex items-center gap-1">
+                            <IconTag size={10} />
+                            <span>Hors Colis</span>
+                          </span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
+                  <div className="line-qty-row">
+                    <span className="qty-label">Attendu</span>
+                    <span className="qty-value">{showQuantities ? line.orderedQty : '•••'}</span>
+                    <span className="qty-label">
+                      {stage === 'preparation' ? 'Préparé' : stage === 'chargement' ? 'Chargé' : 'Pointé'}
                     </span>
-                  )}
-                  <span className="line-no">N°{line.no}</span>
-                  {line.page != null && <span className="line-page">PAGE {line.page}</span>}
-                </div>
-                <div className="flex gap-1">
-                  {line.status !== 'active' && (
-                    <span className={`badge badge-${line.status === 'out_of_stock' ? 'out-of-stock' : line.status === 'cancelled' ? 'cancelled' : line.status === 'not_found' ? 'not-found' : 'removed'} flex items-center gap-1`}>
-                      {line.status === 'out_of_stock' ? <><IconBan size={11} /> RUPTURE</> :
-                       line.status === 'cancelled' ? <><IconBan size={11} /> ANNULÉ</> :
-                       line.status === 'not_found' ? <><IconSearch size={11} /> INTROUVABLE</> : <><IconX size={11} /> SUPPRIMÉ</>}
+                    <span className="qty-value" style={{
+                      color: disc.isExact && stageTotal > 0 ? 'var(--success)' :
+                             disc.isOver ? 'var(--over)' :
+                             disc.isShort ? 'var(--warning)' : 'var(--text)'
+                    }}>
+                      {stageTotal}
                     </span>
-                  )}
-                  {disc.isModified && <span className="badge badge-modified flex items-center gap-1"><IconPencil size={11} /> MODIFIÉ</span>}
-                  {line.status === 'active' && disc.isExact && stageTotal > 0 && (
-                    <span className="badge badge-exact flex items-center gap-1"><IconCheck size={11} /> EXACT</span>
-                  )}
-                  {line.status === 'active' && disc.isShort && (
-                    <span className="badge badge-short flex items-center gap-1"><IconWarning size={11} /> {showQuantities ? `${disc.remaining} MANQ` : 'MANQUANT'}</span>
-                  )}
-                  {line.status === 'active' && disc.isOver && (
-                    <span className="badge badge-over">{showQuantities ? `${disc.over} EXCÉD` : 'EXCÉDENT'}</span>
-                  )}
+                  </div>
+
+                  {/* Visual Progress Micro-Gauge Bar */}
+                  <div
+                    className="product-micro-gauge"
+                    style={{
+                      marginTop: 8,
+                      height: 5,
+                      background: 'var(--border-subtle, rgba(255, 255, 255, 0.08))',
+                      borderRadius: 999,
+                      overflow: 'hidden',
+                      display: 'flex',
+                      width: '100%',
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${Math.min(100, line.orderedQty > 0 ? (stageTotal / line.orderedQty) * 100 : (stageTotal > 0 ? 100 : 0))}%`,
+                        background: disc.isExact && stageTotal > 0 ? 'var(--success)' :
+                                   disc.isOver ? 'var(--over)' :
+                                   stageTotal > 0 ? 'var(--warning)' : 'transparent',
+                        borderRadius: 999,
+                        transition: 'width 0.25s ease',
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
-
-              {line.reference && <div className="line-ref">REF: {line.reference}</div>}
-              <div className="line-designation">{line.designation}</div>
-
-              <div className="line-qty-row">
-                <span className="qty-label">Attendu</span>
-                <span className="qty-value">{showQuantities ? line.orderedQty : '•••'}</span>
-                <span className="qty-label">
-                  {stage === 'preparation' ? 'Préparé' : stage === 'chargement' ? 'Chargé' : 'Pointé'}
-                </span>
-                <span className="qty-value" style={{
-                  color: disc.isExact && stageTotal > 0 ? 'var(--success)' :
-                         disc.isOver ? 'var(--over)' :
-                         disc.isShort ? 'var(--warning)' : 'var(--text)'
-                }}>
-                  {stageTotal}
-                </span>
-              </div>
-
-              {/* Visual Progress Micro-Gauge Bar */}
-              <div
-                className="product-micro-gauge"
-                style={{
-                  marginTop: 8,
-                  height: 5,
-                  background: 'var(--border-subtle, rgba(255, 255, 255, 0.08))',
-                  borderRadius: 999,
-                  overflow: 'hidden',
-                  display: 'flex',
-                  width: '100%',
-                }}
-              >
-                <div
-                  style={{
-                    height: '100%',
-                    width: `${Math.min(100, line.orderedQty > 0 ? (stageTotal / line.orderedQty) * 100 : (stageTotal > 0 ? 100 : 0))}%`,
-                    background: disc.isExact && stageTotal > 0 ? 'var(--success)' :
-                               disc.isOver ? 'var(--over)' :
-                               stageTotal > 0 ? 'var(--warning)' : 'transparent',
-                    borderRadius: 999,
-                    transition: 'width 0.25s ease',
-                  }}
-                />
               </div>
             </div>
           );
@@ -2382,22 +2854,85 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         )}
       </div>
 
-      <div className="bottom-bar">
-        <button
-          className="btn btn-primary"
-          style={{ flex: 2 }}
-          onClick={() => nav(`/scan?billId=${billId}&stage=${stage}`)}
-        >
-          <IconScan size={18} /> SCANNER
-        </button>
-        <button
-          className="btn btn-secondary"
-          style={{ flex: 1 }}
-          onClick={() => nav(`/bill/${billId}/extras?stage=${stage}`)}
-        >
-          <IconPlus size={16} /> EXTRA
-        </button>
-      </div>
+      {/* Floating Batch Action Bar when items are selected */}
+      {selectedLineIds.size > 0 ? (
+        <div className="batch-action-bar">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="badge badge-accent font-bold" style={{ fontSize: '0.85rem', padding: '4px 10px' }}>
+                {selectedLineIds.size}
+              </span>
+              <span className="text-xs font-semibold text-secondary">
+                article{selectedLineIds.size > 1 ? 's' : ''} sélectionné{selectedLineIds.size > 1 ? 's' : ''}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              {stage === 'pointage' && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary flex items-center gap-1"
+                  style={{ fontWeight: 700 }}
+                  onClick={async () => {
+                    const selectedLines = activeLinesPool.filter((l) => selectedLineIds.has(l.id!));
+                    const res = await batchAssignContainerAndCount(selectedLines, 'pointage', null, {
+                      mode: 'remaining',
+                      outcome: 'accepted',
+                    });
+                    playSuccessChime();
+                    showToast(`✓ ${res.processedCount} articles validés en pointage`, setToast);
+                    setSelectedLineIds(new Set());
+                    setIsSelectionMode(false);
+                  }}
+                >
+                  <IconCheck size={14} /> Pointer Tout
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-primary flex items-center gap-1.5"
+                style={{ padding: '8px 14px', fontSize: '0.85rem', fontWeight: 700 }}
+                onClick={() => setShowBatchModal(true)}
+              >
+                <IconBag size={15} />
+                <span>Mettre en Colis</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="bottom-bar">
+          <button
+            className="btn btn-primary"
+            style={{ flex: 2 }}
+            onClick={() => nav(`/scan?billId=${billId}&stage=${stage}`)}
+          >
+            <IconScan size={18} /> SCANNER
+          </button>
+          <button
+            className="btn btn-secondary"
+            style={{ flex: 1 }}
+            onClick={() => nav(`/bill/${billId}/extras?stage=${stage}`)}
+          >
+            <IconPlus size={16} /> EXTRA
+          </button>
+        </div>
+      )}
+
+      <BatchContainerModal
+        isOpen={showBatchModal}
+        onClose={() => setShowBatchModal(false)}
+        billId={billId}
+        client={bill.client}
+        stage={stage}
+        selectedLines={activeLinesPool.filter((l) => selectedLineIds.has(l.id!))}
+        containers={activeContainers}
+        onSuccess={(processedCount, unitsAdded, label) => {
+          playSuccessChime();
+          showToast(`✓ ${processedCount} articles (${unitsAdded} unités) rangés dans ${label}`, setToast);
+          setSelectedLineIds(new Set());
+          setIsSelectionMode(false);
+        }}
+      />
 
       <QRSyncModal
         isOpen={showQRSync}

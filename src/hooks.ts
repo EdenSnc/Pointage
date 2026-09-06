@@ -543,6 +543,72 @@ export async function createTransportContainer(
   return { ...container, id };
 }
 
+/**
+ * Batch assigns a set of lines to a transport container (Chouala, Carton, or Loose)
+ * and records count events up to their ordered quantity (or specified mode).
+ */
+export async function batchAssignContainerAndCount(
+  lines: OrderLine[],
+  stage: Stage,
+  containerId: number | null,
+  options?: {
+    mode?: 'remaining' | 'full';
+    outcome?: PointageOutcome | null;
+  }
+): Promise<{ processedCount: number; unitsAdded: number }> {
+  const mode = options?.mode || 'remaining';
+  const outcome = options?.outcome ?? (stage === 'pointage' ? 'accepted' : null);
+
+  let processedCount = 0;
+  let unitsAdded = 0;
+
+  await db.transaction('rw', [db.countEvents, db.auditEvents], async () => {
+    for (const line of lines) {
+      if (!line.id) continue;
+
+      const lineEvents = await db.countEvents
+        .where('orderLineId')
+        .equals(line.id)
+        .toArray();
+      const activeStageEvents = lineEvents.filter((e) => e.stage === stage && !e.undone);
+      const currentStageTotal = activeStageEvents.reduce((s, e) => s + e.quantity, 0);
+
+      let targetQtyToAdd = 0;
+      if (mode === 'full') {
+        targetQtyToAdd = line.orderedQty;
+      } else {
+        targetQtyToAdd = Math.max(0, line.orderedQty - currentStageTotal);
+      }
+
+      // Update existing active events in this stage to the selected container
+      for (const ev of activeStageEvents) {
+        if (ev.containerId !== containerId) {
+          await db.countEvents.update(ev.id!, { containerId });
+        }
+      }
+
+      // If more units need to be added to reach the desired quantity
+      if (targetQtyToAdd > 0) {
+        await db.countEvents.add({
+          billId: line.billId,
+          orderLineId: line.id,
+          stage,
+          quantity: targetQtyToAdd,
+          containerId,
+          outcome,
+          undone: false,
+          createdAt: new Date().toISOString(),
+        });
+        unitsAdded += targetQtyToAdd;
+      }
+
+      processedCount++;
+    }
+  });
+
+  return { processedCount, unitsAdded };
+}
+
 export async function substituteOrderLine(
   originalLineId: number,
   substituteLineId: number,
@@ -672,7 +738,8 @@ export function searchLines(
   query: string,
   mode: 'smart' | 'no' | 'ref' | 'ean' | 'name',
   billId?: number,
-  overrides?: BillIdentifierOverride[]
+  overrides?: BillIdentifierOverride[],
+  lineContainerMap?: Map<number, string[]>
 ): OrderLine[] {
   const q = query.trim().toLowerCase();
   if (!q) return lines;
@@ -715,17 +782,43 @@ export function searchLines(
     );
   }
   if (mode === 'name') {
-    return lines.filter((l) =>
-      l.designation.toLowerCase().includes(q)
-    );
+    return lines.filter((l) => {
+      if (l.designation.toLowerCase().includes(q)) return true;
+      if (lineContainerMap) {
+        const containers = lineContainerMap.get(l.id!) || [];
+        return containers.some((c) => c.toLowerCase().includes(q));
+      }
+      return false;
+    });
   }
 
   // SMART mode
   const scored = lines
-    .map((l) => ({
-      line: l,
-      score: smartSearchScore(l, q, billId),
-    }))
+    .map((l) => {
+      let score = smartSearchScore(l, q, billId);
+
+      // Check container / chouala / carton / vrac matching
+      if (lineContainerMap) {
+        const containers = lineContainerMap.get(l.id!) || [];
+        for (const cLabel of containers) {
+          const cLow = cLabel.toLowerCase();
+          if (cLow === q) {
+            // Exact container match (e.g. "sac a", "carton 1") -> high priority 2.5
+            score = score > 0 ? Math.min(score, 2.5) : 2.5;
+            break;
+          } else if (
+            cLow.includes(q) ||
+            (q.length >= 3 && q.includes(cLow))
+          ) {
+            // Partial container match (e.g. "sac", "chouala", "carton", "vrac") -> priority 5.5
+            score = score > 0 ? Math.min(score, 5.5) : 5.5;
+            break;
+          }
+        }
+      }
+
+      return { line: l, score };
+    })
     .filter((s) => s.score > 0)
     .sort((a, b) => a.score - b.score);
 

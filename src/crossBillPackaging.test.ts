@@ -2,8 +2,10 @@
 // POINTAGE — Cross-Bill Product Search & Shared Packaging Tests
 // ============================================================
 
+import 'fake-indexeddb/auto';
 import { describe, it, expect } from 'vitest';
-import { searchLines } from './hooks';
+import { searchLines, batchAssignContainerAndCount } from './hooks';
+import { db } from './db';
 import type { OrderLine, CountEvent, Bill, TransportContainer } from './types';
 
 function createDummyLine(overrides: Partial<OrderLine>): OrderLine {
@@ -283,5 +285,71 @@ describe('Shared Packaging Boxes / Cartons Across Bills for Same Seller', () => 
     expect(note).toContain('Écart: +25.50 DA');
     expect(note).toContain("Client a payé d'avance");
     expect(note).toContain('Mentionné sur bon');
+  });
+
+  it('searches lines by container name (SAC A, CHOUALA, CARTON, VRAC) using lineContainerMap', () => {
+    const linesToSearch = [
+      createDummyLine({ id: 601, designation: 'Sac à dos Avengers Marvel', reference: 'SAC-AVENG-01' }),
+      createDummyLine({ id: 602, designation: 'Sac à dos Reine des Neiges', reference: 'SAC-FROZEN-02' }),
+      createDummyLine({ id: 603, designation: 'Classeur 4 Anneaux Noir', reference: 'CLAS-04' }),
+      createDummyLine({ id: 604, designation: 'Trousse Scolaire 2 Zip', reference: 'TR-02' }),
+    ];
+
+    // lineContainerMap: line 601 and 602 are in SAC A (Chouala)
+    // line 603 is in CARTON A
+    // line 604 is in VRAC (Hors Colis)
+    const containerMap = new Map<number, string[]>([
+      [601, ['SAC A', 'CHOUALA', 'SAC']],
+      [602, ['SAC A', 'CHOUALA', 'SAC']],
+      [603, ['CARTON A', 'CARTON']],
+      [604, ['HORS COLIS', 'VRAC']],
+    ]);
+
+    // 1. Search for "SAC A" -> returns lines 601 and 602
+    const sacAMatches = searchLines(linesToSearch, 'SAC A', 'smart', 1, undefined, containerMap);
+    expect(sacAMatches).toHaveLength(2);
+    expect(sacAMatches.map((l) => l.id)).toEqual([601, 602]);
+
+    // 2. Search for "chouala" -> returns all lines in choualas (601 and 602)
+    const choualaMatches = searchLines(linesToSearch, 'chouala', 'smart', 1, undefined, containerMap);
+    expect(choualaMatches).toHaveLength(2);
+
+    // 3. Search for "carton a" -> returns line 603
+    const cartonMatches = searchLines(linesToSearch, 'carton a', 'smart', 1, undefined, containerMap);
+    expect(cartonMatches).toHaveLength(1);
+    expect(cartonMatches[0].id).toBe(603);
+
+    // 4. Search for "vrac" / "hors colis" -> returns line 604
+    const vracMatches = searchLines(linesToSearch, 'vrac', 'smart', 1, undefined, containerMap);
+    expect(vracMatches).toHaveLength(1);
+    expect(vracMatches[0].id).toBe(604);
+
+    const horsColisMatches = searchLines(linesToSearch, 'hors colis', 'smart', 1, undefined, containerMap);
+    expect(horsColisMatches).toHaveLength(1);
+    expect(horsColisMatches[0].id).toBe(604);
+  });
+
+  it('batch assigns multiple selected lines to Chouala A and fills remaining quantity', async () => {
+    await db.countEvents.clear();
+    await db.orderLines.clear();
+
+    const line1 = createDummyLine({ id: 701, billId: 10, designation: 'Sac à dos Sonic', orderedQty: 5 });
+    const line2 = createDummyLine({ id: 702, billId: 10, designation: 'Sac à dos Mario', orderedQty: 8 });
+    await db.orderLines.bulkAdd([line1, line2]);
+
+    const choualaAId = 99;
+    const res = await batchAssignContainerAndCount([line1, line2], 'preparation', choualaAId, {
+      mode: 'remaining',
+    });
+
+    expect(res.processedCount).toBe(2);
+    expect(res.unitsAdded).toBe(13); // 5 + 8
+
+    const allEvents = await db.countEvents.toArray();
+    expect(allEvents).toHaveLength(2);
+    expect(allEvents[0].containerId).toBe(choualaAId);
+    expect(allEvents[0].quantity).toBe(5);
+    expect(allEvents[1].containerId).toBe(choualaAId);
+    expect(allEvents[1].quantity).toBe(8);
   });
 });
