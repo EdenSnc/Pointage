@@ -513,17 +513,19 @@ describe('findNormalBackCamera (1x camera selection)', () => {
     expect(findNormalBackCamera(devices)).toBe('main');
   });
 
-  it('getAvailableBackCameras correctly tags and lists rear sensors', () => {
+  it('getAvailableBackCameras excludes Capteur 1 (ultra-wide) and returns Capteur 2 as main sensor', () => {
     const devices = [
       { deviceId: 'uw', label: 'camera2 0, facing back, Ultra Wide', kind: 'videoinput' },
       { deviceId: 'front', label: 'camera2 1, facing front', kind: 'videoinput' },
       { deviceId: 'main', label: 'camera2 2, facing back', kind: 'videoinput' },
     ];
     const result = getAvailableBackCameras(devices);
-    expect(result.length).toBe(2);
-    expect(result.some(r => r.deviceId === 'main' && r.isLikely1x)).toBe(true);
-    expect(result.find(r => r.deviceId === 'main')?.cleanName).toContain('Principal 1×');
-    expect(result.find(r => r.deviceId === 'uw')?.cleanName).toContain('0.5×');
+    // Capteur 1 (uw) is strictly excluded
+    expect(result.length).toBe(1);
+    expect(result[0].deviceId).toBe('main');
+    expect(result[0].isLikely1x).toBe(true);
+    expect(result[0].cleanName).toContain('Capteur 2');
+    expect(result[0].cleanName).toContain('Principal 1×');
   });
 });
 

@@ -457,14 +457,17 @@ function QRSyncModal({
         reader = new BrowserMultiFormatReader(hints);
 
         if (cameraVideoRef.current && !cancelled) {
+          const normalId = navigator.mediaDevices?.enumerateDevices
+            ? findNormalBackCamera(await navigator.mediaDevices.enumerateDevices())
+            : null;
+          const qrConstraints: MediaTrackConstraints = normalId
+            ? { deviceId: { exact: normalId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+            : { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } };
+
           await reader.decodeFromConstraints(
             {
               audio: false,
-              video: {
-                facingMode: { ideal: 'environment' },
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
-              },
+              video: qrConstraints,
             },
             cameraVideoRef.current,
             (result: any) => {
@@ -4881,7 +4884,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
 
   const handleCycleCamera = () => {
     if (availableCameras.length <= 1) {
-      showToast('1 seul capteur arrière détecté', setToast);
+      showToast('Capteur 2 (Principal 1×) verrouillé', setToast);
       return;
     }
     const currentIndex = availableCameras.findIndex(c => c.deviceId === selectedCameraId);
@@ -4918,7 +4921,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
         ]);
         reader = new BrowserMultiFormatReader(hints);
 
-        // If we haven't resolved a normal camera device ID yet, inspect devices first
+        // Enforce Capteur 2 exclusively as primary camera, discarding Capteur 1
         let activeDeviceId = selectedCameraId;
         if (navigator.mediaDevices?.enumerateDevices) {
           try {
@@ -4928,20 +4931,21 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
               setAvailableCameras(backCams);
             }
             const normalId = findNormalBackCamera(devices);
-            const userManuallyChose = localStorage.getItem('pointage_camera_user_selected') === 'true';
 
-            const currentCam = backCams.find(c => c.deviceId === activeDeviceId);
-            const isCurrentUltraWide = currentCam && !currentCam.isLikely1x && (
-              currentCam.label.toLowerCase().includes('0.5') ||
-              currentCam.label.toLowerCase().includes('ultra') ||
-              currentCam.label.toLowerCase().includes('camera2 0')
-            );
+            // Capteur 1 ban: ensure Capteur 1 (index 0 of rear devices) is never used
+            const allBackDevs = devices.filter(d => !d.kind || d.kind === 'videoinput').filter(d => {
+              const lbl = (d.label || '').toLowerCase();
+              return !lbl.includes('front') && !lbl.includes('avant') && !lbl.includes('selfie') && !lbl.includes('user');
+            });
+            const capteur1Id = allBackDevs.length >= 2 ? allBackDevs[0].deviceId : null;
 
-            if (normalId && (!activeDeviceId || isCurrentUltraWide || (!userManuallyChose && activeDeviceId !== normalId))) {
-              activeDeviceId = normalId;
-              setSelectedCameraId(normalId);
-              localStorage.setItem('pointage_preferred_camera_id', normalId);
-              localStorage.removeItem('pointage_camera_user_selected');
+            if (normalId) {
+              // Always enforce normalId (Capteur 2) if activeDeviceId is missing, points to Capteur 1, or not in availableCameras
+              if (!activeDeviceId || (capteur1Id && activeDeviceId === capteur1Id) || !backCams.some(c => c.deviceId === activeDeviceId)) {
+                activeDeviceId = normalId;
+                setSelectedCameraId(normalId);
+                localStorage.setItem('pointage_preferred_camera_id', normalId);
+              }
             }
           } catch (e) {
             console.warn('Initial device enumeration skipped:', e);
@@ -5235,15 +5239,15 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
           <video ref={videoRef} className="scanner-video" playsInline muted autoPlay />
           <div className="scanner-target" />
           <div className="scanner-controls-bar">
-            {availableCameras.length > 1 && (
+            {availableCameras.length > 0 && (
               <button
                 type="button"
                 className="scanner-cam-switch-btn"
                 onClick={handleCycleCamera}
-                title="Changer de capteur photo"
+                title={availableCameras.length > 1 ? "Changer de capteur photo" : "Capteur 2 (Principal 1×) verrouillé"}
               >
                 <IconRotate size={14} />
-                <span>{currentCameraInfo?.cleanName || 'Capteur'}</span>
+                <span>{currentCameraInfo?.cleanName || 'Capteur 2 (Principal 1×)'}</span>
               </button>
             )}
             <div className="scanner-zoom-bar">

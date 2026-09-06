@@ -646,8 +646,9 @@ export interface BackCameraInfo {
 }
 
 /**
- * Automatically select the standard/normal (1x) rear camera,
- * discarding any 0.5x Ultra-Wide, wide-angle, macro, or front-facing cameras.
+ * Automatically select the standard/normal (1x) rear camera.
+ * STRICT RULE: Capteur 2 (index 1 of rear cameras) is the physical 1x main camera.
+ * Capteur 1 (index 0 of rear cameras) is the 0.5x ultra-wide lens and must NEVER be used!
  */
 export function findNormalBackCamera(
   devices: Array<{ deviceId: string; label: string; kind?: string }>
@@ -669,21 +670,17 @@ export function findNormalBackCamera(
   const candidates = backDevs.length > 0 ? backDevs : videoDevs;
   if (candidates.length === 1) return candidates[0].deviceId;
 
-  // 2. Discard macro, depth, virtual, and ultra-wide / 0.5x cameras
-  const nonAuxCandidates = candidates.filter(d => {
-    const lbl = (d.label || '').toLowerCase();
-    const isUltraWide = lbl.includes('ultra') || lbl.includes('0.5') || lbl.includes('0.6');
-    const isMacroOrDepth = lbl.includes('macro') || lbl.includes('depth') || lbl.includes('bokeh');
-    return !isUltraWide && !isMacroOrDepth;
-  });
+  // 2. When 2 or more rear cameras are present:
+  // Capteur 1 (candidates[0]) is the 0.5x ultra-wide sensor and must NEVER be used.
+  // Capteur 2 (candidates[1]) is the physical 1x main camera.
+  const nonCapteur1Pool = candidates.slice(1);
 
-  const pool = nonAuxCandidates.length > 0 ? nonAuxCandidates : candidates;
-  if (pool.length === 1) return pool[0].deviceId;
-
-  // 3. Look for explicit main / standard / primary / 1x labels
-  const explicitMain = pool.find(d => {
+  // Look first for explicit camera2 2 or main or standard
+  const explicitMain = nonCapteur1Pool.find(d => {
     const lbl = (d.label || '').toLowerCase();
     return (
+      lbl.includes('camera2 2') ||
+      lbl.includes('camera 2') ||
       lbl.includes('main') ||
       lbl.includes('standard') ||
       lbl.includes('primary') ||
@@ -693,47 +690,24 @@ export function findNormalBackCamera(
   });
   if (explicitMain) return explicitMain.deviceId;
 
-  // 4. Samsung Galaxy Camera2 HAL pattern:
-  // On Samsung phones (e.g. Galaxy A54, A53, S21-S24):
-  // camera2 0 = 0.5x Ultra-Wide / Logical Multi-Camera
-  // camera2 2 = Physical 1x Main Sensor (50MP standard lens)
-  // camera2 1 = Front (or secondary rear)
-  // camera2 3 = Macro
-  // Look for camera2 2 first:
-  const samsungMain = pool.find(d => {
+  // Discard macro/depth/virtual if other non-Capteur-1 candidates exist
+  const usablePool = nonCapteur1Pool.filter(d => {
     const lbl = (d.label || '').toLowerCase();
-    return lbl.includes('camera2 2') || lbl.includes('camera 2');
+    return !lbl.includes('macro') && !lbl.includes('depth') && !lbl.includes('bokeh');
   });
-  if (samsungMain) return samsungMain.deviceId;
 
-  // 5. Look for camera2 1 (if not front)
-  const samsungCam1 = pool.find(d => {
-    const lbl = (d.label || '').toLowerCase();
-    return lbl.includes('camera2 1') || lbl.includes('camera 1');
-  });
-  if (samsungCam1) return samsungCam1.deviceId;
-
-  // 6. Look for "wide" without "ultra" (standard 1x wide lens)
-  const wideNonUltra = pool.find(d => {
-    const lbl = (d.label || '').toLowerCase();
-    return lbl.includes('wide') && !lbl.includes('ultra');
-  });
-  if (wideNonUltra) return wideNonUltra.deviceId;
-
-  // 7. Avoid camera2 0 or index 0 if multiple back candidates exist
-  // Because index 0 on Android is almost always the ultra-wide!
-  if (pool.length >= 2) {
-    const nonZeroCandidate = pool.find(d => {
-      const lbl = (d.label || '').toLowerCase();
-      return !lbl.includes('camera2 0') && !lbl.includes('camera 0');
-    });
-    if (nonZeroCandidate) return nonZeroCandidate.deviceId;
-    return pool[1].deviceId;
+  if (usablePool.length > 0) {
+    return usablePool[0].deviceId;
   }
 
-  return pool[0].deviceId;
+  // Capteur 2 is candidates[1]
+  return candidates[1].deviceId;
 }
 
+/**
+ * Returns available rear cameras for the camera switch controller.
+ * Excludes Capteur 1 when multiple rear cameras exist, ensuring Capteur 2 is used exclusively.
+ */
 export function getAvailableBackCameras(
   devices: Array<{ deviceId: string; label: string; kind?: string }>
 ): BackCameraInfo[] {
@@ -748,27 +722,41 @@ export function getAvailableBackCameras(
     );
   });
 
+  if (backDevs.length === 0) return [];
+
   const normalId = findNormalBackCamera(devices);
 
-  return backDevs.map((d, index) => {
-    const lbl = d.label || '';
-    const is1x = d.deviceId === normalId;
-    let cleanName = `Capteur ${index + 1}`;
-    const l = lbl.toLowerCase();
-    if (l.includes('ultra') || l.includes('0.5') || l.includes('0.6')) {
-      cleanName = `Capteur ${index + 1} (Ultra-Grand Angle 0.5×)`;
-    } else if (l.includes('macro')) {
-      cleanName = `Capteur ${index + 1} (Macro)`;
-    } else if (is1x || l.includes('main') || l.includes('camera2 2')) {
-      cleanName = `Capteur ${index + 1} (Principal 1×)`;
-    }
-    return {
-      deviceId: d.deviceId,
-      label: d.label || `Caméra ${index + 1}`,
-      isLikely1x: is1x,
-      cleanName,
-    };
-  });
+  // If 2 or more rear cameras exist, Capteur 1 (index 0) is the 0.5x ultra-wide lens.
+  // We strictly exclude Capteur 1 so the scanner NEVER lands on it or cycles to it!
+  if (backDevs.length >= 2) {
+    return backDevs.slice(1).map((d, sliceIndex) => {
+      const originalIndex = sliceIndex + 1; // 1-indexed: Capteur 2, Capteur 3...
+      const isMain = d.deviceId === normalId || sliceIndex === 0;
+      let cleanName = `Capteur ${originalIndex + 1}`;
+      const l = (d.label || '').toLowerCase();
+      if (isMain) {
+        cleanName = `Capteur ${originalIndex + 1} (Principal 1×)`;
+      } else if (l.includes('macro')) {
+        cleanName = `Capteur ${originalIndex + 1} (Macro)`;
+      } else if (l.includes('tele') || l.includes('zoom')) {
+        cleanName = `Capteur ${originalIndex + 1} (Téléobjectif)`;
+      }
+      return {
+        deviceId: d.deviceId,
+        label: d.label || `Caméra ${originalIndex + 1}`,
+        isLikely1x: isMain,
+        cleanName,
+      };
+    });
+  }
+
+  // Sole rear camera on budget/single-lens device
+  return [{
+    deviceId: backDevs[0].deviceId,
+    label: backDevs[0].label || 'Caméra 1',
+    isLikely1x: true,
+    cleanName: 'Capteur 1 (Principal)',
+  }];
 }
 
 
