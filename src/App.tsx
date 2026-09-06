@@ -772,6 +772,8 @@ function HomeScreen({
   const nav = useNavigate();
   const session = useActiveSession();
   const bills = useSessionBills(session?.id);
+  const allLines = useAllSessionLines(session?.id);
+  const [homeSearch, setHomeSearch] = useState('');
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [showManualBillModal, setShowManualBillModal] = useState(false);
@@ -795,6 +797,11 @@ function HomeScreen({
   const activeBills = bills.filter(b => b.status === 'active');
   const archivedBills = bills.filter(b => b.status === 'completed');
   const displayBills = billFilter === 'active' ? activeBills : archivedBills;
+
+  const matchedGlobalLines = React.useMemo(() => {
+    if (!homeSearch.trim() || !allLines) return [];
+    return searchLines(allLines, homeSearch, 'smart');
+  }, [homeSearch, allLines]);
 
   const handleArchiveBill = async (billId: number) => {
     await db.bills.update(billId, { status: 'completed' });
@@ -882,7 +889,85 @@ function HomeScreen({
           </button>
         </div>
 
-        {displayBills.length === 0 ? (
+        {/* Global Search across all bills and products */}
+        {bills.length > 0 && (
+          <div className="search-wrapper mb-3" style={{ position: 'relative' }}>
+            <input
+              id="home-global-search-input"
+              className="search-input"
+              style={{ height: 40, fontSize: '0.84rem', paddingLeft: 14 }}
+              placeholder="Rechercher un article, réf, code-barres ou N° BL..."
+              value={homeSearch}
+              onChange={(e) => setHomeSearch(e.target.value)}
+            />
+            {homeSearch ? (
+              <button
+                type="button"
+                className="search-clear-btn"
+                onClick={() => setHomeSearch('')}
+                aria-label="Effacer"
+              >
+                <IconX size={15} />
+              </button>
+            ) : (
+              <span style={{ position: 'absolute', right: 12, top: 12, color: 'var(--text-muted)', pointerEvents: 'none' }}>
+                <IconSearch size={16} />
+              </span>
+            )}
+          </div>
+        )}
+
+        {homeSearch.trim() ? (
+          <div className="flex flex-col gap-2 mb-4">
+            <div className="text-xs text-muted flex justify-between items-center px-1">
+              <span>{matchedGlobalLines.length} article(s) trouvé(s) dans la session</span>
+              <button className="text-accent text-xs font-bold" onClick={() => setHomeSearch('')}>Voir tous les bons</button>
+            </div>
+            {matchedGlobalLines.length === 0 ? (
+              <div className="card text-center text-xs text-muted py-4">
+                Aucun article correspondant à « {homeSearch} »
+              </div>
+            ) : (
+              matchedGlobalLines.slice(0, 30).map((line) => {
+                const parentBill = bills.find((b) => b.id === line.billId);
+                const targetStage = sessionStorage.getItem(`pointage_stage_${line.billId}`) || 'preparation';
+                return (
+                  <div
+                    key={line.id}
+                    className="product-card cursor-pointer"
+                    style={{ borderLeft: '4px solid var(--accent)' }}
+                    onClick={() => nav(`/bill/${line.billId}/line/${line.id}?stage=${targetStage}&from=home`)}
+                  >
+                    <div className="flex justify-between items-center mb-1">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className="badge"
+                          style={{ background: 'var(--accent-glow)', color: 'var(--accent)', fontWeight: 800, cursor: 'pointer' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            nav(`/bill/${line.billId}`);
+                          }}
+                          title="Ouvrir l'ensemble de ce bon"
+                        >
+                          {parentBill?.billNumber || `BL #${line.billId}`} ›
+                        </span>
+                        <span className="text-xs text-muted font-bold truncate" style={{ maxWidth: 140 }}>
+                          {parentBill?.client || ''}
+                        </span>
+                      </div>
+                      <span className="line-no">N°{line.no}</span>
+                    </div>
+                    <div className="line-designation font-bold text-sm">{line.designation}</div>
+                    <div className="flex justify-between items-center text-xs text-muted mt-1">
+                      <span>RÉF: {line.reference || 'Sans réf'}</span>
+                      <span className="font-bold text-primary">Attendu: {line.orderedQty}</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        ) : displayBills.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">
               {billFilter === 'active' ? <IconBox size={46} /> : <IconClipboard size={46} />}
@@ -1088,6 +1173,7 @@ function ClientGroupCard({
   onArchiveBill?: (id: number) => void;
   onRestoreBill?: (id: number) => void;
 }) {
+  const nav = useNavigate();
   const [expanded, setExpanded] = useState(true);
   const [groupSearch, setGroupSearch] = useState('');
   const entityLines = useEntityLines(client);
@@ -1162,16 +1248,25 @@ function ClientGroupCard({
               ) : (
                 matchedLines.map((line) => {
                   const parentBill = bills.find((b) => b.id === line.billId);
+                  const targetStage = sessionStorage.getItem(`pointage_stage_${line.billId}`) || 'preparation';
                   return (
                     <div
                       key={line.id}
                       className="product-card cursor-pointer"
                       style={{ borderLeft: '4px solid var(--accent)' }}
-                      onClick={() => onSelectBill(line.billId)}
+                      onClick={() => nav(`/bill/${line.billId}/line/${line.id}?stage=${targetStage}&from=home`)}
                     >
                       <div className="flex justify-between items-center mb-1">
-                        <span className="badge" style={{ background: 'var(--accent-glow)', color: 'var(--accent)', fontWeight: 800 }}>
-                          {parentBill?.billNumber || `BL #${line.billId}`}
+                        <span
+                          className="badge"
+                          style={{ background: 'var(--accent-glow)', color: 'var(--accent)', fontWeight: 800, cursor: 'pointer' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectBill(line.billId);
+                          }}
+                          title="Ouvrir ce bon de livraison"
+                        >
+                          {parentBill?.billNumber || `BL #${line.billId}`} ›
                         </span>
                         <span className="line-no">N°{line.no}</span>
                       </div>
@@ -2348,6 +2443,15 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
 
   const stageParam = (searchParams.get('stage') || sessionStorage.getItem(`pointage_stage_${billId}`) || 'preparation') as Stage;
   const [stage, setStage] = useState<Stage>(stageParam);
+  const fromParam = searchParams.get('from');
+
+  const handleBack = () => {
+    if (fromParam === 'home') {
+      nav('/');
+    } else {
+      nav(`/bill/${billId}?stage=${stage}`);
+    }
+  };
 
   const handleStageChange = (s: Stage) => {
     setStage(s);
@@ -2536,7 +2640,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     <ErrorBoundary fallbackTitle="Erreur d'affichage de la fiche produit">
       <header className="app-header">
 
-        <button className="back-btn" onClick={() => nav(`/bill/${billId}?stage=${stage}`)} aria-label="Retour"><IconArrowLeft size={18} /></button>
+        <button className="back-btn" onClick={handleBack} aria-label="Retour"><IconArrowLeft size={18} /></button>
         <div style={{ flex: 1 }}>
           <div className="flex items-center gap-2">
             <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--accent)' }}>
@@ -2546,7 +2650,17 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               <span className="text-sm font-bold text-muted">PAGE {line.page}</span>
             )}
           </div>
-          <div className="text-xs text-muted truncate">{bill.client} — {bill.billNumber}</div>
+          <div className="text-xs text-muted truncate flex items-center gap-1.5">
+            <span>{bill.client}</span>
+            <span>•</span>
+            <span
+              className="cursor-pointer font-bold text-accent"
+              onClick={() => nav(`/bill/${billId}?stage=${stage}`)}
+              title="Voir l'ensemble du bon"
+            >
+              {bill.billNumber} ›
+            </span>
+          </div>
         </div>
         <AudioMuteButton />
       </header>
@@ -3346,8 +3460,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               <div className="flex gap-2">
                 <button
                   type="button"
-                  className="btn btn-sm flex items-center justify-center gap-1"
-                  style={{ flex: 1, background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger)', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+                  className="btn btn-sm flex items-center justify-center gap-1.5"
+                  style={{ flex: 1, background: 'rgba(239, 68, 68, 0.12)', color: 'var(--danger)', border: '1px solid rgba(239, 68, 68, 0.3)', fontWeight: 600 }}
                   onClick={() => handleStatusChange('out_of_stock')}
                   title="Stock totalement épuisé en entrepôt"
                 >
@@ -3355,8 +3469,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 </button>
                 <button
                   type="button"
-                  className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
-                  style={{ flex: 1, borderColor: 'var(--accent)' }}
+                  className="btn btn-sm btn-secondary flex items-center justify-center gap-1.5"
+                  style={{ flex: 1, borderColor: 'var(--accent)', fontWeight: 600 }}
                   onClick={() => setShowSubModal(true)}
                   title="Remplacer par un produit similaire ou équivalent"
                 >
@@ -3366,32 +3480,38 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               <div className="flex gap-2">
                 <button
                   type="button"
-                  className="btn btn-sm btn-warning flex items-center justify-center gap-1"
-                  style={{ flex: 1 }}
+                  className="btn btn-sm flex items-center justify-center gap-1.5"
+                  style={{ flex: 1, background: 'rgba(245, 158, 11, 0.14)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.35)', fontWeight: 600 }}
                   onClick={() => handleStatusChange('not_found')}
                   title="Article introuvable dans les rayons pour l'instant"
                 >
-                  <IconSearch size={15} /> Introuvable rayon
+                  <IconSearch size={15} /> Introuvable
                 </button>
                 <button
                   type="button"
-                  className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
-                  style={{ flex: 1 }}
+                  className="btn btn-sm btn-secondary flex items-center justify-center gap-1.5"
+                  style={{ flex: 1, background: 'rgba(148, 163, 184, 0.10)', color: 'var(--text-secondary)', border: '1px solid var(--border)', fontWeight: 600 }}
                   onClick={() => handleStatusChange('cancelled')}
                   title="Article annulé par le client ou le service commercial"
                 >
                   <IconX size={15} /> Annulé
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-ghost flex items-center justify-center gap-1 text-muted"
-                  style={{ border: '1px solid var(--border)' }}
-                  onClick={handleUndo}
-                  title="Annuler la toute dernière saisie de comptage effectuée"
-                >
-                  <IconUndo size={14} /> Annuler saisie
-                </button>
               </div>
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost flex items-center justify-center gap-1.5 text-muted mt-1"
+                style={{
+                  width: '100%',
+                  padding: '7px 12px',
+                  fontSize: '0.78rem',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px dashed var(--border)',
+                }}
+                onClick={handleUndo}
+                title="Annuler la toute dernière saisie de comptage effectuée"
+              >
+                <IconUndo size={13} /> Annuler la dernière saisie
+              </button>
             </div>
           ) : (
             <div>

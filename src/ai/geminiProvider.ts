@@ -134,6 +134,51 @@ function sanitizeAndParseJSON(text: string): ImportPayload {
   throw new Error('Le format retourné par Gemini ne contient pas de factures valides.');
 }
 
+async function callGeminiApiWithRetry(
+  url: string,
+  requestBody: any,
+  modelId: string,
+  maxRetries = 2
+): Promise<any> {
+  let attempt = 0;
+  while (attempt <= maxRetries) {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errJson = await response.json().catch(() => null);
+      const errMsg = errJson?.error?.message || response.statusText;
+
+      // Retry on transient 429 or 503 if attempts remain
+      if ((response.status === 429 || response.status === 503) && attempt < maxRetries) {
+        attempt++;
+        const jitter = Math.random() * 400;
+        const delay = attempt * 1200 + jitter;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+
+      if (response.status === 429) {
+        if (modelId === 'gemini-3.8-flash') {
+          throw new Error('Pic de charge temporaire ou quota atteint pour Gemini 3.8 Flash (max 20 scans/j). Basculez sur Flash Lite 3.5 (500 scans/j) pour continuer sans attente.');
+        } else {
+          throw new Error('Trop de requêtes rapides (limite 15 scans/min). Veuillez patienter 10 secondes puis réessayez.');
+        }
+      }
+      if (response.status === 503) {
+        throw new Error('Les serveurs de Gemini sont temporairement surchargés (pic de demande mondial). Veuillez patienter quelques secondes ou utiliser Flash Lite 3.5.');
+      }
+      throw new Error(`Erreur API Gemini (${response.status}): ${errMsg}`);
+    }
+
+    const data = await response.json();
+    return data;
+  }
+}
+
 export const geminiProvider: LLMProvider = {
   id: 'gemini',
   name: 'Google Gemini',
@@ -188,30 +233,21 @@ export const geminiProvider: LLMProvider = {
       generationConfig: {
         temperature: 0.1,
         responseMimeType: 'application/json',
+        maxOutputTokens: 65536,
+        ...(modelId.startsWith('gemini-3.8') || modelId.startsWith('gemini-3.7')
+          ? { thinkingConfig: { thinkingLevel: 'low' } }
+          : {}),
       },
     };
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-    });
+    const data = await callGeminiApiWithRetry(url, requestBody, modelId);
+    const candidate = data.candidates?.[0];
 
-    if (!response.ok) {
-      const errJson = await response.json().catch(() => null);
-      const errMsg = errJson?.error?.message || response.statusText;
-      if (response.status === 429) {
-        if (modelId === 'gemini-3.8-flash') {
-          throw new Error('Quota journalier atteint pour Gemini 3.8 Flash (max 20 scans/jour en gratuit). Basculez sur Flash Lite 3.5 (500 scans/jour) pour continuer.');
-        } else {
-          throw new Error('Trop de requêtes rapides (limite 15 scans/min). Veuillez patienter 10 secondes puis réessayez.');
-        }
-      }
-      throw new Error(`Erreur API Gemini (${response.status}): ${errMsg}`);
+    if (candidate?.finishReason === 'MAX_TOKENS') {
+      throw new Error('Le document est trop volumineux et a dépassé le plafond de tokens de sortie de l’IA. Veuillez photographier le bon page par page.');
     }
 
-    const data = await response.json();
-    const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const candidateText = candidate?.content?.parts?.[0]?.text;
 
     if (!candidateText) {
       throw new Error('Gemini n’a pas pu extraire de contenu de cette image.');
@@ -255,30 +291,21 @@ export const geminiProvider: LLMProvider = {
       generationConfig: {
         temperature: 0.1,
         responseMimeType: 'application/json',
+        maxOutputTokens: 65536,
+        ...(modelId.startsWith('gemini-3.8') || modelId.startsWith('gemini-3.7')
+          ? { thinkingConfig: { thinkingLevel: 'low' } }
+          : {}),
       },
     };
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-    });
+    const data = await callGeminiApiWithRetry(url, requestBody, modelId);
+    const candidate = data.candidates?.[0];
 
-    if (!response.ok) {
-      const errJson = await response.json().catch(() => null);
-      const errMsg = errJson?.error?.message || response.statusText;
-      if (response.status === 429) {
-        if (modelId === 'gemini-3.8-flash') {
-          throw new Error('Quota journalier atteint pour Gemini 3.8 Flash (max 20 scans/jour en gratuit). Basculez sur Flash Lite 3.5 (500 scans/jour) pour continuer.');
-        } else {
-          throw new Error('Trop de requêtes rapides (limite 15 scans/min). Veuillez patienter 10 secondes puis réessayez.');
-        }
-      }
-      throw new Error(`Erreur API Gemini (${response.status}): ${errMsg}`);
+    if (candidate?.finishReason === 'MAX_TOKENS') {
+      throw new Error('Le document est trop volumineux et a dépassé le plafond de tokens de sortie de l’IA.');
     }
 
-    const data = await response.json();
-    const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const candidateText = candidate?.content?.parts?.[0]?.text;
 
     if (!candidateText) {
       throw new Error('Gemini n’a pas pu extraire de données du texte fourni.');
