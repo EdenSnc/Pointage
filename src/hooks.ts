@@ -105,6 +105,23 @@ export function useBillEvents(billId: number | undefined) {
   );
 }
 
+export function useEntityEvents(client: string | undefined) {
+  return useLiveQuery(
+    async () => {
+      if (!client) return [];
+      const trimmed = client.trim().toLowerCase();
+      const allBills = await db.bills.toArray();
+      const clientBillIds = allBills
+        .filter((b) => b.client && b.client.trim().toLowerCase() === trimmed)
+        .map((b) => b.id!);
+      if (clientBillIds.length === 0) return [];
+      return db.countEvents.where('billId').anyOf(clientBillIds).toArray();
+    },
+    [client],
+    []
+  );
+}
+
 // ---------- Transport Containers (Shared Across Bills of Same Seller/Client) ----------
 export function useBillContainers(billId: number | undefined) {
   return useLiveQuery(

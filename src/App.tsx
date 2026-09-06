@@ -23,6 +23,7 @@ import {
   useAllSessionLines,
   useEntityBills,
   useEntityLines,
+  useEntityEvents,
   addCountEvent,
   undoLastCount,
   undoLastBillCount,
@@ -1918,6 +1919,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const overrides = useBillOverrides(billId);
   const entityBills = useEntityBills(bill?.client);
   const entityLines = useEntityLines(bill?.client);
+  const entityEvents = useEntityEvents(bill?.client);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const initialStage = (searchParams.get('stage') || sessionStorage.getItem(`pointage_stage_${billId}`) || 'preparation') as Stage;
@@ -2025,8 +2027,9 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
     },
   });
 
+  const activeEvents = searchScope === 'all' && entityEvents && entityEvents.length > 0 ? entityEvents : events;
   const eventsByLine = new Map<number, CountEvent[]>();
-  for (const e of events) {
+  for (const e of activeEvents) {
     const arr = eventsByLine.get(e.orderLineId) || [];
     arr.push(e);
     eventsByLine.set(e.orderLineId, arr);
@@ -2171,22 +2174,23 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
 
         {/* Scope Toggle when client has multiple bills */}
         {entityBills && entityBills.length > 1 && (
-          <div className="flex gap-2 mb-2">
+          <div className="scope-segmented-bar">
             <button
               type="button"
-              className={`btn btn-xs ${searchScope === 'current' ? 'btn-primary' : 'btn-secondary'}`}
+              className={`scope-seg-btn ${searchScope === 'current' ? 'active' : ''}`}
               onClick={() => setSearchScope('current')}
-              style={{ flex: 1, padding: '6px 8px', fontSize: '0.78rem', fontWeight: 700 }}
             >
-              Ce bon ({lines.length})
+              <span>Ce bon</span>
+              <span className="scope-count-badge">{lines.length}</span>
             </button>
             <button
               type="button"
-              className={`btn btn-xs ${searchScope === 'all' ? 'btn-primary' : 'btn-secondary'} flex items-center justify-center gap-1`}
+              className={`scope-seg-btn ${searchScope === 'all' ? 'active' : ''}`}
               onClick={() => setSearchScope('all')}
-              style={{ flex: 1, padding: '6px 8px', fontSize: '0.78rem', fontWeight: 700 }}
             >
-              <IconBuilding size={13} /> Tous les {entityBills.length} bons ({entityLines?.length || 0})
+              <IconBuilding size={14} />
+              <span>Tous les {entityBills.length} bons</span>
+              <span className="scope-count-badge">{entityLines?.length || 0}</span>
             </button>
           </div>
         )}
@@ -2209,8 +2213,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               <span>{showQuantities ? 'Visibles' : 'Masquées'}</span>
             </button>
           </div>
-          <span className="text-sm text-muted" style={{ alignSelf: 'center' }}>
-            {displayLines.length}/{lines.length} lignes
+          <span className="text-xs text-muted font-bold" style={{ alignSelf: 'center' }}>
+            {searchScope === 'all'
+              ? `${displayLines.length} / ${entityLines?.length || displayLines.length} lignes`
+              : `${displayLines.length} / ${lines.length} lignes`}
           </span>
         </div>
 
