@@ -91,8 +91,9 @@ export function numberToWordsFr(num: number): string {
 export function formatDzdAmountInWords(amount: number): string {
   if (isNaN(amount) || amount < 0) return 'ZÉRO DZD';
 
-  const integerPart = Math.floor(amount);
-  const centsPart = Math.round((amount - integerPart + Number.EPSILON) * 100);
+  const rounded = Math.round((amount + Number.EPSILON) * 100) / 100;
+  const integerPart = Math.floor(rounded);
+  const centsPart = Math.round((rounded - integerPart) * 100);
 
   const words = numberToWordsFr(integerPart);
   const dzdText = `${words} DZD`;

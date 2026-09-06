@@ -932,3 +932,222 @@ describe('excelExport — 1:1 Warehouse Document Replicas & Differentiation', ()
   });
 });
 
+describe('excelExport — Comprehensive Edge Cases & Precision Testing', () => {
+  it('handles formatDzdAmountInWords edge cases including singular centime, rollover and large numbers', () => {
+    // Zero
+    expect(formatDzdAmountInWords(0)).toBe('ZÉRO DZD');
+    // Singular centime
+    expect(formatDzdAmountInWords(100.01)).toBe('CENT DZD ET UN CENTIME');
+    // Plural centimes
+    expect(formatDzdAmountInWords(100.02)).toBe('CENT DZD ET DEUX CENTIMES');
+    expect(formatDzdAmountInWords(100.99)).toBe('CENT DZD ET QUATRE-VINGT-DIX-NEUF CENTIMES');
+    // Floating point precision rollover (e.g. 99.999 -> 100.00)
+    expect(formatDzdAmountInWords(99.999)).toBe('CENT DZD');
+    // Negative or NaN
+    expect(formatDzdAmountInWords(-50)).toBe('ZÉRO DZD');
+    expect(formatDzdAmountInWords(NaN)).toBe('ZÉRO DZD');
+
+    // Complex French grammar numbers
+    expect(formatDzdAmountInWords(71.00)).toBe('SOIXANTE ET ONZE DZD');
+    expect(formatDzdAmountInWords(80.00)).toBe('QUATRE-VINGTS DZD');
+    expect(formatDzdAmountInWords(81.00)).toBe('QUATRE-VINGT-UN DZD');
+    expect(formatDzdAmountInWords(91.00)).toBe('QUATRE-VINGT-ONZE DZD');
+    expect(formatDzdAmountInWords(99.00)).toBe('QUATRE-VINGT-DIX-NEUF DZD');
+    expect(formatDzdAmountInWords(200.00)).toBe('DEUX CENTS DZD');
+    expect(formatDzdAmountInWords(201.00)).toBe('DEUX CENT UN DZD');
+    expect(formatDzdAmountInWords(1000.00)).toBe('MILLE DZD');
+    expect(formatDzdAmountInWords(2000.00)).toBe('DEUX MILLE DZD');
+    expect(formatDzdAmountInWords(20000000.00)).toBe('VINGT MILLIONS DZD');
+    expect(formatDzdAmountInWords(1500000.00)).toBe('UN MILLION CINQ CENTS MILLE DZD');
+  });
+
+  it('strictly preserves leading zeros in 13-digit EAN barcodes as string cells in Excel', () => {
+    const data = {
+      billNumber: 'BL/OU126/03615',
+      client: 'TEST',
+      date: '2026-09-06',
+      totalOrderedQty: 10,
+      totalActualQty: 10,
+      totalDiffQty: 0,
+      totalAmountTtc: 0,
+      isPriced: false,
+      checksumValid: true,
+      rows: [
+        {
+          no: '1',
+          code: 'REF-01',
+          // EAN starting with 0!
+          ean: '0123456789012',
+          designation: 'Article avec zéro initial',
+          colisage: null,
+          orderedQty: 10,
+          actualQty: 10,
+          diffQty: 0,
+          unitPrice: null,
+          totalTtc: null,
+          status: 'CONFORME' as const,
+          observation: '',
+        },
+        {
+          no: '2',
+          code: 'REF-02',
+          // Null EAN
+          ean: null,
+          designation: 'Article sans EAN',
+          colisage: null,
+          orderedQty: 5,
+          actualQty: 5,
+          diffQty: 0,
+          unitPrice: null,
+          totalTtc: null,
+          status: 'CONFORME' as const,
+          observation: '',
+        },
+      ],
+    };
+
+    const wb = createDeliveryNoteWorkbook(data);
+    const ws = wb.Sheets[wb.SheetNames[0]];
+
+    // First row: EAN cell C21 must have leading zero preserved as string
+    const cellEan1 = ws['C21'];
+    expect(cellEan1.t).toBe('s');
+    expect(cellEan1.v).toBe('0123456789012');
+    expect(cellEan1.v.startsWith('0')).toBe(true);
+
+    // Second row: Null EAN should render as '-'
+    const cellEan2 = ws['C22'];
+    expect(cellEan2.t).toBe('s');
+    expect(cellEan2.v).toBe('-');
+  });
+
+  it('handles empty delivery note and invoice workbooks without crashing', () => {
+    const emptyData = {
+      billNumber: 'BL/EMPTY',
+      client: 'EMPTY CLIENT',
+      date: '2026-09-06',
+      totalOrderedQty: 0,
+      totalActualQty: 0,
+      totalDiffQty: 0,
+      totalAmountTtc: 0,
+      isPriced: false,
+      checksumValid: true,
+      rows: [],
+    };
+
+    const wbBL = createDeliveryNoteWorkbook(emptyData);
+    expect(wbBL.SheetNames.length).toBe(1);
+    const wsBL = wbBL.Sheets[wbBL.SheetNames[0]];
+    expect(wsBL['D21'].v).toContain('Aucun article');
+
+    const wbInv = createInvoiceWorkbook(emptyData);
+    expect(wbInv.SheetNames.length).toBe(1);
+    const wsInv = wbInv.Sheets[wbInv.SheetNames[0]];
+    expect(wsInv['C10'].v).toContain('Aucun article');
+
+    const wbWork = createWorkshopDeliveryWorkbook(emptyData);
+    expect(wbWork.SheetNames.length).toBe(1);
+    const wsWork = wbWork.Sheets[wbWork.SheetNames[0]];
+    expect(wsWork['C11'].v).toContain('Aucun article');
+  });
+
+  it('handles resolveDocumentType with strange, lowercase, or empty strings', () => {
+    const base = {
+      billNumber: '',
+      client: 'TEST',
+      date: '2026-09-06',
+      totalOrderedQty: 0,
+      totalActualQty: 0,
+      totalDiffQty: 0,
+      totalAmountTtc: 0,
+      isPriced: false,
+      checksumValid: true,
+      rows: [],
+    };
+
+    // Case insensitive
+    expect(resolveDocumentType({ ...base, billNumber: 'invoice-2026' })).toBe('invoice');
+    expect(resolveDocumentType({ ...base, billNumber: 'saj-blida' })).toBe('invoice');
+    expect(resolveDocumentType({ ...base, billNumber: 'facture_01' })).toBe('invoice');
+    expect(resolveDocumentType({ ...base, billNumber: 'commande-gros' })).toBe('bon_commande');
+
+    // Empty billNumber with priced items -> defaults to invoice
+    expect(resolveDocumentType({ ...base, billNumber: '   ', isPriced: true })).toBe('invoice');
+
+    // Empty billNumber with barcode rows -> defaults to bl_official
+    const eanRows = [{
+      no: '1', code: 'C', ean: '6941782115831', designation: 'D',
+      colisage: null, orderedQty: 1, actualQty: 1, diffQty: 0,
+      unitPrice: null, totalTtc: null, status: 'CONFORME' as const, observation: '',
+    }];
+    expect(resolveDocumentType({ ...base, billNumber: '', rows: eanRows })).toBe('bl_official');
+
+    // Empty billNumber with no prices and no barcodes -> defaults to bl_workshop
+    expect(resolveDocumentType({ ...base, billNumber: '' })).toBe('bl_workshop');
+  });
+
+  it('handles compileFinalBillData with line discounts, bill discount, and null prices', () => {
+    const dummyBill = {
+      id: 1,
+      sessionId: 1,
+      billNumber: 'INV-TEST',
+      client: 'CLIENT TEST',
+      status: 'active' as const,
+      discountPercent: 5, // 5% payment discount
+      createdAt: '',
+      updatedAt: '',
+    };
+
+    const rows = [
+      {
+        no: '1',
+        code: 'ART-1',
+        ean: null,
+        designation: 'Article 1',
+        colisage: '1,00',
+        orderedQty: 10,
+        actualQty: 10,
+        diffQty: 0,
+        unitPrice: 100.00,
+        discountPercent: 10, // 10% line discount
+        totalTtc: 1000.00,
+        status: 'CONFORME' as const,
+        observation: '',
+      },
+      {
+        no: '2',
+        code: 'ART-2',
+        ean: null,
+        designation: 'Article gratuit / sans prix',
+        colisage: '1,00',
+        orderedQty: 5,
+        actualQty: 5,
+        diffQty: 0,
+        unitPrice: null, // No price!
+        discountPercent: null,
+        totalTtc: null,
+        status: 'CONFORME' as const,
+        observation: '',
+      },
+    ];
+
+    const data = compileFinalBillData(dummyBill as any, rows);
+    // Gross HT: 10 * 100 = 1000.00
+    expect(data.totalHt).toBe(1000.00);
+    // Line discount: 10% of 1000 = 100.00
+    expect(data.totalRemise).toBe(100.00);
+    // Net HT: 1000 - 100 = 900.00
+    expect(data.totalHtNet).toBe(900.00);
+    // TVA (19%): 900 * 0.19 = 171.00
+    expect(data.totalTva).toBe(171.00);
+    // Total TTC: 1000.00
+    expect(data.totalAmountTtc).toBe(1000.00);
+    // Remise paiement (5% on 1000): 50.00
+    expect(data.totalRemPaiement).toBe(50.00);
+    // Total avec remise: 950.00
+    expect(data.totalAvecRemise).toBe(950.00);
+    expect(data.amountInWords).toContain('MILLE DZD');
+  });
+});
+
+

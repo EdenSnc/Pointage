@@ -3540,14 +3540,13 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
 
   const pointageTotals = getStageTotals(events, 'pointage');
 
-  const mismatchedStage = React.useMemo<Stage | null>(() => {
-    if (stageTotals[stage] > 0) return null;
-    if (stage === 'preparation' && stageTotals.chargement > 0) return 'chargement';
-    if (stage === 'chargement' && stageTotals.preparation > 0) return 'preparation';
-    if (stage === 'pointage' && stageTotals.chargement > 0) return 'chargement';
-    if (stage === 'pointage' && stageTotals.preparation > 0) return 'preparation';
-    return null;
-  }, [stageTotals, stage]);
+  let mismatchedStage: Stage | null = null;
+  if (stageTotals[stage] === 0) {
+    if (stage === 'preparation' && stageTotals.chargement > 0) mismatchedStage = 'chargement';
+    else if (stage === 'chargement' && stageTotals.preparation > 0) mismatchedStage = 'preparation';
+    else if (stage === 'pointage' && stageTotals.chargement > 0) mismatchedStage = 'chargement';
+    else if (stage === 'pointage' && stageTotals.preparation > 0) mismatchedStage = 'preparation';
+  }
 
   const handleAddCount = async (targetNextLineId?: number) => {
     const now = Date.now();
@@ -5852,6 +5851,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   const [showPriceModal, setShowPriceModal] = useState(false);
   const [editingPrices, setEditingPrices] = useState<Record<number, string>>({});
   const [priceSearchQuery, setPriceSearchQuery] = useState('');
+  const [exportDocFormat, setExportDocFormat] = useState<DocumentExportType>('auto');
 
   const eventsByLine = new Map<number, CountEvent[]>();
   for (const e of events) {
@@ -6011,8 +6011,6 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
     onlyPresent: exportOnlyPresent,
   });
   const finalBillData = compileFinalBillData(bill, finalBillRows);
-
-  const [exportDocFormat, setExportDocFormat] = useState<DocumentExportType>('auto');
   const resolvedDocType = resolveDocumentType(finalBillData, exportDocFormat);
 
   const handleDownloadFinalExcel = () => {
