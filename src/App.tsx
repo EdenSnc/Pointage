@@ -115,6 +115,7 @@ import { providerRegistry } from './ai/providerRegistry';
 import { ErrorBoundary } from './ErrorBoundary';
 import { SettingsModal } from './SettingsModal';
 import { FastScanQuantityCard } from './FastScanQuantityCard';
+import { ConformityDonutChart } from './ConformityDonutChart';
 import {
   playSuccessChime,
   playWarningBeep,
@@ -244,13 +245,9 @@ function AudioMuteButton({ className, style }: { className?: string; style?: Rea
   return (
     <button
       type="button"
-      className={className || 'btn btn-xs btn-ghost btn-icon'}
+      className={className || 'header-icon-btn'}
       style={{
-        padding: 6,
         color: muted ? 'var(--text-muted)' : 'var(--accent)',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
         ...style,
       }}
       onClick={toggle}
@@ -829,38 +826,33 @@ function HomeScreen({
     <>
       <header className="app-header">
         <div className="brand-container" onClick={() => nav('/')} title="Pointage">
-          <BrandLogo size={34} />
+          <BrandLogo size={32} />
           <div className="brand-text">
             <span className="brand-title">Pointage</span>
-            <span className="badge" style={{ fontSize: '0.62rem', fontWeight: 700, background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', padding: '1px 5px', borderRadius: 4 }}>
-              SURFACE v1.4
-            </span>
+            <span className="brand-pill">SURFACE</span>
           </div>
         </div>
 
         <div className="header-meta">
           <button
-            className="btn btn-xs btn-ghost btn-icon"
+            type="button"
+            className="header-icon-btn"
             onClick={toggleShowQuantities}
             title={showQuantities ? 'Quantités visibles (Cliquer pour masquer)' : 'Quantités masquées (Cliquer pour afficher)'}
-            style={{ padding: 6 }}
             aria-label={showQuantities ? 'Masquer les quantités' : 'Afficher les quantités'}
           >
             {showQuantities ? <IconEye size={18} style={{ color: 'var(--accent)' }} /> : <IconEyeOff size={18} />}
           </button>
-          <AudioMuteButton />
+          <AudioMuteButton className="header-icon-btn" />
           <button
-            className="btn btn-xs btn-ghost btn-icon"
+            type="button"
+            className="header-icon-btn"
             onClick={() => setShowSettingsModal(true)}
             title="Paramètres, Quotas & Thème"
-            style={{ padding: 6 }}
             aria-label="Paramètres"
           >
             <IconSettings size={18} />
           </button>
-          <span className="badge-status-dot">
-            {activeBills.length} Actif{activeBills.length !== 1 ? 's' : ''}
-          </span>
         </div>
       </header>
 
@@ -3939,345 +3931,142 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   return (
     <>
       <header className="app-header">
-        <button className="back-btn" onClick={() => nav(`/bill/${billId}?stage=${stageScope}`)} aria-label="Retour"><IconArrowLeft size={18} /></button>
-        <h1>RÉCAPITULATIF</h1>
-        <span className="badge" style={{ fontSize: '0.62rem', fontWeight: 700, background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', padding: '1px 5px', borderRadius: 4 }}>
-          SURFACE v1.4
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+          <button
+            type="button"
+            className="header-icon-btn"
+            onClick={() => nav(`/bill/${billId}?stage=${stageScope}`)}
+            aria-label="Retour"
+          >
+            <IconArrowLeft size={18} />
+          </button>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ margin: 0, fontSize: '1.18rem', fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text-primary)', lineHeight: 1.2 }}>
+              Récapitulatif
+            </h1>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }} className="truncate">
+              {bill.client} • {bill.billNumber}
+            </div>
+          </div>
+        </div>
+        <div className="header-meta">
+          <AudioMuteButton className="header-icon-btn" />
+          <button
+            type="button"
+            className="header-icon-btn"
+            onClick={handleCopyReport}
+            title="Copier le rapport"
+            aria-label="Copier le rapport"
+          >
+            <IconClipboard size={18} />
+          </button>
+        </div>
       </header>
 
       <div className="app-content">
-        {/* Bill Info & Lifecycle Card */}
-        <div className="card mb-3">
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="font-bold text-base">{bill.client || 'Client Inconnu'}</div>
-              <div className="text-xs text-muted font-mono">{bill.billNumber}</div>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span
-                className={`badge ${bill.status === 'completed' ? 'badge-secondary' : 'badge-active'}`}
-                style={{ fontSize: '0.68rem', fontWeight: 700 }}
-              >
-                {bill.status === 'completed' ? 'Archivé' : 'Actif'}
-              </span>
-              {bill.status === 'completed' ? (
-                <button
-                  type="button"
-                  className="btn btn-xs btn-secondary flex items-center gap-1"
-                  onClick={async () => {
-                    await db.bills.update(bill.id!, { status: 'active' });
-                    if (setToast) setToast('Bon réouvert');
-                  }}
-                  title="Réouvrir le bon"
-                >
-                  <IconUndo size={12} />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn-xs btn-secondary flex items-center gap-1"
-                  onClick={async () => {
-                    await db.bills.update(bill.id!, { status: 'completed' });
-                    if (setToast) setToast(`Bon ${bill.billNumber} archivé`);
-                    nav('/');
-                  }}
-                  title="Clôturer et archiver ce bon"
-                >
-                  <IconCheck size={12} /> Clôturer
-                </button>
-              )}
-            </div>
-          </div>
+        {/* Apple-Style Glanceable Donut KPI Card */}
+        <ConformityDonutChart
+          totalLines={lines.length}
+          conformeCount={conformeCount}
+          shortCount={shortCount}
+          overCount={overCount}
+          problemCount={problemStatusCount}
+          actualPieces={finalBillData.totalActualQty}
+          orderedPieces={finalBillData.totalOrderedQty}
+          totalAmountTtc={finalBillData.totalAmountTtc}
+          isPriced={finalBillData.isPriced}
+          billStatus={bill.status}
+          onToggleStatus={async () => {
+            const nextStatus = bill.status === 'completed' ? 'active' : 'completed';
+            await db.bills.update(bill.id!, { status: nextStatus });
+            if (setToast) setToast(nextStatus === 'completed' ? 'Bon archivé' : 'Bon réouvert');
+          }}
+        />
 
-          <div className="divider" />
-
-          <div className="flex justify-between items-center text-xs mb-2 flex-wrap gap-1">
-            <span className="text-secondary">
-              Articles : <strong>{totalLines}</strong> ({activeLines} actives)
+        {/* Transmission & Export Hub (Apple Pill Buttons) */}
+        <div className="transmission-card">
+          <div className="transmission-header">
+            <span className="transmission-title">
+              <IconFileSpreadsheet size={15} style={{ color: 'var(--accent)' }} /> Transmettre & Exporter
             </span>
-            {outOfStockLines > 0 && (
-              <span style={{ color: 'var(--danger)', fontWeight: 700 }}>{outOfStockLines} ruptures</span>
-            )}
-            {notFoundLines > 0 && (
-              <span style={{ color: 'var(--warning)', fontWeight: 700 }}>{notFoundLines} introuvables</span>
-            )}
-            {cancelledLines > 0 && <span className="text-muted">{cancelledLines} annulées</span>}
-          </div>
-
-          {isMultiStage ? (
-            <>
-              <ProgressRow label="Préparation" progress={prep} />
-              <ProgressRow label="Chargement" progress={load} />
-              <ProgressRow label="Pointage" progress={point} />
-            </>
-          ) : (
-            <ProgressRow label="Pointage Réception" progress={prep} />
-          )}
-        </div>
-
-        {/* Visual Quality Distribution Gauge Chart */}
-        <div className="card mb-3">
-          <div className="flex justify-between items-center mb-2">
-            <div className="text-xs font-bold text-secondary uppercase tracking-wider flex items-center gap-1.5">
-              <IconChart size={14} style={{ color: 'var(--accent)' }} /> RÉPARTITION QUALITÉ & CONFORMITÉ
-            </div>
-            <span className="text-xs text-muted">{lines.length} articles</span>
-          </div>
-
-          {/* Multi-segment visual bar */}
-          <div
-            style={{
-              height: 12,
-              borderRadius: 6,
-              overflow: 'hidden',
-              display: 'flex',
-              background: 'var(--border-subtle, rgba(255, 255, 255, 0.08))',
-              marginBottom: 10,
-              boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.2)',
-            }}
-          >
-            {conformeCount > 0 && (
-              <div
-                style={{
-                  width: `${(conformeCount / lines.length) * 100}%`,
-                  background: 'var(--success, #10b981)',
-                  transition: 'width 0.3s ease',
-                }}
-                title={`Conformes: ${conformeCount} (${pctConforme}%)`}
-              />
-            )}
-            {shortCount > 0 && (
-              <div
-                style={{
-                  width: `${(shortCount / lines.length) * 100}%`,
-                  background: 'var(--warning, #f59e0b)',
-                  transition: 'width 0.3s ease',
-                }}
-                title={`Partiels / Manquants: ${shortCount} (${pctShort}%)`}
-              />
-            )}
-            {overCount > 0 && (
-              <div
-                style={{
-                  width: `${(overCount / lines.length) * 100}%`,
-                  background: 'var(--over, #a855f7)',
-                  transition: 'width 0.3s ease',
-                }}
-                title={`Excédents: ${overCount} (${pctOver}%)`}
-              />
-            )}
-            {problemStatusCount > 0 && (
-              <div
-                style={{
-                  width: `${(problemStatusCount / lines.length) * 100}%`,
-                  background: 'var(--danger, #ef4444)',
-                  transition: 'width 0.3s ease',
-                }}
-                title={`Ruptures / Anomalies: ${problemStatusCount} (${pctProblem}%)`}
-              />
-            )}
-          </div>
-
-          {/* Legend chips */}
-          <div className="grid grid-cols-2 gap-1.5 text-xs">
-            <div
-              className="flex items-center justify-between p-1.5"
-              style={{ background: 'rgba(16, 185, 129, 0.1)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(16, 185, 129, 0.25)' }}
-            >
-              <span className="flex items-center gap-1 font-semibold" style={{ color: '#10b981' }}>
-                <IconCheck size={12} /> Conformes
-              </span>
-              <span className="font-bold">{conformeCount} <span className="text-muted font-normal">({pctConforme}%)</span></span>
-            </div>
-
-            <div
-              className="flex items-center justify-between p-1.5"
-              style={{ background: 'rgba(245, 158, 11, 0.1)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(245, 158, 11, 0.25)' }}
-            >
-              <span className="flex items-center gap-1 font-semibold" style={{ color: '#f59e0b' }}>
-                <IconWarning size={12} /> Incomplets
-              </span>
-              <span className="font-bold">{shortCount} <span className="text-muted font-normal">({pctShort}%)</span></span>
-            </div>
-
-            <div
-              className="flex items-center justify-between p-1.5"
-              style={{ background: 'rgba(168, 85, 247, 0.1)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(168, 85, 247, 0.25)' }}
-            >
-              <span className="flex items-center gap-1 font-semibold" style={{ color: '#a855f7' }}>
-                <IconPlus size={12} /> Excédents
-              </span>
-              <span className="font-bold">{overCount} <span className="text-muted font-normal">({pctOver}%)</span></span>
-            </div>
-
-            <div
-              className="flex items-center justify-between p-1.5"
-              style={{ background: 'rgba(239, 68, 68, 0.1)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(239, 68, 68, 0.25)' }}
-            >
-              <span className="flex items-center gap-1 font-semibold" style={{ color: '#ef4444' }}>
-                <IconBan size={12} /> Ruptures/Spéc.
-              </span>
-              <span className="font-bold">{problemStatusCount} <span className="text-muted font-normal">({pctProblem}%)</span></span>
-            </div>
-          </div>
-        </div>
-
-        {/* Visual Warehouse Workflow Pipeline Map */}
-        <div className="card mb-3" style={{ background: 'var(--bg-surface)' }}>
-          <div className="text-xs font-bold text-secondary uppercase tracking-wider mb-2 flex items-center gap-1.5">
-            <IconLayers size={14} style={{ color: 'var(--accent)' }} /> CYCLE OPÉRATIONNEL ENTREPÔT
-          </div>
-          <div className="flex items-center justify-between gap-1 overflow-x-auto pb-1" style={{ fontSize: '0.72rem' }}>
-            <div className="flex flex-col items-center text-center p-1.5 flex-1 min-w-[70px]" style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-              <IconClipboard size={16} style={{ color: 'var(--accent)', marginBottom: 4 }} />
-              <span className="font-bold">1. Papier</span>
-              <span className="text-muted" style={{ fontSize: '0.64rem' }}>Bon Source</span>
-            </div>
-
-            <span className="text-muted font-bold">➔</span>
-
-            <div className="flex flex-col items-center text-center p-1.5 flex-1 min-w-[70px]" style={{ background: prep.percent === 100 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-sm)', border: prep.percent === 100 ? '1px solid #10b981' : '1px solid var(--border)' }}>
-              <IconBox size={16} style={{ color: prep.percent === 100 ? '#10b981' : 'var(--accent)', marginBottom: 4 }} />
-              <span className="font-bold">2. Pointage</span>
-              <span style={{ fontSize: '0.64rem', color: prep.percent === 100 ? '#10b981' : 'var(--text-muted)' }}>{prep.percent}% saisi</span>
-            </div>
-
-            <span className="text-muted font-bold">➔</span>
-
-            <div className="flex flex-col items-center text-center p-1.5 flex-1 min-w-[70px]" style={{ background: problemLines.length === 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)', borderRadius: 'var(--radius-sm)', border: problemLines.length === 0 ? '1px solid #10b981' : '1px solid #f59e0b' }}>
-              <IconWarning size={16} style={{ color: problemLines.length === 0 ? '#10b981' : '#f59e0b', marginBottom: 4 }} />
-              <span className="font-bold">3. Audit</span>
-              <span style={{ fontSize: '0.64rem', color: problemLines.length === 0 ? '#10b981' : '#f59e0b' }}>{problemLines.length} écarts</span>
-            </div>
-
-            <span className="text-muted font-bold">➔</span>
-
-            <div className="flex flex-col items-center text-center p-1.5 flex-1 min-w-[70px]" style={{ background: 'rgba(56, 189, 248, 0.1)', borderRadius: 'var(--radius-sm)', border: '1px solid #38bdf8' }}>
-              <IconFileSpreadsheet size={16} style={{ color: '#0284c7', marginBottom: 4 }} />
-              <span className="font-bold">4. Facture</span>
-              <span style={{ fontSize: '0.64rem', color: '#0284c7' }}>1:1 Excel</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Surface Facture, Export & Rapport Card */}
-        <div
-          className="card mb-3"
-          style={{ background: 'rgba(56, 189, 248, 0.06)', border: '1px solid rgba(56, 189, 248, 0.25)' }}
-        >
-          <div className="flex justify-between items-center mb-2.5">
-            <div className="font-bold text-sm flex items-center gap-2" style={{ color: '#0284c7' }}>
-              <IconFileSpreadsheet size={18} /> FACTURE & RAPPORT SURFACE
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span
-                className="badge"
-                style={{ fontSize: '0.65rem', background: 'rgba(56, 189, 248, 0.15)', color: '#0284c7', fontWeight: 700 }}
-              >
-                Pointage Réel
-              </span>
-              <button
-                type="button"
-                className="btn btn-xs btn-ghost flex items-center gap-1"
-                style={{ padding: '2px 7px', fontSize: '0.7rem' }}
-                onClick={() => {
-                  setQrSyncInitialTab('export');
-                  setShowQRSync(true);
-                }}
-                title="Synchronisation QR Multi-Téléphones"
-              >
-                <IconLayers size={13} /> Sync QR
-              </button>
-            </div>
-          </div>
-
-          {/* Key metrics */}
-          <div className="flex gap-2 mb-3 flex-wrap items-center">
-            <div className="badge badge-secondary text-xs flex items-center gap-1">
-              <IconBox size={13} /> {finalBillData.totalActualQty} / {finalBillData.totalOrderedQty} pièces
-            </div>
-            {finalBillData.totalDiffQty !== 0 ? (
-              <div
-                className="badge text-xs"
-                style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', fontWeight: 700 }}
-              >
-                {finalBillData.totalDiffQty > 0 ? `+${finalBillData.totalDiffQty}` : finalBillData.totalDiffQty} écart
-              </div>
-            ) : (
-              <div
-                className="badge text-xs"
-                style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e', fontWeight: 700 }}
-              >
-                100% Conforme
-              </div>
-            )}
-            {finalBillData.isPriced && finalBillData.totalAmountTtc > 0 && (
-              <div
-                className="badge text-xs font-bold"
-                style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}
-              >
-                {finalBillData.totalAmountTtc.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DA
-              </div>
-            )}
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex gap-2 flex-wrap mb-2">
             <button
-              className="btn btn-sm btn-primary flex-1 flex items-center justify-center gap-1.5"
-              style={{ minWidth: 125 }}
+              type="button"
+              className="btn btn-xs btn-ghost flex items-center gap-1"
+              style={{ fontSize: '0.72rem', color: 'var(--text-muted)', padding: '2px 8px' }}
+              onClick={() => {
+                setQrSyncInitialTab('export');
+                setShowQRSync(true);
+              }}
+              title="Synchronisation QR Multi-Téléphones"
+            >
+              <IconLayers size={13} /> Sync QR
+            </button>
+          </div>
+
+          {/* Primary Action Buttons (Side by Side) */}
+          <div className="transmission-primary-grid">
+            <button
+              type="button"
+              className="btn-pill-primary"
               onClick={handleDownloadFinalExcel}
-              title="Télécharger la facture finale au format Excel (.xlsx)"
+              title="Télécharger la facture 1:1 conforme au bon papier (.xlsx)"
             >
-              <IconFileSpreadsheet size={15} /> Excel (.xlsx)
+              <IconFileSpreadsheet size={18} /> Excel (.xlsx)
             </button>
+
             <button
-              className="btn btn-sm flex-1 flex items-center justify-center gap-1.5"
-              style={{ background: '#25D366', color: '#fff', fontWeight: 700, border: 'none', minWidth: 125 }}
+              type="button"
+              className="btn-pill-whatsapp"
               onClick={handleShareFinalWhatsApp}
-              title="Transmettre la facture vérifiée au responsable par WhatsApp"
+              title="Transmettre le rapport et la facture par WhatsApp"
             >
-              <IconSend size={15} /> WhatsApp
-            </button>
-            <button
-              className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
-              onClick={handleSendFinalEmail}
-              title="Envoyer par email au responsable"
-            >
-              <IconMail size={15} /> Email
-            </button>
-            <button
-              className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
-              onClick={() => setShowPriceModal(true)}
-              title="Consulter ou renseigner les prix unitaires pour la saisie"
-            >
-              <IconTable size={15} /> Prix
-            </button>
-            <button
-              className="btn btn-sm btn-ghost flex items-center justify-center gap-1"
-              onClick={handleCopyReport}
-              title="Copier le rapport texte dans le presse-papier"
-            >
-              <IconClipboard size={15} />
+              <IconSend size={18} /> WhatsApp
             </button>
           </div>
 
-          <div className="pt-2 mt-1" style={{ borderTop: '1px solid rgba(56, 189, 248, 0.15)' }}>
-            <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-secondary">
-              <input
-                type="checkbox"
-                checked={exportOnlyPresent}
-                onChange={(e) => setExportOnlyPresent(e.target.checked)}
-              />
-              <span>Exclure les articles non reçus (Qté = 0)</span>
-            </label>
+          {/* Secondary Quick Actions */}
+          <div className="secondary-actions-row">
+            <button
+              type="button"
+              className="btn-pill-glass"
+              onClick={() => setShowPriceModal(true)}
+              title="Consulter ou renseigner les prix unitaires"
+            >
+              <IconTable size={14} /> Prix
+            </button>
+
+            <button
+              type="button"
+              className="btn-pill-glass"
+              onClick={handleSendFinalEmail}
+              title="Envoyer par email"
+            >
+              <IconMail size={14} /> Email
+            </button>
+
+            <button
+              type="button"
+              className="btn-pill-glass"
+              onClick={handleCopyReport}
+              title="Copier le texte du rapport"
+            >
+              <IconClipboard size={14} /> Copier
+            </button>
           </div>
+
+          <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-secondary mt-3 pt-2" style={{ borderTop: 'var(--glass-border-subtle)' }}>
+            <input
+              type="checkbox"
+              checked={exportOnlyPresent}
+              onChange={(e) => setExportOnlyPresent(e.target.checked)}
+              style={{ borderRadius: 4, accentColor: 'var(--accent)' }}
+            />
+            <span>Exclure les articles non reçus (Qté = 0)</span>
+          </label>
         </div>
 
         {extras.length > 0 && (
-
-          <div className="card">
+          <div className="card mb-3">
             <div className="section-title" style={{ marginTop: 0 }}>EXTRAS ({extras.length})</div>
             {extras.map((ex) => (
               <div key={ex.id} className="text-sm mb-2">
@@ -4288,31 +4077,35 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           </div>
         )}
 
-        {/* View Tabs */}
-        <div className="flex gap-1 mb-2 flex-wrap">
+        {/* View Tabs — Segmented Apple Control */}
+        <div className="seg-control mb-3">
           <button
-            className={`btn btn-sm ${summaryTab === 'problems' ? 'btn-warning' : 'btn-secondary'} flex items-center gap-1`}
+            type="button"
+            className={`seg-btn ${summaryTab === 'problems' ? 'active' : ''}`}
             onClick={() => setSummaryTab('problems')}
           >
-            <IconWarning size={14} /> Anomalies ({problemLines.length})
+            Écarts ({problemLines.length})
           </button>
           <button
-            className={`btn btn-sm ${summaryTab === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+            type="button"
+            className={`seg-btn ${summaryTab === 'all' ? 'active' : ''}`}
             onClick={() => setSummaryTab('all')}
           >
             Tous ({lines.length})
           </button>
           <button
-            className={`btn btn-sm ${summaryTab === 'cartons' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
+            type="button"
+            className={`seg-btn ${summaryTab === 'cartons' ? 'active' : ''}`}
             onClick={() => setSummaryTab('cartons')}
           >
-            <IconBox size={14} /> Cartons ({containers.length})
+            Colis ({containers.length})
           </button>
           <button
-            className={`btn btn-sm ${summaryTab === 'audit' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
+            type="button"
+            className={`seg-btn ${summaryTab === 'audit' ? 'active' : ''}`}
             onClick={() => setSummaryTab('audit')}
           >
-            <IconClipboard size={14} /> Audit
+            Audit Logistique
           </button>
         </div>
 
@@ -4437,39 +4230,17 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           </div>
         )}
 
-        {/* Reassuring Empty State for 0 Problems */}
+        {/* Calm Apple Glass Zero State for 0 Problems */}
         {summaryTab === 'problems' && problemLines.length === 0 && (
-          <div
-            className="card text-center py-5 my-2"
-            style={{
-              background: 'rgba(16, 185, 129, 0.08)',
-              border: '1px solid rgba(16, 185, 129, 0.25)',
-              borderRadius: 'var(--radius-md)',
-              padding: '24px 16px',
-            }}
-          >
-            <div
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: '50%',
-                background: 'rgba(16, 185, 129, 0.15)',
-                color: 'var(--success)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 10px auto',
-              }}
-            >
+          <div className="calm-zero-state mb-3">
+            <div className="calm-zero-icon">
               <IconCheck size={26} />
             </div>
-            <div className="font-bold text-sm" style={{ color: 'var(--success)' }}>
-              Aucun écart ni anomalie détecté !
+            <div className="calm-zero-title">
+              Aucun écart détecté
             </div>
-            <div className="text-xs text-muted mt-1" style={{ maxWidth: 280, margin: '0 auto' }}>
-              Toutes les lignes comptées pour l'étape{' '}
-              <strong>{stageScope === 'pointage' ? 'Pointage' : stageScope === 'chargement' ? 'Chargement' : 'Préparation'}</strong>{' '}
-              correspondent parfaitement aux quantités attendues.
+            <div className="calm-zero-desc">
+              Toutes les lignes comptées pour l'étape <strong>{stageScope === 'pointage' ? 'Pointage' : stageScope === 'chargement' ? 'Chargement' : 'Préparation'}</strong> correspondent au bon source.
             </div>
           </div>
         )}
