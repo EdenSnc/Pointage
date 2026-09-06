@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { playSuccessChime, playWarningBeep, playErrorBeep } from './audio';
+import {
+  playSuccessChime,
+  playWarningBeep,
+  playErrorBeep,
+  playExactMatchChime,
+  playUndoBeep,
+  hapticTap,
+  isAudioMuted,
+  setAudioMuted,
+} from './audio';
 
 describe('Multimodal Audio & Haptic Feedback Engine', () => {
   let originalAudioContext: any;
@@ -84,5 +93,30 @@ describe('Multimodal Audio & Haptic Feedback Engine', () => {
     expect(() => playSuccessChime()).not.toThrow();
     expect(() => playWarningBeep()).not.toThrow();
     expect(() => playErrorBeep()).not.toThrow();
+    expect(() => playExactMatchChime()).not.toThrow();
+    expect(() => playUndoBeep()).not.toThrow();
+  });
+
+  it('triggers hapticTap with tuned durations for Samsung A54', () => {
+    const vibrateMock = vi.fn();
+    Object.defineProperty(globalThis.navigator, 'vibrate', {
+      value: vibrateMock,
+      writable: true,
+      configurable: true,
+    });
+
+    hapticTap('light');
+    expect(vibrateMock).toHaveBeenCalledWith(15);
+
+    hapticTap('medium');
+    expect(vibrateMock).toHaveBeenCalledWith(28);
+  });
+
+  it('manages audio mute preferences in localStorage', () => {
+    setAudioMuted(true);
+    expect(isAudioMuted()).toBe(true);
+
+    setAudioMuted(false);
+    expect(isAudioMuted()).toBe(false);
   });
 });

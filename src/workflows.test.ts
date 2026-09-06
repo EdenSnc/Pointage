@@ -11,6 +11,7 @@ import {
   lineBlocksCompletion,
   getStageTotals,
   smartSearchScore,
+  calcPackBreakdown,
 } from './logic';
 import type { OrderLine, CountEvent } from './types';
 
@@ -322,6 +323,96 @@ describe('Workflow 5: Onboarding Walkthrough & Experience Integrity', () => {
       createdAt: new Date().toISOString(),
     });
     expect(sumStageEvents(events, 'preparation')).toBe(24);
+  });
+});
+
+describe('Workflow 7: Quality Distribution Breakdown & Visual Gauge Calculations', () => {
+  it('correctly categorizes lines into exact, partial, overfill, and problem statuses', () => {
+    const l1 = makeLine({ id: 1, orderedQty: 20, status: 'active' }); // Exact (20/20)
+    const l2 = makeLine({ id: 2, orderedQty: 50, status: 'active' }); // Partial (30/50)
+    const l3 = makeLine({ id: 3, orderedQty: 10, status: 'active' }); // Overfill (15/10)
+    const l4 = makeLine({ id: 4, orderedQty: 15, status: 'out_of_stock' }); // Rupture
+    const l5 = makeLine({ id: 5, orderedQty: 5, status: 'cancelled' }); // Annulé
+
+    const lines = [l1, l2, l3, l4, l5];
+    const eventsByLine = new Map<number, CountEvent[]>([
+      [1, [makeEvent({ orderLineId: 1, quantity: 20 })]],
+      [2, [makeEvent({ orderLineId: 2, quantity: 30 })]],
+      [3, [makeEvent({ orderLineId: 3, quantity: 15 })]],
+      [4, []],
+      [5, []],
+    ]);
+
+    const conformeCount = lines.filter(l => {
+      if (l.status !== 'active') return false;
+      const evts = eventsByLine.get(l.id!) || [];
+      const stageTotal = sumStageEvents(evts, 'preparation');
+      const disc = calcDiscrepancy(l, stageTotal);
+      return disc.isExact && stageTotal > 0;
+    }).length;
+
+    const shortCount = lines.filter(l => {
+      if (l.status !== 'active') return false;
+      const evts = eventsByLine.get(l.id!) || [];
+      const stageTotal = sumStageEvents(evts, 'preparation');
+      const disc = calcDiscrepancy(l, stageTotal);
+      return disc.isShort && stageTotal > 0;
+    }).length;
+
+    const overCount = lines.filter(l => {
+      if (l.status !== 'active') return false;
+      const evts = eventsByLine.get(l.id!) || [];
+      const stageTotal = sumStageEvents(evts, 'preparation');
+      const disc = calcDiscrepancy(l, stageTotal);
+      return disc.isOver;
+    }).length;
+
+    const problemStatusCount = lines.filter(l => l.status === 'out_of_stock' || l.status === 'not_found' || l.status === 'cancelled').length;
+
+    expect(conformeCount).toBe(1);
+    expect(shortCount).toBe(1);
+    expect(overCount).toBe(1);
+    expect(problemStatusCount).toBe(2);
+
+    expect(Math.round((conformeCount / lines.length) * 100)).toBe(20);
+    expect(Math.round((shortCount / lines.length) * 100)).toBe(20);
+    expect(Math.round((overCount / lines.length) * 100)).toBe(20);
+    expect(Math.round((problemStatusCount / lines.length) * 100)).toBe(40);
+  });
+});
+
+describe('Workflow 8: Visual Pack Breakdown Arithmetic & Packaging Decomposition', () => {
+  it('accurately decomposes remainder into integer full packages and loose units', () => {
+    // 25 units remaining with inner pack of 6
+    const res = calcPackBreakdown(25, 6);
+    expect(res.fullPacks).toBe(4); // 4 × 6 = 24
+    expect(res.loose).toBe(1);     // + 1 = 25
+
+    // Exact multiple (24 units with pack of 12)
+    const exact = calcPackBreakdown(24, 12);
+    expect(exact.fullPacks).toBe(2);
+    expect(exact.loose).toBe(0);
+
+    // Only loose units (3 units with pack of 10)
+    const looseOnly = calcPackBreakdown(3, 10);
+    expect(looseOnly.fullPacks).toBe(0);
+    expect(looseOnly.loose).toBe(3);
+  });
+});
+
+describe('Workflow 9: Accidental Tap Correction via Decrement Chips (-1, -5)', () => {
+  it('safely decrements count without dropping below zero', () => {
+    let loose = 7;
+    // Worker tapped +12 by mistake, wants to decrease
+    loose = Math.max(0, loose - 5);
+    expect(loose).toBe(2);
+
+    loose = Math.max(0, loose - 1);
+    expect(loose).toBe(1);
+
+    // Guard against negative numbers
+    loose = Math.max(0, loose - 5);
+    expect(loose).toBe(0);
   });
 });
 

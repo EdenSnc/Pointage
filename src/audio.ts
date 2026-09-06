@@ -40,6 +40,7 @@ export function playSuccessChime() {
   }
 
   // 2. Synthesized high-frequency industrial chime
+  if (isAudioMuted()) return;
   const ctx = getAudioContext();
   if (!ctx) return;
 
@@ -82,6 +83,7 @@ export function playWarningBeep() {
     } catch {}
   }
 
+  if (isAudioMuted()) return;
   const ctx = getAudioContext();
   if (!ctx) return;
 
@@ -101,7 +103,110 @@ export function playWarningBeep() {
 }
 
 /**
- * Low-frequency alert tone (220 Hz sawtooth) for unrecognized barcodes or refusal
+ * Micro-tactile click for keypad taps, chip selections, and stepper adjustments
+ * Specially tuned for Samsung Galaxy A54 5G linear resonant haptic motor
+ */
+export function hapticTap(intensity: 'light' | 'medium' = 'light') {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    try {
+      navigator.vibrate(intensity === 'light' ? 15 : 28);
+    } catch {}
+  }
+}
+
+let memoryMuted = false;
+
+/**
+ * Checks whether sound effects are muted by user preference
+ */
+export function isAudioMuted(): boolean {
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem) {
+      const val = localStorage.getItem('pointage_audio_muted');
+      if (val !== null) return val === 'true';
+    }
+  } catch {}
+  return memoryMuted;
+}
+
+/**
+ * Sets sound effects mute preference
+ */
+export function setAudioMuted(muted: boolean): void {
+  memoryMuted = muted;
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage.setItem) {
+      localStorage.setItem('pointage_audio_muted', muted ? 'true' : 'false');
+    }
+  } catch {}
+}
+
+/**
+ * Glorious triad celebration chime (880 Hz -> 1108 Hz -> 1320 Hz)
+ * Triggered when a product line hits 100% exact target count!
+ */
+export function playExactMatchChime() {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    try {
+      navigator.vibrate([40, 50, 75]);
+    } catch {}
+  }
+
+  if (isAudioMuted()) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  try {
+    const now = ctx.currentTime;
+    const freqs = [880, 1108.73, 1320]; // A5, C#6, E6 major chord triad
+    freqs.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const startTime = now + idx * 0.05;
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, startTime);
+      gain.gain.setValueAtTime(0.18, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + 0.35);
+    });
+  } catch {}
+}
+
+/**
+ * Descending subtle chime (660 Hz -> 440 Hz) for undo or reset operations
+ */
+export function playUndoBeep() {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    try {
+      navigator.vibrate(28);
+    } catch {}
+  }
+
+  if (isAudioMuted()) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  try {
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(660, now);
+    osc.frequency.exponentialRampToValueAtTime(440, now + 0.12);
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.14);
+  } catch {}
+}
+
+/**
+ * Low-frequency alert tone (220 Hz sawtooth) for unrecognized barcodes, refusals, or errors
  */
 export function playErrorBeep() {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -110,6 +215,7 @@ export function playErrorBeep() {
     } catch {}
   }
 
+  if (isAudioMuted()) return;
   const ctx = getAudioContext();
   if (!ctx) return;
 
@@ -127,3 +233,5 @@ export function playErrorBeep() {
     osc.stop(now + 0.28);
   } catch {}
 }
+
+

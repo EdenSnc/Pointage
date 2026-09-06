@@ -98,6 +98,8 @@ import {
   IconMail,
   IconFileSpreadsheet,
   IconTable,
+  IconVolume,
+  IconVolumeX,
 } from './icons';
 
 import {
@@ -113,7 +115,16 @@ import { providerRegistry } from './ai/providerRegistry';
 import { ErrorBoundary } from './ErrorBoundary';
 import { SettingsModal } from './SettingsModal';
 import { FastScanQuantityCard } from './FastScanQuantityCard';
-import { playSuccessChime, playErrorBeep } from './audio';
+import {
+  playSuccessChime,
+  playWarningBeep,
+  playExactMatchChime,
+  playUndoBeep,
+  playErrorBeep,
+  hapticTap,
+  isAudioMuted,
+  setAudioMuted,
+} from './audio';
 
 export interface ToastItem {
   message: string;
@@ -214,6 +225,41 @@ export default function App() {
     </HashRouter>
   );
 
+}
+
+// ---- Reusable Audio / Haptic Mute Toggle ----
+function AudioMuteButton({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  const [muted, setMuted] = useState(() => isAudioMuted());
+
+  const toggle = () => {
+    const next = !muted;
+    setAudioMuted(next);
+    setMuted(next);
+    hapticTap('light');
+    if (!next) {
+      playSuccessChime();
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      className={className || 'btn btn-xs btn-ghost btn-icon'}
+      style={{
+        padding: 6,
+        color: muted ? 'var(--text-muted)' : 'var(--accent)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        ...style,
+      }}
+      onClick={toggle}
+      title={muted ? 'Activer le son et les vibrations' : 'Couper les retours sonores'}
+      aria-label={muted ? 'Activer le son' : 'Couper le son'}
+    >
+      {muted ? <IconVolumeX size={18} /> : <IconVolume size={18} />}
+    </button>
+  );
 }
 
 // ---- Reusable API Key Configuration Modal ----
@@ -802,6 +848,7 @@ function HomeScreen({
           >
             {showQuantities ? <IconEye size={18} style={{ color: 'var(--accent)' }} /> : <IconEyeOff size={18} />}
           </button>
+          <AudioMuteButton />
           <button
             className="btn btn-xs btn-ghost btn-icon"
             onClick={() => setShowSettingsModal(true)}
@@ -1793,6 +1840,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <div className="font-semibold truncate">{bill.client}</div>
           <div className="text-xs text-muted truncate">{bill.billNumber}</div>
         </div>
+        <AudioMuteButton />
         <button
           type="button"
           className="btn btn-sm btn-secondary flex items-center gap-1"
@@ -1946,6 +1994,32 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                   {stageTotal}
                 </span>
               </div>
+
+              {/* Visual Progress Micro-Gauge Bar */}
+              <div
+                className="product-micro-gauge"
+                style={{
+                  marginTop: 8,
+                  height: 5,
+                  background: 'var(--border-subtle, rgba(255, 255, 255, 0.08))',
+                  borderRadius: 999,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  width: '100%',
+                }}
+              >
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${Math.min(100, line.orderedQty > 0 ? (stageTotal / line.orderedQty) * 100 : (stageTotal > 0 ? 100 : 0))}%`,
+                    background: disc.isExact && stageTotal > 0 ? 'var(--success)' :
+                               disc.isOver ? 'var(--over)' :
+                               stageTotal > 0 ? 'var(--warning)' : 'transparent',
+                    borderRadius: 999,
+                    transition: 'width 0.25s ease',
+                  }}
+                />
+              </div>
             </div>
           );
         })}
@@ -2085,7 +2159,6 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
 
     if (stage === 'pointage') setRefusalNote('');
 
-
     // Save packaging if set
     if (line.reference && (outerPack || innerPack)) {
       await db.orderLines.update(lineId, {
@@ -2104,15 +2177,24 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     setLoose(0);
     setDirectTotal('');
 
-    if (navigator.vibrate) navigator.vibrate(50);
+    if (afterDisc.isExact) {
+      playExactMatchChime();
+    } else if (afterDisc.isOver) {
+      playWarningBeep();
+    } else {
+      playSuccessChime();
+    }
     showToast(`+${batchQty} enregistré`, setToast);
   };
 
   const handleUndo = async () => {
     const success = await undoLastCount(lineId, stage);
     if (success) {
+      playUndoBeep();
+      hapticTap('medium');
       showToast('Dernier comptage annulé', setToast);
     } else {
+      playErrorBeep();
       showToast('Rien à annuler', setToast);
     }
   };
@@ -2124,6 +2206,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
       return;
     }
     await resetLineStageCount(lineId, stage);
+    playUndoBeep();
+    hapticTap('medium');
     showToast('Comptage réinitialisé à 0', setToast);
   };
 
@@ -2138,6 +2222,13 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
       stage === 'pointage' ? outcome : null,
       refusalNote
     );
+    if (val === line.orderedQty) {
+      playExactMatchChime();
+    } else if (val > line.orderedQty) {
+      playWarningBeep();
+    } else {
+      playSuccessChime();
+    }
     setEditingCount(false);
     showToast(`Comptage ajusté à ${val} pièces`, setToast);
   };
@@ -2177,6 +2268,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
           <div className="text-xs text-muted truncate">{bill.client} — {bill.billNumber}</div>
         </div>
+        <AudioMuteButton />
       </header>
 
       <div className="app-content">
@@ -2366,11 +2458,60 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             </div>
           )}
 
-          {innerPack && showQuantities && (
-            <div className="text-xs text-muted mt-2">
-              = {calcPackBreakdown(disc.remaining, innerPack).fullPacks} paquets × {innerPack} + {calcPackBreakdown(disc.remaining, innerPack).loose} unités
-            </div>
-          )}
+          {/* Visual pack breakdown illustration */}
+          {innerPack && showQuantities && disc.remaining > 0 && (() => {
+            const breakdown = calcPackBreakdown(disc.remaining, innerPack);
+            return (
+              <div
+                className="mt-2.5 p-2.5"
+                style={{
+                  background: 'var(--bg-surface)',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                <div className="text-xs font-semibold text-muted mb-1.5 flex items-center gap-1.5">
+                  <IconBox size={13} style={{ color: 'var(--accent)' }} />
+                  <span>DÉCOMPOSITION DU RELIQUAT ({disc.remaining} pièces) :</span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap text-xs">
+                  {breakdown.fullPacks > 0 && (
+                    <div
+                      className="flex items-center gap-1 px-2 py-1"
+                      style={{
+                        background: 'rgba(37, 99, 235, 0.12)',
+                        border: '1px solid rgba(37, 99, 235, 0.3)',
+                        borderRadius: 'var(--radius-badge)',
+                        color: 'var(--accent)',
+                        fontWeight: 700,
+                      }}
+                    >
+                      <IconBox size={14} />
+                      <span>{breakdown.fullPacks} × Colis ({innerPack} pcs)</span>
+                      <span className="text-muted font-normal">= {breakdown.fullPacks * innerPack}</span>
+                    </div>
+                  )}
+                  {breakdown.fullPacks > 0 && breakdown.loose > 0 && (
+                    <span className="font-bold text-muted">+</span>
+                  )}
+                  {breakdown.loose > 0 && (
+                    <div
+                      className="flex items-center gap-1 px-2 py-1"
+                      style={{
+                        background: 'rgba(234, 179, 8, 0.12)',
+                        border: '1px solid rgba(234, 179, 8, 0.3)',
+                        borderRadius: 'var(--radius-badge)',
+                        color: 'var(--warning)',
+                        fontWeight: 700,
+                      }}
+                    >
+                      <span>{breakdown.loose} Unité{breakdown.loose > 1 ? 's' : ''} Vrac</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Stage tabs for counting */}
@@ -2565,29 +2706,35 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           {/* Quick preset chips for rapid warehouse counting */}
           <div className="flex gap-1 mt-3 flex-wrap items-center">
             <button className="btn btn-xs btn-secondary" onClick={() => {
+              hapticTap('light');
               if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + 1));
               else setLoose(prev => prev + 1);
             }}>+1</button>
             <button className="btn btn-xs btn-secondary" onClick={() => {
+              hapticTap('light');
               if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + 5));
               else setLoose(prev => prev + 5);
             }}>+5</button>
             <button className="btn btn-xs btn-secondary" onClick={() => {
+              hapticTap('light');
               if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + 10));
               else setLoose(prev => prev + 10);
             }}>+10</button>
             <button className="btn btn-xs btn-secondary" onClick={() => {
+              hapticTap('light');
               if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + 12));
               else setLoose(prev => prev + 12);
             }}>+12</button>
             {innerPack && innerPack > 1 && innerPack !== 5 && innerPack !== 10 && innerPack !== 12 && (
               <button className="btn btn-xs btn-secondary" onClick={() => {
+                hapticTap('light');
                 if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + innerPack));
                 else setLoose(prev => prev + innerPack);
               }}>+{innerPack}</button>
             )}
             {outerPack && outerPack > 1 && (
               <button className="btn btn-xs btn-secondary" onClick={() => {
+                hapticTap('light');
                 if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + outerPack));
                 else setLoose(prev => prev + outerPack);
               }}>+{outerPack}</button>
@@ -2599,6 +2746,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               className="btn btn-xs btn-ghost text-muted"
               style={{ border: '1px dashed var(--border)' }}
               onClick={() => {
+                hapticTap('light');
                 if (useDirectEntry) {
                   const c = parseInt(directTotal) || 0;
                   if (c > 0) setDirectTotal(String(c - 1));
@@ -2615,6 +2763,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               className="btn btn-xs btn-ghost text-muted"
               style={{ border: '1px dashed var(--border)' }}
               onClick={() => {
+                hapticTap('light');
                 if (useDirectEntry) {
                   const c = parseInt(directTotal) || 0;
                   if (c >= 5) setDirectTotal(String(c - 5));
@@ -2631,6 +2780,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             {/* STRICT BLIND COUNT: Only show SOLDE when quantities are VISIBLE */}
             {showQuantities && disc.remaining > 0 && (
               <button className="btn btn-xs btn-primary flex items-center gap-1" onClick={() => {
+                hapticTap('medium');
+                playExactMatchChime();
                 if (useDirectEntry) setDirectTotal(String(disc.remaining));
                 else setLoose(disc.remaining);
               }}>
@@ -2655,6 +2806,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                       type="button"
                       className="btn btn-sm btn-warning btn-full flex items-center justify-center gap-1"
                       onClick={() => {
+                        hapticTap('medium');
+                        playSuccessChime();
                         if (useDirectEntry) setDirectTotal(String(rounded.servedQty));
                         else setLoose(rounded.servedQty);
                         showToast(`Lot scellé : ${rounded.servedQty} servis (${rounded.missingQty} reliquat)`, setToast);
@@ -3019,7 +3172,16 @@ function Stepper({ value, onChange }: { value: number; onChange: (v: number) => 
 
   return (
     <div className="stepper">
-      <button type="button" className="stepper-btn" onClick={() => onChange(Math.max(0, value - 1))}>−</button>
+      <button
+        type="button"
+        className="stepper-btn"
+        onClick={() => {
+          hapticTap('light');
+          onChange(Math.max(0, value - 1));
+        }}
+      >
+        −
+      </button>
       <input
         id="stepper-quantity-input"
         name="stepperQuantity"
@@ -3051,7 +3213,16 @@ function Stepper({ value, onChange }: { value: number; onChange: (v: number) => 
           fontFamily: 'var(--font-mono)',
         }}
       />
-      <button type="button" className="stepper-btn" onClick={() => onChange(value + 1)}>+</button>
+      <button
+        type="button"
+        className="stepper-btn"
+        onClick={() => {
+          hapticTap('light');
+          onChange(value + 1);
+        }}
+      >
+        +
+      </button>
     </div>
   );
 }
@@ -3583,6 +3754,38 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   const load = calcBillProgress(lines, eventsByLine, 'chargement');
   const point = calcBillProgress(lines, eventsByLine, 'pointage');
 
+  // Visual Quality Distribution metrics
+  const activeScopeStage: Stage = stageScope === 'auto' ? 'preparation' : stageScope;
+  const conformeCount = lines.filter(l => {
+    if (l.status !== 'active') return false;
+    const evts = eventsByLine.get(l.id!) || [];
+    const stageTotal = sumStageEvents(evts, activeScopeStage);
+    const disc = calcDiscrepancy(l, stageTotal);
+    return disc.isExact && stageTotal > 0;
+  }).length;
+
+  const shortCount = lines.filter(l => {
+    if (l.status !== 'active') return false;
+    const evts = eventsByLine.get(l.id!) || [];
+    const stageTotal = sumStageEvents(evts, activeScopeStage);
+    const disc = calcDiscrepancy(l, stageTotal);
+    return disc.isShort && stageTotal > 0;
+  }).length;
+
+  const overCount = lines.filter(l => {
+    if (l.status !== 'active') return false;
+    const evts = eventsByLine.get(l.id!) || [];
+    const stageTotal = sumStageEvents(evts, activeScopeStage);
+    const disc = calcDiscrepancy(l, stageTotal);
+    return disc.isOver;
+  }).length;
+
+  const problemStatusCount = outOfStockLines + notFoundLines + cancelledLines;
+  const pctConforme = lines.length > 0 ? Math.round((conformeCount / lines.length) * 100) : 0;
+  const pctShort = lines.length > 0 ? Math.round((shortCount / lines.length) * 100) : 0;
+  const pctOver = lines.length > 0 ? Math.round((overCount / lines.length) * 100) : 0;
+  const pctProblem = lines.length > 0 ? Math.round((problemStatusCount / lines.length) * 100) : 0;
+
   // WhatsApp Discrepancy Report Generator
   const generateReport = () => {
     const stageProblems = getStageProblemLines(lines, eventsByLine, stageScope === 'auto' ? 'preparation' : stageScope);
@@ -3811,6 +4014,151 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           ) : (
             <ProgressRow label="Pointage Réception" progress={prep} />
           )}
+        </div>
+
+        {/* Visual Quality Distribution Gauge Chart */}
+        <div className="card mb-3">
+          <div className="flex justify-between items-center mb-2">
+            <div className="text-xs font-bold text-secondary uppercase tracking-wider flex items-center gap-1.5">
+              <IconChart size={14} style={{ color: 'var(--accent)' }} /> RÉPARTITION QUALITÉ & CONFORMITÉ
+            </div>
+            <span className="text-xs text-muted">{lines.length} articles</span>
+          </div>
+
+          {/* Multi-segment visual bar */}
+          <div
+            style={{
+              height: 12,
+              borderRadius: 6,
+              overflow: 'hidden',
+              display: 'flex',
+              background: 'var(--border-subtle, rgba(255, 255, 255, 0.08))',
+              marginBottom: 10,
+              boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.2)',
+            }}
+          >
+            {conformeCount > 0 && (
+              <div
+                style={{
+                  width: `${(conformeCount / lines.length) * 100}%`,
+                  background: 'var(--success, #10b981)',
+                  transition: 'width 0.3s ease',
+                }}
+                title={`Conformes: ${conformeCount} (${pctConforme}%)`}
+              />
+            )}
+            {shortCount > 0 && (
+              <div
+                style={{
+                  width: `${(shortCount / lines.length) * 100}%`,
+                  background: 'var(--warning, #f59e0b)',
+                  transition: 'width 0.3s ease',
+                }}
+                title={`Partiels / Manquants: ${shortCount} (${pctShort}%)`}
+              />
+            )}
+            {overCount > 0 && (
+              <div
+                style={{
+                  width: `${(overCount / lines.length) * 100}%`,
+                  background: 'var(--over, #a855f7)',
+                  transition: 'width 0.3s ease',
+                }}
+                title={`Excédents: ${overCount} (${pctOver}%)`}
+              />
+            )}
+            {problemStatusCount > 0 && (
+              <div
+                style={{
+                  width: `${(problemStatusCount / lines.length) * 100}%`,
+                  background: 'var(--danger, #ef4444)',
+                  transition: 'width 0.3s ease',
+                }}
+                title={`Ruptures / Anomalies: ${problemStatusCount} (${pctProblem}%)`}
+              />
+            )}
+          </div>
+
+          {/* Legend chips */}
+          <div className="grid grid-cols-2 gap-1.5 text-xs">
+            <div
+              className="flex items-center justify-between p-1.5"
+              style={{ background: 'rgba(16, 185, 129, 0.1)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(16, 185, 129, 0.25)' }}
+            >
+              <span className="flex items-center gap-1 font-semibold" style={{ color: '#10b981' }}>
+                <IconCheck size={12} /> Conformes
+              </span>
+              <span className="font-bold">{conformeCount} <span className="text-muted font-normal">({pctConforme}%)</span></span>
+            </div>
+
+            <div
+              className="flex items-center justify-between p-1.5"
+              style={{ background: 'rgba(245, 158, 11, 0.1)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(245, 158, 11, 0.25)' }}
+            >
+              <span className="flex items-center gap-1 font-semibold" style={{ color: '#f59e0b' }}>
+                <IconWarning size={12} /> Incomplets
+              </span>
+              <span className="font-bold">{shortCount} <span className="text-muted font-normal">({pctShort}%)</span></span>
+            </div>
+
+            <div
+              className="flex items-center justify-between p-1.5"
+              style={{ background: 'rgba(168, 85, 247, 0.1)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(168, 85, 247, 0.25)' }}
+            >
+              <span className="flex items-center gap-1 font-semibold" style={{ color: '#a855f7' }}>
+                <IconPlus size={12} /> Excédents
+              </span>
+              <span className="font-bold">{overCount} <span className="text-muted font-normal">({pctOver}%)</span></span>
+            </div>
+
+            <div
+              className="flex items-center justify-between p-1.5"
+              style={{ background: 'rgba(239, 68, 68, 0.1)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(239, 68, 68, 0.25)' }}
+            >
+              <span className="flex items-center gap-1 font-semibold" style={{ color: '#ef4444' }}>
+                <IconBan size={12} /> Ruptures/Spéc.
+              </span>
+              <span className="font-bold">{problemStatusCount} <span className="text-muted font-normal">({pctProblem}%)</span></span>
+            </div>
+          </div>
+        </div>
+
+        {/* Visual Warehouse Workflow Pipeline Map */}
+        <div className="card mb-3" style={{ background: 'var(--bg-surface)' }}>
+          <div className="text-xs font-bold text-secondary uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <IconLayers size={14} style={{ color: 'var(--accent)' }} /> CYCLE OPÉRATIONNEL ENTREPÔT
+          </div>
+          <div className="flex items-center justify-between gap-1 overflow-x-auto pb-1" style={{ fontSize: '0.72rem' }}>
+            <div className="flex flex-col items-center text-center p-1.5 flex-1 min-w-[70px]" style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+              <IconClipboard size={16} style={{ color: 'var(--accent)', marginBottom: 4 }} />
+              <span className="font-bold">1. Papier</span>
+              <span className="text-muted" style={{ fontSize: '0.64rem' }}>Bon Source</span>
+            </div>
+
+            <span className="text-muted font-bold">➔</span>
+
+            <div className="flex flex-col items-center text-center p-1.5 flex-1 min-w-[70px]" style={{ background: prep.percent === 100 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-sm)', border: prep.percent === 100 ? '1px solid #10b981' : '1px solid var(--border)' }}>
+              <IconBox size={16} style={{ color: prep.percent === 100 ? '#10b981' : 'var(--accent)', marginBottom: 4 }} />
+              <span className="font-bold">2. Pointage</span>
+              <span style={{ fontSize: '0.64rem', color: prep.percent === 100 ? '#10b981' : 'var(--text-muted)' }}>{prep.percent}% saisi</span>
+            </div>
+
+            <span className="text-muted font-bold">➔</span>
+
+            <div className="flex flex-col items-center text-center p-1.5 flex-1 min-w-[70px]" style={{ background: problemLines.length === 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)', borderRadius: 'var(--radius-sm)', border: problemLines.length === 0 ? '1px solid #10b981' : '1px solid #f59e0b' }}>
+              <IconWarning size={16} style={{ color: problemLines.length === 0 ? '#10b981' : '#f59e0b', marginBottom: 4 }} />
+              <span className="font-bold">3. Audit</span>
+              <span style={{ fontSize: '0.64rem', color: problemLines.length === 0 ? '#10b981' : '#f59e0b' }}>{problemLines.length} écarts</span>
+            </div>
+
+            <span className="text-muted font-bold">➔</span>
+
+            <div className="flex flex-col items-center text-center p-1.5 flex-1 min-w-[70px]" style={{ background: 'rgba(56, 189, 248, 0.1)', borderRadius: 'var(--radius-sm)', border: '1px solid #38bdf8' }}>
+              <IconFileSpreadsheet size={16} style={{ color: '#0284c7', marginBottom: 4 }} />
+              <span className="font-bold">4. Facture</span>
+              <span style={{ fontSize: '0.64rem', color: '#0284c7' }}>1:1 Excel</span>
+            </div>
+          </div>
         </div>
 
         {/* Surface Facture, Export & Rapport Card */}
