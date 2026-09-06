@@ -269,6 +269,15 @@ export function IconArrowLeft({ size = 18, className, style }: IconProps) {
   );
 }
 
+export function IconTransfer({ size = 16, className, style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <path d="M7 16V4M7 4L3 8M7 4L11 8" />
+      <path d="M17 8V20M17 20L21 16M17 20L13 16" />
+    </svg>
+  );
+}
+
 export function IconLayers({ size = 16, className, style }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>

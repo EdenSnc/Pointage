@@ -430,6 +430,99 @@ export async function setLineStageTotalCount(
   }
 }
 
+/**
+ * Transfers all active count events of a single line from one stage to another.
+ * e.g., when an operator accidentally counted items in chargement instead of preparation.
+ */
+export async function transferLineStageCounts(
+  billId: number,
+  orderLineId: number,
+  fromStage: Stage,
+  toStage: Stage
+): Promise<number> {
+  if (fromStage === toStage) return 0;
+  const events = await db.countEvents
+    .where('orderLineId')
+    .equals(orderLineId)
+    .toArray();
+  const activeEvents = events.filter((e) => e.stage === fromStage && !e.undone);
+  if (activeEvents.length === 0) return 0;
+
+  let transferredQty = 0;
+  await db.transaction('rw', db.countEvents, db.auditEvents, async () => {
+    for (const evt of activeEvents) {
+      transferredQty += evt.quantity;
+      await db.countEvents.update(evt.id!, {
+        stage: toStage,
+        outcome: toStage === 'pointage' ? (evt.outcome || 'accepted') : null,
+      });
+    }
+    await db.auditEvents.add({
+      billId,
+      orderLineId,
+      stage: toStage,
+      type: 'status_changed',
+      oldValue: `stage:${fromStage}`,
+      newValue: `stage:${toStage}`,
+      reason: 'stage_transfer_correction',
+      timestamp: new Date().toISOString(),
+    });
+  });
+  return transferredQty;
+}
+
+/**
+ * Transfers active count events between stages for a batch of lines or the entire bill.
+ */
+export async function transferBatchStageCounts(
+  billId: number,
+  lineIds: number[] | null,
+  fromStage: Stage,
+  toStage: Stage
+): Promise<{ linesCount: number; unitsCount: number }> {
+  if (fromStage === toStage) return { linesCount: 0, unitsCount: 0 };
+  const allEvents = await db.countEvents
+    .where('billId')
+    .equals(billId)
+    .toArray();
+
+  const targetLineSet = lineIds ? new Set(lineIds) : null;
+  const matchingEvents = allEvents.filter(
+    (e) =>
+      e.stage === fromStage &&
+      !e.undone &&
+      (!targetLineSet || targetLineSet.has(e.orderLineId))
+  );
+
+  if (matchingEvents.length === 0) return { linesCount: 0, unitsCount: 0 };
+
+  const affectedLines = new Set<number>();
+  let unitsCount = 0;
+
+  await db.transaction('rw', db.countEvents, db.auditEvents, async () => {
+    for (const evt of matchingEvents) {
+      affectedLines.add(evt.orderLineId);
+      unitsCount += evt.quantity;
+      await db.countEvents.update(evt.id!, {
+        stage: toStage,
+        outcome: toStage === 'pointage' ? (evt.outcome || 'accepted') : null,
+      });
+    }
+    await db.auditEvents.add({
+      billId,
+      orderLineId: 0,
+      stage: toStage,
+      type: 'status_changed',
+      oldValue: `stage:${fromStage} (${unitsCount} units)`,
+      newValue: `stage:${toStage}`,
+      reason: 'batch_stage_transfer_correction',
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  return { linesCount: affectedLines.size, unitsCount };
+}
+
 export async function updateOrderLineField(
   lineId: number,
   field: string,

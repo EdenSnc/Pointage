@@ -31,6 +31,8 @@ import {
   undoLastBillCount,
   resetLineStageCount,
   setLineStageTotalCount,
+  transferLineStageCounts,
+  transferBatchStageCounts,
   updateOrderLineField,
   updateLineStatus,
   createTransportContainer,
@@ -114,6 +116,7 @@ import {
   IconBag,
   IconRotate,
   IconTag,
+  IconTransfer,
 } from './icons';
 
 import {
@@ -2104,6 +2107,161 @@ function BatchContainerModal({
   );
 }
 
+function TransferStageModal({
+  isOpen,
+  onClose,
+  billId,
+  lineId,
+  lineIds,
+  currentLineTitle,
+  initialFromStage = 'chargement',
+  initialToStage = 'preparation',
+  onSuccess,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  billId: number;
+  lineId?: number;
+  lineIds?: number[];
+  currentLineTitle?: string;
+  initialFromStage?: Stage;
+  initialToStage?: Stage;
+  onSuccess: (unitsTransferred: number, linesCount: number, from: Stage, to: Stage) => void;
+}) {
+  const [fromStage, setFromStage] = useState<Stage>(initialFromStage);
+  const [toStage, setToStage] = useState<Stage>(initialToStage);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setFromStage(initialFromStage);
+      setToStage(initialToStage);
+    }
+  }, [isOpen, initialFromStage, initialToStage]);
+
+  if (!isOpen) return null;
+
+  const STAGE_LABELS: Record<Stage, string> = {
+    preparation: 'Préparation',
+    chargement: 'Chargement',
+    pointage: 'Pointage',
+  };
+
+  const handleConfirm = async () => {
+    if (fromStage === toStage || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      if (lineId) {
+        const units = await transferLineStageCounts(billId, lineId, fromStage, toStage);
+        onSuccess(units, 1, fromStage, toStage);
+      } else {
+        const res = await transferBatchStageCounts(billId, lineIds || null, fromStage, toStage);
+        onSuccess(res.unitsCount, res.linesCount, fromStage, toStage);
+      }
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const isBatch = !lineId && Boolean(lineIds && lineIds.length > 0);
+  const isWholeBill = !lineId && !lineIds;
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+        <div className="flex justify-between items-center mb-3">
+          <div className="modal-title flex items-center gap-2" style={{ margin: 0 }}>
+            <IconTransfer size={18} style={{ color: 'var(--accent)' }} />
+            <span>TRANSFÉRER L'ÉTAPE</span>
+          </div>
+          <button className="btn btn-ghost btn-xs btn-icon" onClick={onClose} aria-label="Fermer">
+            <IconX size={18} />
+          </button>
+        </div>
+
+        <div className="text-xs text-secondary mb-3 p-2.5" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+          {lineId && (
+            <div>
+              Article concerné : <strong>{currentLineTitle || `#${lineId}`}</strong>
+            </div>
+          )}
+          {isBatch && (
+            <div>
+              Articles sélectionnés : <strong>{lineIds!.length} articles</strong>
+            </div>
+          )}
+          {isWholeBill && (
+            <div>
+              Portée : <strong>Tous les articles du bon</strong>
+            </div>
+          )}
+          <div className="text-muted mt-1">
+            Bascule les comptages enregistrés d'une étape vers une autre sans perte d'historique ni de colisage.
+          </div>
+        </div>
+
+        {/* Source Stage */}
+        <div className="mb-3">
+          <label className="text-xs font-bold text-muted block mb-1">DÉPLACER DEPUIS (SOURCE) :</label>
+          <div className="flex gap-2">
+            {(['chargement', 'preparation', 'pointage'] as Stage[]).map((s) => (
+              <button
+                key={`from-${s}`}
+                type="button"
+                className={`btn btn-sm flex-1 ${fromStage === s ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => {
+                  setFromStage(s);
+                  if (toStage === s) {
+                    setToStage(s === 'chargement' ? 'preparation' : s === 'preparation' ? 'chargement' : 'preparation');
+                  }
+                }}
+              >
+                {STAGE_LABELS[s]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Destination Stage */}
+        <div className="mb-4">
+          <label className="text-xs font-bold text-muted block mb-1">VERS L'ÉTAPE (DESTINATION) :</label>
+          <div className="flex gap-2">
+            {(['preparation', 'chargement', 'pointage'] as Stage[]).map((s) => (
+              <button
+                key={`to-${s}`}
+                type="button"
+                className={`btn btn-sm flex-1 ${toStage === s ? 'btn-primary' : 'btn-secondary'}`}
+                disabled={fromStage === s}
+                onClick={() => setToStage(s)}
+              >
+                {STAGE_LABELS[s]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2">
+          <button type="button" className="btn btn-secondary flex-1" onClick={onClose}>
+            Annuler
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary flex-1 flex items-center justify-center gap-1.5"
+            disabled={fromStage === toStage || isSubmitting}
+            onClick={handleConfirm}
+            style={{ fontWeight: 700 }}
+          >
+            <IconTransfer size={15} />
+            <span>{isSubmitting ? 'Transfert...' : `Bascule vers ${STAGE_LABELS[toStage]}`}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ============================================================
 // BILL SCREEN
 // ============================================================
@@ -2129,6 +2287,19 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedLineIds, setSelectedLineIds] = useState<Set<number>>(new Set());
   const [showBatchModal, setShowBatchModal] = useState(false);
+  const [showBatchTransferModal, setShowBatchTransferModal] = useState(false);
+  const [showWholeBillTransferModal, setShowWholeBillTransferModal] = useState(false);
+
+  // Active units per stage across this entire bill
+  const billStageUnitTotals = React.useMemo(() => {
+    const res: Record<Stage, number> = { preparation: 0, chargement: 0, pointage: 0 };
+    for (const e of events || []) {
+      if (!e.undone && (e.stage in res)) {
+        res[e.stage] += e.quantity;
+      }
+    }
+    return res;
+  }, [events]);
 
   const handleStageChange = (s: Stage) => {
     setStage(s);
@@ -2428,6 +2599,9 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         >
           <IconLayers size={14} /> FUSION QR
         </button>
+        <button className="btn btn-sm btn-secondary btn-icon" onClick={() => setShowWholeBillTransferModal(true)} title="Transférer les étapes du bon">
+          <IconTransfer size={17} />
+        </button>
         <button className="btn btn-sm btn-secondary btn-icon" onClick={() => nav(`/bill/${billId}/summary?stage=${stage}`)} title="Récapitulatif">
           <IconChart size={18} />
         </button>
@@ -2446,6 +2620,57 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             </button>
           ))}
         </div>
+
+        {/* Smart Bill-Wide Stage Mistake Recovery Banner */}
+        {billStageUnitTotals[stage] === 0 && (() => {
+          const otherStage: Stage | null =
+            stage === 'preparation' && billStageUnitTotals.chargement > 0
+              ? 'chargement'
+              : stage === 'chargement' && billStageUnitTotals.preparation > 0
+              ? 'preparation'
+              : null;
+          if (!otherStage) return null;
+          const otherUnits = billStageUnitTotals[otherStage];
+          const otherStageName = otherStage === 'preparation' ? 'Préparation' : 'Chargement';
+          const currentStageName = stage === 'preparation' ? 'Préparation' : 'Chargement';
+          return (
+            <div
+              className="card mb-2 flex justify-between items-center"
+              style={{
+                background: 'rgba(245, 158, 11, 0.12)',
+                border: '1px solid rgba(245, 158, 11, 0.35)',
+                padding: '10px 14px',
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <IconTransfer size={18} style={{ color: 'var(--warning)', flexShrink: 0 }} />
+                <div>
+                  <div className="font-bold text-xs" style={{ color: 'var(--warning)' }}>
+                    {otherUnits} pièces comptées en {otherStageName}
+                  </div>
+                  <div className="text-xs text-muted">
+                    Vous êtes en {currentStageName}. Vouliez-vous enregistrer ce bon en {currentStageName} ?
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-xs btn-primary flex items-center gap-1"
+                style={{ fontWeight: 700, whiteSpace: 'nowrap' }}
+                onClick={async () => {
+                  if (window.confirm(`Basculer TOUS les comptages de "${otherStageName}" vers "${currentStageName}" pour ce bon (${otherUnits} pièces) ?`)) {
+                    const res = await transferBatchStageCounts(billId, null, otherStage, stage);
+                    playSuccessChime();
+                    hapticTap('medium');
+                    showToast(`✓ ${res.unitsCount} pièces transférées vers ${currentStageName} (${res.linesCount} articles)`, setToast);
+                  }
+                }}
+              >
+                ⇄ Tout basculer ici
+              </button>
+            </div>
+          );
+        })()}
 
         {/* Search mode */}
         <div className="seg-control mb-2">
@@ -2889,6 +3114,16 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               )}
               <button
                 type="button"
+                className="btn btn-sm btn-secondary flex items-center gap-1"
+                style={{ fontWeight: 700 }}
+                onClick={() => setShowBatchTransferModal(true)}
+                title="Transférer les articles sélectionnés vers une autre étape"
+              >
+                <IconTransfer size={14} />
+                <span>Changer d'étape</span>
+              </button>
+              <button
+                type="button"
                 className="btn btn-primary flex items-center gap-1.5"
                 style={{ padding: '8px 14px', fontSize: '0.85rem', fontWeight: 700 }}
                 onClick={() => setShowBatchModal(true)}
@@ -2931,6 +3166,39 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           showToast(`✓ ${processedCount} articles (${unitsAdded} unités) rangés dans ${label}`, setToast);
           setSelectedLineIds(new Set());
           setIsSelectionMode(false);
+        }}
+      />
+
+      {/* Batch stage transfer modal for selected items */}
+      <TransferStageModal
+        isOpen={showBatchTransferModal}
+        onClose={() => setShowBatchTransferModal(false)}
+        billId={billId}
+        lineIds={Array.from(selectedLineIds)}
+        initialFromStage={stage === 'preparation' && billStageUnitTotals.chargement > 0 ? 'chargement' : stage}
+        initialToStage={stage === 'preparation' ? 'chargement' : 'preparation'}
+        onSuccess={(units, linesCount, from, to) => {
+          playSuccessChime();
+          hapticTap('medium');
+          const STAGE_NAMES = { preparation: 'Préparation', chargement: 'Chargement', pointage: 'Pointage' };
+          showToast(`✓ ${units} pièces basculées de ${STAGE_NAMES[from]} vers ${STAGE_NAMES[to]} (${linesCount} articles)`, setToast);
+          setSelectedLineIds(new Set());
+          setIsSelectionMode(false);
+        }}
+      />
+
+      {/* Whole bill stage transfer modal */}
+      <TransferStageModal
+        isOpen={showWholeBillTransferModal}
+        onClose={() => setShowWholeBillTransferModal(false)}
+        billId={billId}
+        initialFromStage={stage === 'preparation' && billStageUnitTotals.chargement > 0 ? 'chargement' : stage}
+        initialToStage={stage === 'preparation' ? 'chargement' : 'preparation'}
+        onSuccess={(units, linesCount, from, to) => {
+          playSuccessChime();
+          hapticTap('medium');
+          const STAGE_NAMES = { preparation: 'Préparation', chargement: 'Chargement', pointage: 'Pointage' };
+          showToast(`✓ ${units} pièces de tout le bon basculées vers ${STAGE_NAMES[to]} (${linesCount} articles)`, setToast);
         }}
       />
 
@@ -3071,6 +3339,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const [selectedContainer, setSelectedContainer] = useState<number | null>(null);
   const [outcome, setOutcome] = useState<PointageOutcome>('accepted');
   const [refusalNote, setRefusalNote] = useState('');
+  const [showTransferModal, setShowTransferModal] = useState(false);
 
   // Substitution state
   const [showSubModal, setShowSubModal] = useState(false);
@@ -3124,6 +3393,15 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   };
 
   const pointageTotals = getStageTotals(events, 'pointage');
+
+  const mismatchedStage = React.useMemo<Stage | null>(() => {
+    if (stageTotals[stage] > 0) return null;
+    if (stage === 'preparation' && stageTotals.chargement > 0) return 'chargement';
+    if (stage === 'chargement' && stageTotals.preparation > 0) return 'preparation';
+    if (stage === 'pointage' && stageTotals.chargement > 0) return 'chargement';
+    if (stage === 'pointage' && stageTotals.preparation > 0) return 'preparation';
+    return null;
+  }, [stageTotals, stage]);
 
   const handleAddCount = async (targetNextLineId?: number) => {
     const now = Date.now();
@@ -3399,6 +3677,44 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           )}
         </div>
 
+        {/* Smart Transfer Suggestion Banner */}
+        {stageTotal === 0 && mismatchedStage && (
+          <div
+            className="card mb-3 flex justify-between items-center"
+            style={{
+              background: 'rgba(245, 158, 11, 0.12)',
+              border: '1px solid rgba(245, 158, 11, 0.35)',
+              padding: '10px 14px',
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <IconTransfer size={18} style={{ color: 'var(--warning)', flexShrink: 0 }} />
+              <div>
+                <div className="font-bold text-xs" style={{ color: 'var(--warning)' }}>
+                  {stageTotals[mismatchedStage]} pièces comptées en {mismatchedStage === 'preparation' ? 'Préparation' : mismatchedStage === 'chargement' ? 'Chargement' : 'Pointage'}
+                </div>
+                <div className="text-xs text-muted">
+                  Erreur d'étape ? Vous êtes actuellement en {stage === 'preparation' ? 'Préparation' : stage === 'chargement' ? 'Chargement' : 'Pointage'}.
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-xs btn-primary flex items-center gap-1"
+              style={{ fontWeight: 700, whiteSpace: 'nowrap' }}
+              onClick={async () => {
+                const units = await transferLineStageCounts(billId, lineId, mismatchedStage, stage);
+                playSuccessChime();
+                hapticTap('medium');
+                const STAGE_NAMES = { preparation: 'Préparation', chargement: 'Chargement', pointage: 'Pointage' };
+                showToast(`✓ ${units} pièces basculées vers ${STAGE_NAMES[stage]}`, setToast);
+              }}
+            >
+              ⇄ Basculer ici
+            </button>
+          </div>
+        )}
+
         {/* Discrepancy summary */}
         <div className="card">
           <div className="flex justify-between items-center">
@@ -3406,6 +3722,17 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               {stage === 'preparation' ? 'PRÉPARATION' : stage === 'chargement' ? 'CHARGEMENT' : 'POINTAGE'}
             </span>
             <div className="flex items-center gap-1.5">
+              {events.filter(e => !e.undone).length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-xs btn-ghost flex items-center gap-1"
+                  style={{ fontSize: '0.68rem', padding: '2px 6px', color: 'var(--accent)' }}
+                  onClick={() => setShowTransferModal(true)}
+                  title="Transférer les comptages vers une autre étape"
+                >
+                  <IconTransfer size={12} /> Transférer
+                </button>
+              )}
               {stageTotal > 0 && (
                 <button
                   type="button"
@@ -4379,6 +4706,23 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             </div>
           </div>
         )}
+
+        {/* Single product stage transfer modal */}
+        <TransferStageModal
+          isOpen={showTransferModal}
+          onClose={() => setShowTransferModal(false)}
+          billId={billId}
+          lineId={lineId}
+          currentLineTitle={`N°${line.no} — ${line.designation}`}
+          initialFromStage={stage === 'preparation' && stageTotals.chargement > 0 ? 'chargement' : stage}
+          initialToStage={stage === 'preparation' ? 'chargement' : 'preparation'}
+          onSuccess={(units, _, from, to) => {
+            playSuccessChime();
+            hapticTap('medium');
+            const STAGE_NAMES = { preparation: 'Préparation', chargement: 'Chargement', pointage: 'Pointage' };
+            showToast(`✓ ${units} pièces basculées de ${STAGE_NAMES[from]} vers ${STAGE_NAMES[to]}`, setToast);
+          }}
+        />
       </div>
 
       {/* Sticky confirm button & Next button */}

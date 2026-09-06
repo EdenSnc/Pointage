@@ -4,7 +4,13 @@
 
 import 'fake-indexeddb/auto';
 import { describe, it, expect } from 'vitest';
-import { searchLines, batchAssignContainerAndCount } from './hooks';
+import {
+  searchLines,
+  batchAssignContainerAndCount,
+  transferLineStageCounts,
+  transferBatchStageCounts,
+  addCountEvent,
+} from './hooks';
 import { db } from './db';
 import type { OrderLine, CountEvent, Bill, TransportContainer } from './types';
 
@@ -351,5 +357,70 @@ describe('Shared Packaging Boxes / Cartons Across Bills for Same Seller', () => 
     expect(allEvents[0].quantity).toBe(5);
     expect(allEvents[1].containerId).toBe(choualaAId);
     expect(allEvents[1].quantity).toBe(8);
+  });
+
+  it('transfers line stage counts from chargement to preparation smoothly', async () => {
+    await db.countEvents.clear();
+    await db.auditEvents.clear();
+
+    const lineId = 801;
+    const billId = 20;
+
+    // Operator accidentally added 15 units under chargement
+    await addCountEvent(billId, lineId, 'chargement', 10);
+    await addCountEvent(billId, lineId, 'chargement', 5);
+
+    // Verify initial state
+    let events = await db.countEvents.where('orderLineId').equals(lineId).toArray();
+    let prepEvents = events.filter((e) => e.stage === 'preparation' && !e.undone);
+    let chargEvents = events.filter((e) => e.stage === 'chargement' && !e.undone);
+    expect(prepEvents).toHaveLength(0);
+    expect(chargEvents.reduce((s, e) => s + e.quantity, 0)).toBe(15);
+
+    // Operator transfers from chargement to preparation
+    const transferred = await transferLineStageCounts(billId, lineId, 'chargement', 'preparation');
+    expect(transferred).toBe(15);
+
+    // Verify after transfer
+    events = await db.countEvents.where('orderLineId').equals(lineId).toArray();
+    prepEvents = events.filter((e) => e.stage === 'preparation' && !e.undone);
+    chargEvents = events.filter((e) => e.stage === 'chargement' && !e.undone);
+    expect(prepEvents.reduce((s, e) => s + e.quantity, 0)).toBe(15);
+    expect(chargEvents).toHaveLength(0);
+
+    // Verify audit trail
+    const audit = await db.auditEvents.where('orderLineId').equals(lineId).toArray();
+    expect(audit.some((a) => a.reason === 'stage_transfer_correction')).toBe(true);
+  });
+
+  it('transfers batch and whole bill stage counts without losing data', async () => {
+    await db.countEvents.clear();
+    await db.auditEvents.clear();
+
+    const billId = 30;
+    // Add counts for 3 lines under chargement
+    await addCountEvent(billId, 901, 'chargement', 20);
+    await addCountEvent(billId, 902, 'chargement', 30);
+    await addCountEvent(billId, 903, 'chargement', 50);
+
+    // Transfer lines 901 and 902 only
+    const resBatch = await transferBatchStageCounts(billId, [901, 902], 'chargement', 'preparation');
+    expect(resBatch.linesCount).toBe(2);
+    expect(resBatch.unitsCount).toBe(50); // 20 + 30
+
+    let allEvents = await db.countEvents.where('billId').equals(billId).toArray();
+    expect(allEvents.filter((e) => e.stage === 'preparation' && !e.undone)).toHaveLength(2);
+    expect(allEvents.filter((e) => e.stage === 'chargement' && !e.undone)).toHaveLength(1); // 903 remains
+
+    // Now whole bill transfer for whatever is left in chargement
+    const resWhole = await transferBatchStageCounts(billId, null, 'chargement', 'preparation');
+    expect(resWhole.linesCount).toBe(1);
+    expect(resWhole.unitsCount).toBe(50);
+
+    allEvents = await db.countEvents.where('billId').equals(billId).toArray();
+    expect(allEvents.filter((e) => e.stage === 'chargement' && !e.undone)).toHaveLength(0);
+    expect(allEvents.filter((e) => e.stage === 'preparation' && !e.undone)).toHaveLength(3);
+    const totalPrep = allEvents.filter((e) => e.stage === 'preparation' && !e.undone).reduce((s, e) => s + e.quantity, 0);
+    expect(totalPrep).toBe(100);
   });
 });
