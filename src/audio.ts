@@ -127,7 +127,7 @@ export function playWarningBeep() {
   triggerAmbientFlash('warning');
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
     try {
-      navigator.vibrate([25, 45, 25]);
+      navigator.vibrate([30, 50, 30]);
     } catch {}
   }
 
@@ -137,17 +137,36 @@ export function playWarningBeep() {
 
   try {
     const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(370, now);
-    gain.gain.setValueAtTime(0.001, now);
-    gain.gain.linearRampToValueAtTime(0.14, now + 0.005);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.20);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.20);
+
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(1.0, now);
+    master.connect(ctx.destination);
+
+    // Warm fundamental tone (F#4 - 370 Hz) with substantial acoustic presence
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'triangle'; // Triangle provides warm harmonic body that phone speakers can easily project
+    osc1.frequency.setValueAtTime(370, now);
+    gain1.gain.setValueAtTime(0.001, now);
+    gain1.gain.linearRampToValueAtTime(0.36, now + 0.008);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+    osc1.connect(gain1);
+    gain1.connect(master);
+    osc1.start(now);
+    osc1.stop(now + 0.26);
+
+    // Harmonic overtone (F#5 - 740 Hz octave) to cut cleanly through warehouse ambient noise
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(740, now);
+    gain2.gain.setValueAtTime(0.001, now);
+    gain2.gain.linearRampToValueAtTime(0.22, now + 0.008);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+    osc2.connect(gain2);
+    gain2.connect(master);
+    osc2.start(now);
+    osc2.stop(now + 0.24);
   } catch {}
 }
 

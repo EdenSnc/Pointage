@@ -3039,7 +3039,32 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           );
         })}
 
-        {displayLines.length === 0 && (
+        {displayLines.length === 0 && siblingMatches.length > 0 && searchScope === 'current' ? (
+          <div
+            className="card my-3 p-3 text-center"
+            style={{
+              background: 'rgba(37, 99, 235, 0.12)',
+              border: '1px solid rgba(37, 99, 235, 0.35)',
+              borderRadius: 'var(--radius-card)',
+            }}
+          >
+            <div className="font-bold text-sm text-accent mb-1 flex items-center justify-center gap-1.5">
+              <IconBuilding size={16} />
+              <span>Non trouvé dans ce bon, mais trouvé dans un autre bon !</span>
+            </div>
+            <div className="text-xs text-muted mb-2">
+              Cet article ({searchQuery}) se trouve dans {siblingMatches.length === 1 ? 'un autre bon' : `${siblingMatches.length} autres articles`} de {bill.client}.
+            </div>
+            <button
+              type="button"
+              className="btn btn-xs btn-primary inline-flex items-center gap-1"
+              onClick={() => setSearchScope('all')}
+            >
+              <span>Basculer sur tous les {entityBills?.length || 3} bons ({siblingMatches.length} trouvés)</span>
+              <span style={{ fontSize: '1rem', fontWeight: 800 }}>→</span>
+            </button>
+          </div>
+        ) : displayLines.length === 0 && (
           <div className="empty-state">
             <p>Aucune ligne trouvée dans ce bon</p>
           </div>
@@ -3631,14 +3656,27 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
       <header className="app-header">
 
         <button className="back-btn" onClick={handleBack} aria-label="Retour"><IconArrowLeft size={18} /></button>
-        <div style={{ flex: 1 }}>
-          <div className="flex items-center gap-2">
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="flex items-center gap-2 flex-wrap">
             <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--accent)' }}>
               N°{line.no}
             </span>
             {line.page != null && (
               <span className="text-sm font-bold text-muted">PAGE {line.page}</span>
             )}
+            <span
+              className={`badge ${disc.isExact && stageTotal > 0 ? 'badge-exact' : disc.isOver ? 'badge-over' : disc.isShort && stageTotal > 0 ? 'badge-short' : ''}`}
+              style={{ fontSize: '0.72rem', fontWeight: 800, padding: '2px 7px', marginLeft: 'auto', marginRight: 4 }}
+              title="Quantité déjà comptée pour cette étape"
+            >
+              {stageTotal === 0
+                ? `0 / ${line.orderedQty} pcs`
+                : disc.isExact
+                ? `✓ ${stageTotal} / ${line.orderedQty} pcs`
+                : disc.isOver
+                ? `+${disc.over} excédent (${stageTotal}/${line.orderedQty})`
+                : `${stageTotal} / ${line.orderedQty} pcs`}
+            </span>
           </div>
           <div className="text-xs text-muted truncate flex items-center gap-1.5">
             <span>{bill.client}</span>
@@ -4931,36 +4969,86 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
       </div>
 
       {/* Sticky confirm button & Next button */}
-      <div className="bottom-bar flex gap-2">
-        <button
-          className="btn btn-success btn-lg flex-1 flex items-center justify-center gap-2"
-          onClick={() => handleAddCount()}
-          disabled={isSubmitting || batchQty <= 0 || line.status !== 'active'}
+      <div className="bottom-bar flex-col gap-2" style={{ padding: '8px 12px' }}>
+        {/* Glanceable Current Count Banner (Zero Scroll Needed) */}
+        <div
+          className="flex items-center justify-between w-full"
+          style={{
+            padding: '4px 10px',
+            borderRadius: 'var(--radius-pill)',
+            background: stageTotal > 0
+              ? (disc.isExact ? 'rgba(16, 185, 129, 0.18)' : disc.isOver ? 'rgba(168, 85, 247, 0.18)' : 'rgba(245, 158, 11, 0.18)')
+              : 'rgba(255, 255, 255, 0.06)',
+            border: `1px solid ${
+              stageTotal > 0
+                ? (disc.isExact ? 'rgba(16, 185, 129, 0.35)' : disc.isOver ? 'rgba(168, 85, 247, 0.35)' : 'rgba(245, 158, 11, 0.35)')
+                : 'rgba(255, 255, 255, 0.08)'
+            }`,
+          }}
         >
-          <IconCheck size={20} />
-          {isSubmitting
-            ? 'ENREGISTRÉ !'
-            : `AJOUTER ${batchQty > 0 ? batchQty : ''} ${stage === 'preparation' ? 'PRÉPARÉ' : stage === 'chargement' ? 'CHARGÉ' : 'POINTÉ'} & RETOURNER`}
-        </button>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+              {stage === 'preparation' ? 'Préparé' : stage === 'chargement' ? 'Chargé' : 'Pointé'} :
+            </span>
+            <span
+              style={{
+                fontSize: '0.88rem',
+                fontWeight: 800,
+                fontFamily: 'var(--font-mono)',
+                color: stageTotal > 0
+                  ? (disc.isExact ? 'var(--success)' : disc.isOver ? 'var(--over)' : 'var(--warning)')
+                  : 'var(--text-secondary)',
+              }}
+            >
+              {stageTotal} / {line.orderedQty} pcs
+            </span>
+            {batchQty > 0 && (
+              <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--accent)', marginLeft: 4 }}>
+                → après : {afterAdding} pcs
+              </span>
+            )}
+          </div>
 
-        {nextLine && (
-          <button
-            type="button"
-            className="btn btn-secondary btn-lg flex items-center justify-center gap-1"
-            onClick={() => {
-              if (batchQty > 0 && line.status === 'active') {
-                handleAddCount(nextLine.id);
-              } else {
-                nav(`/bill/${billId}/line/${nextLine.id}?stage=${stage}${fromParam ? `&from=${fromParam}` : ''}`, { replace: true });
-              }
-            }}
-            title={batchQty > 0 ? `Enregistrer et passer à l'article suivant N°${nextLine.no}` : `Passer à l'article suivant N°${nextLine.no}`}
-            style={{ padding: stage === 'pointage' ? '0 12px' : '0 16px', fontWeight: 800, flexShrink: 0 }}
+          <span
+            className={`badge ${disc.isExact && stageTotal > 0 ? 'badge-exact' : disc.isOver ? 'badge-over' : disc.isShort && stageTotal > 0 ? 'badge-short' : ''}`}
+            style={{ fontSize: '0.68rem', fontWeight: 800, padding: '1px 7px', flexShrink: 0 }}
           >
-            <span>N°{nextLine.no}</span>
-            <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>›</span>
+            {stageTotal === 0 ? 'Non compté' : disc.isExact ? '✓ Complet' : disc.isOver ? `+${disc.over} Excédent` : `-${disc.remaining} Manquant`}
+          </span>
+        </div>
+
+        {/* Buttons Row */}
+        <div className="flex gap-2 w-full">
+          <button
+            className="btn btn-success btn-lg flex-1 flex items-center justify-center gap-2"
+            onClick={() => handleAddCount()}
+            disabled={isSubmitting || batchQty <= 0 || line.status !== 'active'}
+          >
+            <IconCheck size={20} />
+            {isSubmitting
+              ? 'ENREGISTRÉ !'
+              : `AJOUTER ${batchQty > 0 ? batchQty : ''} ${stage === 'preparation' ? 'PRÉPARÉ' : stage === 'chargement' ? 'CHARGÉ' : 'POINTÉ'} & RETOURNER`}
           </button>
-        )}
+
+          {nextLine && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-lg flex items-center justify-center gap-1"
+              onClick={() => {
+                if (batchQty > 0 && line.status === 'active') {
+                  handleAddCount(nextLine.id);
+                } else {
+                  nav(`/bill/${billId}/line/${nextLine.id}?stage=${stage}${fromParam ? `&from=${fromParam}` : ''}`, { replace: true });
+                }
+              }}
+              title={batchQty > 0 ? `Enregistrer et passer à l'article suivant N°${nextLine.no}` : `Passer à l'article suivant N°${nextLine.no}`}
+              style={{ padding: stage === 'pointage' ? '0 12px' : '0 16px', fontWeight: 800, flexShrink: 0 }}
+            >
+              <span>N°{nextLine.no}</span>
+              <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>›</span>
+            </button>
+          )}
+        </div>
       </div>
     </ErrorBoundary>
   );

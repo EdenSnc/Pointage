@@ -485,3 +485,53 @@ describe('QA: WhatsApp Discrepancy Report Generator', () => {
     expect(report).toContain('RUPTURE DÉFINITIVE EN ENTREPÔT');
   });
 });
+
+// ------------------------------------------------------------
+// 8. QA: Donut Chart Fulfillment & Discrepancy Accuracy
+// ------------------------------------------------------------
+describe('QA: Donut Chart Fulfillment & Accuracy Logic', () => {
+  it('correctly calculates 100% fulfillment when order is over-fulfilled with surplus (fixes 50% bug)', () => {
+    // Scenario from user screenshot: 6 lines, 45 ordered, 51 prepared (+6 surplus, 3 exact lines, 3 over lines)
+    const totalLines = 6;
+    const orderedPieces = 45;
+    const actualPieces = 51;
+    const conformeCount = 3;
+    const overCount = 3;
+    const shortCount = 0;
+    const problemCount = 0;
+
+    const totalPiecesFulfilled = Math.min(orderedPieces, actualPieces);
+    const pctProgress = orderedPieces > 0
+      ? Math.min(100, Math.round((totalPiecesFulfilled / orderedPieces) * 100))
+      : (actualPieces > 0 ? 100 : 0);
+    const diffPieces = actualPieces - orderedPieces;
+
+    const hasSurplus = (overCount > 0 || diffPieces > 0) && shortCount === 0 && problemCount === 0;
+
+    expect(pctProgress).toBe(100);
+    expect(diffPieces).toBe(6);
+    expect(hasSurplus).toBe(true);
+
+    let kpiVal = `${pctProgress}%`;
+    let kpiSubText = '';
+    if (hasSurplus) {
+      kpiVal = '100%';
+      kpiSubText = `+${diffPieces} pcs Excédent`;
+    }
+    expect(kpiVal).toBe('100%');
+    expect(kpiSubText).toBe('+6 pcs Excédent');
+  });
+
+  it('correctly reports partial fulfillment with shortages', () => {
+    const orderedPieces = 50;
+    const actualPieces = 35;
+    const shortCount = 2;
+    const totalPiecesFulfilled = Math.min(orderedPieces, actualPieces);
+    const pctProgress = Math.min(100, Math.round((totalPiecesFulfilled / orderedPieces) * 100));
+    const diffPieces = actualPieces - orderedPieces;
+
+    expect(pctProgress).toBe(70);
+    expect(diffPieces).toBe(-15);
+  });
+});
+

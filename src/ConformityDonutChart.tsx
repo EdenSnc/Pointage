@@ -27,9 +27,12 @@ export function ConformityDonutChart({
   billStatus,
   onToggleStatus,
 }: ConformityDonutChartProps) {
-  // Calculate completion / conformity percentage
+  // Calculate completion percentage based on pieces fulfilled (capped at 100%)
   const total = totalLines || 1;
-  const pctConforme = Math.min(100, Math.round((conformeCount / total) * 100));
+  const totalPiecesFulfilled = Math.min(orderedPieces, actualPieces);
+  const pctProgress = orderedPieces > 0
+    ? Math.min(100, Math.round((totalPiecesFulfilled / orderedPieces) * 100))
+    : (actualPieces > 0 ? 100 : 0);
   const diffPieces = actualPieces - orderedPieces;
 
   // Exact 100% full conformity requires 0 problems, 0 short, 0 over, and exact piece match
@@ -41,7 +44,11 @@ export function ConformityDonutChart({
     orderedPieces > 0;
 
   const isNotStarted = actualPieces === 0;
-  const hasSurplus = overCount > 0 || diffPieces > 0;
+  const hasSurplus = (overCount > 0 || diffPieces > 0) && shortCount === 0 && problemCount === 0;
+
+  // Active segments count for clean boundary caps
+  const activeSegmentsCount = [conformeCount, overCount, shortCount, problemCount].filter(c => c > 0).length;
+  const strokeLinecap = activeSegmentsCount > 1 ? 'butt' : 'round';
 
   // Donut geometry specs (Apple style)
   const size = 148;
@@ -60,24 +67,31 @@ export function ConformityDonutChart({
   const shortOffset = -(conformeDash + overDash);
   const problemOffset = -(conformeDash + overDash + shortDash);
 
-  // Subtitle & color determination for all 5 states
-  let kpiSubText = `${pctConforme}% Conforme`;
+  // Center KPI value & Subtitle determination
+  let kpiVal = `${pctProgress}%`;
+  let kpiSubText = 'Préparé';
   let kpiSubColor = 'var(--text-muted)';
 
   if (isNotStarted) {
+    kpiVal = '0%';
     kpiSubText = 'À pointer';
     kpiSubColor = 'var(--text-muted)';
   } else if (isFullConform) {
+    kpiVal = '100%';
     kpiSubText = 'Conforme';
     kpiSubColor = 'var(--accent)';
-  } else if (problemCount > 0) {
-    kpiSubText = `${problemCount} anomalie${problemCount > 1 ? 's' : ''}`;
-    kpiSubColor = '#ef4444';
   } else if (hasSurplus) {
+    // 100% of order was fulfilled, plus surplus units
+    kpiVal = '100%';
     kpiSubText = `+${diffPieces > 0 ? diffPieces : overCount} pcs Excédent`;
     kpiSubColor = '#a855f7';
+  } else if (problemCount > 0) {
+    kpiVal = `${pctProgress}%`;
+    kpiSubText = `${problemCount} anomalie${problemCount > 1 ? 's' : ''}`;
+    kpiSubColor = '#ef4444';
   } else if (shortCount > 0) {
     const missing = Math.abs(diffPieces);
+    kpiVal = `${pctProgress}%`;
     kpiSubText = missing > 0 ? `${missing} manquantes` : `${shortCount} incomplets`;
     kpiSubColor = '#f59e0b';
   }
@@ -160,7 +174,7 @@ export function ConformityDonutChart({
               strokeWidth={strokeWidth}
               strokeDasharray={`${conformeDash} ${circumference}`}
               strokeDashoffset={conformeOffset}
-              strokeLinecap="round"
+              strokeLinecap={strokeLinecap}
               style={{ transition: 'stroke-dasharray 0.5s ease' }}
             />
           )}
@@ -176,7 +190,7 @@ export function ConformityDonutChart({
               strokeWidth={strokeWidth}
               strokeDasharray={`${overDash} ${circumference}`}
               strokeDashoffset={overOffset}
-              strokeLinecap="round"
+              strokeLinecap={strokeLinecap}
               style={{ transition: 'stroke-dasharray 0.5s ease' }}
             />
           )}
@@ -192,7 +206,7 @@ export function ConformityDonutChart({
               strokeWidth={strokeWidth}
               strokeDasharray={`${shortDash} ${circumference}`}
               strokeDashoffset={shortOffset}
-              strokeLinecap="round"
+              strokeLinecap={strokeLinecap}
               style={{ transition: 'stroke-dasharray 0.5s ease' }}
             />
           )}
@@ -208,7 +222,7 @@ export function ConformityDonutChart({
               strokeWidth={strokeWidth}
               strokeDasharray={`${problemDash} ${circumference}`}
               strokeDashoffset={problemOffset}
-              strokeLinecap="round"
+              strokeLinecap={strokeLinecap}
               style={{ transition: 'stroke-dasharray 0.5s ease' }}
             />
           )}
@@ -217,7 +231,7 @@ export function ConformityDonutChart({
         {/* Center Glanceable KPI */}
         <div className="donut-center-content">
           <div className="donut-kpi-val">
-            {isFullConform ? '100%' : isNotStarted ? '0%' : `${pctConforme}%`}
+            {kpiVal}
           </div>
           <div
             className="donut-kpi-sub"
@@ -227,6 +241,36 @@ export function ConformityDonutChart({
           </div>
         </div>
       </div>
+
+      {/* Visual Line Breakdown Legend */}
+      {(conformeCount > 0 || overCount > 0 || shortCount > 0 || problemCount > 0) && (
+        <div className="donut-legend">
+          {conformeCount > 0 && (
+            <span className="donut-legend-item">
+              <span className="donut-legend-dot" style={{ background: 'var(--accent)' }} />
+              {conformeCount} conforme{conformeCount > 1 ? 's' : ''}
+            </span>
+          )}
+          {overCount > 0 && (
+            <span className="donut-legend-item">
+              <span className="donut-legend-dot" style={{ background: '#a855f7' }} />
+              {overCount} excédent{overCount > 1 ? 's' : ''}
+            </span>
+          )}
+          {shortCount > 0 && (
+            <span className="donut-legend-item">
+              <span className="donut-legend-dot" style={{ background: '#f59e0b' }} />
+              {shortCount} incomplet{shortCount > 1 ? 's' : ''}
+            </span>
+          )}
+          {problemCount > 0 && (
+            <span className="donut-legend-item">
+              <span className="donut-legend-dot" style={{ background: '#ef4444' }} />
+              {problemCount} anomalie{problemCount > 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Glanceable Metrics Pills (Miller's chunk: 3 items max) */}
       <div className="donut-pills-row">

@@ -51,7 +51,7 @@ describe('Multimodal Audio & Haptic Feedback Engine', () => {
     expect(vibrateMock).toHaveBeenCalledWith(12);
 
     playWarningBeep();
-    expect(vibrateMock).toHaveBeenCalledWith([25, 45, 25]);
+    expect(vibrateMock).toHaveBeenCalledWith([30, 50, 30]);
 
     playErrorBeep();
     expect(vibrateMock).toHaveBeenCalledWith([30, 45, 30]);
