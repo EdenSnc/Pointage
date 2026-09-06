@@ -23,6 +23,8 @@ import {
   useAllSessionLines,
   addCountEvent,
   undoLastCount,
+  resetLineStageCount,
+  setLineStageTotalCount,
   updateOrderLineField,
   updateLineStatus,
   createTransportContainer,
@@ -1702,7 +1704,19 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const events = useBillEvents(billId);
   const overrides = useBillOverrides(billId);
 
-  const [stage, setStage] = useState<Stage>('preparation');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialStage = (searchParams.get('stage') || sessionStorage.getItem(`pointage_stage_${billId}`) || 'preparation') as Stage;
+  const [stage, setStage] = useState<Stage>(initialStage);
+
+  const handleStageChange = (s: Stage) => {
+    setStage(s);
+    sessionStorage.setItem(`pointage_stage_${billId}`, s);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('stage', s);
+      return next;
+    }, { replace: true });
+  };
   const [searchMode, setSearchMode] = useState<SearchMode>('smart');
   const [searchQuery, setSearchQuery] = useState(() => sessionStorage.getItem(`pointage_search_${billId}`) || '');
   const [showProblemsOnly, setShowProblemsOnly] = useState(false);
@@ -1788,7 +1802,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         >
           <IconLayers size={14} /> FUSION QR
         </button>
-        <button className="btn btn-sm btn-secondary btn-icon" onClick={() => nav(`/bill/${billId}/summary`)} title="Récapitulatif">
+        <button className="btn btn-sm btn-secondary btn-icon" onClick={() => nav(`/bill/${billId}/summary?stage=${stage}`)} title="Récapitulatif">
           <IconChart size={18} />
         </button>
       </header>
@@ -1800,7 +1814,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             <button
               key={s}
               className={`stage-tab ${stage === s ? 'active' : ''}`}
-              onClick={() => setStage(s)}
+              onClick={() => handleStageChange(s)}
             >
               {s === 'preparation' ? 'Préparation' : s === 'chargement' ? 'Chargement' : 'Pointage'}
             </button>
@@ -1986,8 +2000,17 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const containers = useBillContainers(billId);
   const profile = useProductProfile(line?.reference);
 
-  const stageParam = (searchParams.get('stage') || 'preparation') as Stage;
+  const stageParam = (searchParams.get('stage') || sessionStorage.getItem(`pointage_stage_${billId}`) || 'preparation') as Stage;
   const [stage, setStage] = useState<Stage>(stageParam);
+
+  const handleStageChange = (s: Stage) => {
+    setStage(s);
+    sessionStorage.setItem(`pointage_stage_${billId}`, s);
+  };
+
+  // Direct count correction & reset
+  const [editingCount, setEditingCount] = useState(false);
+  const [editCountVal, setEditCountVal] = useState('');
 
   // Packaging
   const [outerPack, setOuterPack] = useState<number | null>(null);
@@ -2094,6 +2117,31 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     }
   };
 
+  const handleResetCount = async () => {
+    if (stageTotal === 0) return;
+    const stageName = stage === 'pointage' ? 'Pointage' : stage === 'chargement' ? 'Chargement' : 'Préparation';
+    if (!window.confirm(`Remettre le comptage de cet article à zéro pour l'étape "${stageName}" ?`)) {
+      return;
+    }
+    await resetLineStageCount(lineId, stage);
+    showToast('Comptage réinitialisé à 0', setToast);
+  };
+
+  const handleSaveExactCount = async () => {
+    const val = parseInt(editCountVal, 10);
+    if (isNaN(val) || val < 0) return;
+    await setLineStageTotalCount(
+      billId,
+      lineId,
+      stage,
+      val,
+      stage === 'pointage' ? outcome : null,
+      refusalNote
+    );
+    setEditingCount(false);
+    showToast(`Comptage ajusté à ${val} pièces`, setToast);
+  };
+
   const handleSaveQty = async () => {
     const newQty = parseInt(editQtyVal);
     if (isNaN(newQty) || newQty < 0) return;
@@ -2117,7 +2165,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     <ErrorBoundary fallbackTitle="Erreur d'affichage de la fiche produit">
       <header className="app-header">
 
-        <button className="back-btn" onClick={() => nav(-1)} aria-label="Retour"><IconArrowLeft size={18} /></button>
+        <button className="back-btn" onClick={() => nav(`/bill/${billId}?stage=${stage}`)} aria-label="Retour"><IconArrowLeft size={18} /></button>
         <div style={{ flex: 1 }}>
           <div className="flex items-center gap-2">
             <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--accent)' }}>
@@ -2239,16 +2287,43 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
         {/* Discrepancy summary */}
         <div className="card">
           <div className="flex justify-between items-center">
-            <span className="text-sm text-muted">
+            <span className="text-sm text-muted font-bold">
               {stage === 'preparation' ? 'PRÉPARATION' : stage === 'chargement' ? 'CHARGEMENT' : 'POINTAGE'}
             </span>
-            {disc.isExact && stageTotal > 0 && <span className="badge badge-exact flex items-center gap-1"><IconCheck size={11} /> EXACT</span>}
-            {disc.isShort && <span className="badge badge-short">{showQuantities ? `${disc.remaining} MANQUANTS` : 'MANQUANTS'}</span>}
-            {disc.isOver && <span className="badge badge-over">{showQuantities ? `${disc.over} EXCÉDENT` : 'EXCÉDENT'}</span>}
+            <div className="flex items-center gap-1.5">
+              {stageTotal > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-xs btn-ghost text-danger flex items-center gap-1"
+                  onClick={handleResetCount}
+                  style={{ fontSize: '0.68rem', padding: '2px 6px' }}
+                  title="Remettre le comptage de cet article à zéro"
+                >
+                  <IconTrash size={12} /> Réinitialiser
+                </button>
+              )}
+              {disc.isExact && stageTotal > 0 && <span className="badge badge-exact flex items-center gap-1"><IconCheck size={11} /> EXACT</span>}
+              {disc.isShort && <span className="badge badge-short">{showQuantities ? `${disc.remaining} MANQUANTS` : 'MANQUANTS'}</span>}
+              {disc.isOver && <span className="badge badge-over">{showQuantities ? `${disc.over} EXCÉDENT` : 'EXCÉDENT'}</span>}
+            </div>
           </div>
-          <div className="flex justify-between mt-2">
+          <div className="flex justify-between items-end mt-2">
             <div>
-              <div className="text-xs text-muted">COMPTÉ</div>
+              <div className="text-xs text-muted flex items-center gap-1">
+                COMPTÉ
+                <button
+                  type="button"
+                  className="btn btn-xs btn-ghost"
+                  style={{ padding: '0 4px', fontSize: '0.68rem', color: 'var(--accent)' }}
+                  onClick={() => {
+                    setEditCountVal(String(stageTotal));
+                    setEditingCount(true);
+                  }}
+                  title="Corriger directement la quantité comptée"
+                >
+                  <IconPencil size={11} /> Corriger
+                </button>
+              </div>
               <div className="qty-big" style={{
                 color: disc.isExact && stageTotal > 0 ? 'var(--success)' :
                        disc.isOver ? 'var(--over)' :
@@ -2266,6 +2341,31 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               </div>
             </div>
           </div>
+
+          {/* Inline exact count correction */}
+          {editingCount && (
+            <div className="mt-2.5 p-2" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+              <div className="text-xs font-bold text-muted mb-1">CORRIGER LA QUANTITÉ COMPTÉE :</div>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  className="input input-sm"
+                  style={{ maxWidth: 110, fontFamily: 'var(--font-mono)' }}
+                  value={editCountVal}
+                  onChange={(e) => setEditCountVal(e.target.value)}
+                  autoFocus
+                />
+                <button type="button" className="btn btn-sm btn-primary" onClick={handleSaveExactCount}>
+                  Valider
+                </button>
+                <button type="button" className="btn btn-sm btn-ghost" onClick={() => setEditingCount(false)}>
+                  Annuler
+                </button>
+              </div>
+            </div>
+          )}
+
           {innerPack && showQuantities && (
             <div className="text-xs text-muted mt-2">
               = {calcPackBreakdown(disc.remaining, innerPack).fullPacks} paquets × {innerPack} + {calcPackBreakdown(disc.remaining, innerPack).loose} unités
@@ -2279,7 +2379,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             <button
               key={s}
               className={`stage-tab ${stage === s ? 'active' : ''}`}
-              onClick={() => setStage(s)}
+              onClick={() => handleStageChange(s)}
             >
               {s === 'preparation' ? 'Préparation' : s === 'chargement' ? 'Chargement' : 'Pointage'}
             </button>
@@ -2463,7 +2563,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           )}
 
           {/* Quick preset chips for rapid warehouse counting */}
-          <div className="flex gap-1 mt-3 flex-wrap">
+          <div className="flex gap-1 mt-3 flex-wrap items-center">
             <button className="btn btn-xs btn-secondary" onClick={() => {
               if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + 1));
               else setLoose(prev => prev + 1);
@@ -2492,7 +2592,44 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 else setLoose(prev => prev + outerPack);
               }}>+{outerPack}</button>
             )}
-            {disc.remaining > 0 && (
+
+            {/* Minus buttons to correct accidental taps */}
+            <button
+              type="button"
+              className="btn btn-xs btn-ghost text-muted"
+              style={{ border: '1px dashed var(--border)' }}
+              onClick={() => {
+                if (useDirectEntry) {
+                  const c = parseInt(directTotal) || 0;
+                  if (c > 0) setDirectTotal(String(c - 1));
+                } else {
+                  setLoose(prev => Math.max(0, prev - 1));
+                }
+              }}
+              title="Diminuer de 1"
+            >
+              -1
+            </button>
+            <button
+              type="button"
+              className="btn btn-xs btn-ghost text-muted"
+              style={{ border: '1px dashed var(--border)' }}
+              onClick={() => {
+                if (useDirectEntry) {
+                  const c = parseInt(directTotal) || 0;
+                  if (c >= 5) setDirectTotal(String(c - 5));
+                  else setDirectTotal('0');
+                } else {
+                  setLoose(prev => Math.max(0, prev - 5));
+                }
+              }}
+              title="Diminuer de 5"
+            >
+              -5
+            </button>
+
+            {/* STRICT BLIND COUNT: Only show SOLDE when quantities are VISIBLE */}
+            {showQuantities && disc.remaining > 0 && (
               <button className="btn btn-xs btn-primary flex items-center gap-1" onClick={() => {
                 if (useDirectEntry) setDirectTotal(String(disc.remaining));
                 else setLoose(disc.remaining);
@@ -2502,8 +2639,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             )}
           </div>
 
-          {/* Sealed pack 1-tap round down option */}
+          {/* Sealed pack 1-tap round down option (Only if quantities are visible) */}
           {(() => {
+            if (!showQuantities) return null;
             const packSize = innerPack || outerPack;
             if (packSize && packSize > 1 && disc.remaining > 0 && disc.remaining % packSize !== 0) {
               const rounded = roundDownToPack(disc.remaining, packSize);
@@ -2677,55 +2815,71 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           )
         )}
 
-        {/* Actions */}
-        {line.status === 'active' && (
-          <div className="flex flex-col gap-2 mb-3">
-            <div className="flex gap-2">
+        {/* Statut article (Cas particuliers & Annulation) */}
+        <div className="card mb-3">
+          <div className="section-title" style={{ marginTop: 0 }}>STATUT ARTICLE (CAS PARTICULIERS)</div>
+          {line.status === 'active' ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-sm flex items-center justify-center gap-1"
+                  style={{ flex: 1, background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger)', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+                  onClick={() => handleStatusChange('out_of_stock')}
+                  title="Stock totalement épuisé en entrepôt"
+                >
+                  <IconBan size={15} /> Rupture stock
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-warning flex items-center justify-center gap-1"
+                  style={{ flex: 1 }}
+                  onClick={() => handleStatusChange('not_found')}
+                  title="Article introuvable dans les rayons pour l'instant"
+                >
+                  <IconSearch size={15} /> Introuvable rayon
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
+                  style={{ flex: 1 }}
+                  onClick={() => handleStatusChange('cancelled')}
+                  title="Article annulé par le client ou le service commercial"
+                >
+                  <IconX size={15} /> Annulé par client
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost flex items-center justify-center gap-1 text-muted"
+                  style={{ border: '1px solid var(--border)' }}
+                  onClick={handleUndo}
+                  title="Annuler la toute dernière saisie de comptage effectuée"
+                >
+                  <IconUndo size={14} /> Annuler saisie
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="text-sm mb-2" style={{ color: 'var(--warning)' }}>
+                Statut actuel : <strong>{
+                  line.status === 'out_of_stock' ? 'RUPTURE DE STOCK' :
+                  line.status === 'not_found' ? 'INTROUVABLE EN RAYON' :
+                  line.status === 'cancelled' ? 'ANNULÉ PAR CLIENT' : line.status
+                }</strong>
+              </div>
               <button
-                className="btn btn-sm flex items-center justify-center gap-1"
-                style={{ flex: 1, background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger)', border: '1px solid rgba(239, 68, 68, 0.3)' }}
-                onClick={() => handleStatusChange('out_of_stock')}
-                title="Stock totalement épuisé"
+                type="button"
+                className="btn btn-sm btn-primary flex items-center justify-center gap-1 btn-full"
+                onClick={() => handleStatusChange('active')}
               >
-                <IconBan size={15} /> RUPTURE
-              </button>
-              <button
-                className="btn btn-sm btn-warning flex items-center justify-center gap-1"
-                style={{ flex: 1 }}
-                onClick={() => handleStatusChange('not_found')}
-                title="Article introuvable pour l'instant"
-              >
-                <IconSearch size={15} /> INTROUVABLE
+                <IconUndo size={15} /> RÉACTIVER L'ARTICLE (ACTIF)
               </button>
             </div>
-            <div className="flex gap-2">
-              <button
-                className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
-                style={{ flex: 1 }}
-                onClick={() => handleStatusChange('cancelled')}
-              >
-                <IconX size={15} /> ANNULER
-              </button>
-              <button
-                className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
-                onClick={handleUndo}
-              >
-                <IconUndo size={15} /> UNDO
-              </button>
-            </div>
-          </div>
-        )}
-        {line.status !== 'active' && (
-          <div className="flex gap-2 mb-3">
-            <button
-              className="btn btn-sm btn-primary flex items-center justify-center gap-1"
-              style={{ flex: 1 }}
-              onClick={() => handleStatusChange('active')}
-            >
-              <IconUndo size={15} /> RÉACTIVER L'ARTICLE
-            </button>
-          </div>
-        )}
+          )}
+        </div>
 
 
         {/* Count history */}
@@ -3381,18 +3535,29 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   const audit = useBillAudit(billId);
   const containers = useBillContainers(billId);
 
+  const [searchParams] = useSearchParams();
+  const urlStage = searchParams.get('stage') as Stage | null;
+  const storedStage = (sessionStorage.getItem('pointage_stage_' + billId) as Stage | null);
+
+  const hasLoadEvents = events.some((e) => e.stage === 'chargement' && !e.undone && e.quantity > 0);
+  const hasPointEvents = events.some((e) => e.stage === 'pointage' && !e.undone && e.quantity > 0);
+  const isMultiStage = hasLoadEvents || hasPointEvents;
+
+  const defaultStage: Stage = urlStage || storedStage || (hasPointEvents ? 'pointage' : hasLoadEvents ? 'chargement' : 'preparation');
+  const [stageScope, setStageScopeState] = useState<Stage>(defaultStage);
+
+  const setStageScope = (s: Stage) => {
+    setStageScopeState(s);
+    sessionStorage.setItem('pointage_stage_' + billId, s);
+  };
+
   const [summaryTab, setSummaryTab] = useState<'problems' | 'all' | 'cartons' | 'audit'>('problems');
-  const [stageScope, setStageScope] = useState<Stage | 'auto'>('preparation');
   const [showQRSync, setShowQRSync] = useState(false);
   const [qrSyncInitialTab, setQrSyncInitialTab] = useState<'export' | 'import'>('export');
   const [exportOnlyPresent, setExportOnlyPresent] = useState(false);
   const [showPriceModal, setShowPriceModal] = useState(false);
   const [editingPrices, setEditingPrices] = useState<Record<number, string>>({});
   const [priceSearchQuery, setPriceSearchQuery] = useState('');
-
-  const hasLoadEvents = events.some((e) => e.stage === 'chargement' && !e.undone && e.quantity > 0);
-  const hasPointEvents = events.some((e) => e.stage === 'pointage' && !e.undone && e.quantity > 0);
-  const isMultiStage = hasLoadEvents || hasPointEvents;
 
   const eventsByLine = new Map<number, CountEvent[]>();
   for (const e of events) {
@@ -3571,7 +3736,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   return (
     <>
       <header className="app-header">
-        <button className="back-btn" onClick={() => nav(-1)} aria-label="Retour"><IconArrowLeft size={18} /></button>
+        <button className="back-btn" onClick={() => nav(`/bill/${billId}?stage=${stageScope}`)} aria-label="Retour"><IconArrowLeft size={18} /></button>
         <h1>RÉCAPITULATIF</h1>
         <span className="badge" style={{ fontSize: '0.62rem', fontWeight: 700, background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', padding: '1px 5px', borderRadius: 4 }}>
           SURFACE v1.4
@@ -3781,13 +3946,13 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
             className={`btn btn-sm ${summaryTab === 'problems' ? 'btn-warning' : 'btn-secondary'} flex items-center gap-1`}
             onClick={() => setSummaryTab('problems')}
           >
-            <IconWarning size={14} /> Problèmes ({problemLines.length})
+            <IconWarning size={14} /> Anomalies ({problemLines.length})
           </button>
           <button
             className={`btn btn-sm ${summaryTab === 'all' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setSummaryTab('all')}
           >
-            Toutes ({lines.length})
+            Tous ({lines.length})
           </button>
           <button
             className={`btn btn-sm ${summaryTab === 'cartons' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
@@ -3803,27 +3968,40 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           </button>
         </div>
 
-        {/* Stage Scope Selector for Problem Detection (only if multi-stage workflow has events) */}
+        {/* Stage Scope Selector for Problem Detection (subtle inline pill filter) */}
         {summaryTab === 'problems' && isMultiStage && (
-          <div className="stage-tabs mb-3">
-            <button
-              className={`stage-tab ${stageScope === 'preparation' ? 'active' : ''}`}
-              onClick={() => setStageScope('preparation')}
-            >
-              Préparation ({getStageProblemLines(lines, eventsByLine, 'preparation').length})
-            </button>
-            <button
-              className={`stage-tab ${stageScope === 'chargement' ? 'active' : ''}`}
-              onClick={() => setStageScope('chargement')}
-            >
-              Chargement ({getStageProblemLines(lines, eventsByLine, 'chargement').length})
-            </button>
-            <button
-              className={`stage-tab ${stageScope === 'pointage' ? 'active' : ''}`}
-              onClick={() => setStageScope('pointage')}
-            >
-              Pointage ({getStageProblemLines(lines, eventsByLine, 'pointage').length})
-            </button>
+          <div className="flex items-center justify-between px-2 py-1.5 mb-2.5 text-xs text-muted" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+            <span className="font-semibold">Étape analysée :</span>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                className={`btn btn-xs ${stageScope === 'preparation' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+                onClick={() => setStageScope('preparation')}
+              >
+                Préparation ({getStageProblemLines(lines, eventsByLine, 'preparation').length})
+              </button>
+              {hasLoadEvents && (
+                <button
+                  type="button"
+                  className={`btn btn-xs ${stageScope === 'chargement' ? 'btn-primary' : 'btn-ghost'}`}
+                  style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+                  onClick={() => setStageScope('chargement')}
+                >
+                  Chargement ({getStageProblemLines(lines, eventsByLine, 'chargement').length})
+                </button>
+              )}
+              {(hasPointEvents || stageScope === 'pointage') && (
+                <button
+                  type="button"
+                  className={`btn btn-xs ${stageScope === 'pointage' ? 'btn-primary' : 'btn-ghost'}`}
+                  style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+                  onClick={() => setStageScope('pointage')}
+                >
+                  Pointage ({getStageProblemLines(lines, eventsByLine, 'pointage').length})
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -3911,6 +4089,43 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           </div>
         )}
 
+        {/* Reassuring Empty State for 0 Problems */}
+        {summaryTab === 'problems' && problemLines.length === 0 && (
+          <div
+            className="card text-center py-5 my-2"
+            style={{
+              background: 'rgba(16, 185, 129, 0.08)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+              borderRadius: 'var(--radius-md)',
+              padding: '24px 16px',
+            }}
+          >
+            <div
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: '50%',
+                background: 'rgba(16, 185, 129, 0.15)',
+                color: 'var(--success)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 10px auto',
+              }}
+            >
+              <IconCheck size={26} />
+            </div>
+            <div className="font-bold text-sm" style={{ color: 'var(--success)' }}>
+              Aucun écart ni anomalie détecté !
+            </div>
+            <div className="text-xs text-muted mt-1" style={{ maxWidth: 280, margin: '0 auto' }}>
+              Toutes les lignes comptées pour l'étape{' '}
+              <strong>{stageScope === 'pointage' ? 'Pointage' : stageScope === 'chargement' ? 'Chargement' : 'Préparation'}</strong>{' '}
+              correspondent parfaitement aux quantités attendues.
+            </div>
+          </div>
+        )}
+
         {/* Lines View (Problems or All) */}
         {(summaryTab === 'problems' || summaryTab === 'all') && displayLines.map((line) => {
           const evts = eventsByLine.get(line.id!) || [];
@@ -3920,71 +4135,57 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           const pointTotals = getStageTotals(evts, 'pointage');
           const isModified = line.orderedQty !== line.originalOrderedQty;
 
+          // Reference quantity for the active stage
+          const targetQty = stageScope === 'pointage'
+            ? (hasLoadEvents ? loadTotal : (prepTotal > 0 ? prepTotal : line.orderedQty))
+            : stageScope === 'chargement'
+            ? (prepTotal > 0 ? prepTotal : line.orderedQty)
+            : line.orderedQty;
+          const activeStageCount = stageScope === 'pointage' ? pointTotal : stageScope === 'chargement' ? loadTotal : prepTotal;
+          const diff = activeStageCount - targetQty;
+
           return (
-            <div key={line.id} className="card" style={{ padding: 10 }}>
+            <div key={line.id} className="card" style={{ padding: 10, marginBottom: 8 }}>
               <div className="flex items-center gap-2">
                 <span className="line-no" style={{ fontSize: '1rem' }}>N°{line.no}</span>
                 {line.page != null && <span className="text-xs text-muted">P{line.page}</span>}
                 {line.status !== 'active' && (
-                  <span className={`badge badge-${line.status === 'cancelled' ? 'cancelled' : 'not-found'}`}>
-                    {line.status === 'cancelled' ? 'ANNULÉ' : line.status === 'not_found' ? 'INTROUVABLE' : 'SUPPRIMÉ'}
+                  <span className={`badge badge-${line.status === 'out_of_stock' ? 'out-of-stock' : line.status === 'cancelled' ? 'cancelled' : 'not-found'}`}>
+                    {line.status === 'out_of_stock' ? 'RUPTURE' : line.status === 'cancelled' ? 'ANNULÉ' : 'INTROUVABLE'}
                   </span>
                 )}
                 {isModified && <span className="badge badge-modified">MODIFIÉ</span>}
               </div>
               <div className="text-sm mt-1">{line.reference && `REF: ${line.reference} • `}{line.designation}</div>
-              {isMultiStage ? (
-                <div className="flex gap-3 mt-2 text-sm flex-wrap">
-                  {isModified && <div><span className="text-muted">Orig:</span> <strong>{line.originalOrderedQty}</strong></div>}
-                  <div><span className="text-muted">Attendu:</span> <strong>{line.orderedQty}</strong></div>
-                  <div><span className="text-muted">Préparé:</span> <strong>{prepTotal}</strong></div>
-                  <div><span className="text-muted">Chargé:</span> <strong>{loadTotal}</strong></div>
-                  <div><span className="text-muted">Pointé:</span> <strong>{pointTotal}</strong></div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3 mt-2 text-sm flex-wrap">
-                  {isModified && <div><span className="text-muted">Orig:</span> <strong>{line.originalOrderedQty}</strong></div>}
-                  <div><span className="text-muted">Attendu:</span> <strong>{line.orderedQty}</strong></div>
-                  <div>
-                    <span className="text-muted">Pointé:</span>{' '}
-                    <strong
-                      style={{
-                        color:
-                          prepTotal === line.orderedQty
-                            ? 'var(--success)'
-                            : prepTotal < line.orderedQty
-                            ? 'var(--warning)'
-                            : 'var(--accent)',
-                      }}
-                    >
-                      {prepTotal}
-                    </strong>
-                  </div>
-                  {prepTotal !== line.orderedQty ? (
-                    <span
-                      className="badge"
-                      style={{
-                        fontSize: '0.7rem',
-                        fontWeight: 700,
-                        background:
-                          prepTotal < line.orderedQty ? 'rgba(239, 68, 68, 0.15)' : 'rgba(56, 189, 248, 0.15)',
-                        color: prepTotal < line.orderedQty ? '#ef4444' : '#38bdf8',
-                      }}
-                    >
-                      {prepTotal < line.orderedQty ? `${prepTotal - line.orderedQty}` : `+${prepTotal - line.orderedQty}`}
-                    </span>
-                  ) : (
-                    <span
-                      className="badge"
-                      style={{ fontSize: '0.7rem', fontWeight: 700, background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e' }}
-                    >
-                      Conforme
-                    </span>
-                  )}
-                </div>
-              )}
-              {pointTotal > 0 && (
-                <div className="flex gap-2 mt-1 text-xs flex-wrap">
+
+              {/* Quantities breakdown */}
+              <div className="flex items-center gap-3 mt-2 text-xs flex-wrap font-mono">
+                {isModified && <div><span className="text-muted font-sans">Orig: </span><strong>{line.originalOrderedQty}</strong></div>}
+                <div><span className="text-muted font-sans">Attendu: </span><strong className="text-primary">{line.orderedQty}</strong></div>
+                {(prepTotal > 0 || stageScope === 'preparation') && (
+                  <div><span className="text-muted font-sans">Préparé: </span><strong>{prepTotal}</strong></div>
+                )}
+                {(hasLoadEvents || (stageScope === 'chargement' && loadTotal > 0)) && (
+                  <div><span className="text-muted font-sans">Chargé: </span><strong>{loadTotal}</strong></div>
+                )}
+                {(hasPointEvents || (stageScope === 'pointage' && pointTotal > 0)) && (
+                  <div><span className="text-muted font-sans">Pointé: </span><strong style={{ color: diff === 0 && pointTotal > 0 ? 'var(--success)' : undefined }}>{pointTotal}</strong></div>
+                )}
+
+                {/* Status chip */}
+                {diff === 0 && activeStageCount > 0 && (
+                  <span className="badge badge-exact text-xs ml-auto font-sans"><IconCheck size={11} /> Conforme</span>
+                )}
+                {diff < 0 && (
+                  <span className="badge badge-short text-xs ml-auto font-sans">{diff} manquant{Math.abs(diff) > 1 ? 's' : ''}</span>
+                )}
+                {diff > 0 && (
+                  <span className="badge badge-over text-xs ml-auto font-sans">+{diff} excédent</span>
+                )}
+              </div>
+
+              {pointTotal > 0 && (pointTotals.byOutcome.damaged_accepted > 0 || pointTotals.byOutcome.damaged_refused > 0 || pointTotals.byOutcome.refused > 0) && (
+                <div className="flex gap-2 mt-1.5 text-xs flex-wrap">
                   <span className="flex items-center gap-1"><IconCheck size={12} /> Conforme: {pointTotals.byOutcome.accepted}</span>
                   {pointTotals.byOutcome.damaged_accepted > 0 && (
                     <span className="flex items-center gap-1" style={{ color: 'var(--warning)' }}><IconWarning size={12} /> Avarié Acc: {pointTotals.byOutcome.damaged_accepted}</span>
@@ -3997,9 +4198,10 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
                   )}
                 </div>
               )}
+
               {/* Transport breakdown */}
               {evts.filter(e => e.stage === 'preparation' && !e.undone && e.containerId).length > 0 && (
-                <div className="flex gap-1 mt-1 flex-wrap">
+                <div className="flex gap-1 mt-1.5 flex-wrap">
                   {containers.map(c => {
                     const qty = evts
                       .filter(e => e.stage === 'preparation' && !e.undone && e.containerId === c.id)

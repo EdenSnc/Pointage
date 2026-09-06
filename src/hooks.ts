@@ -254,6 +254,69 @@ export async function undoLastCount(
   return true;
 }
 
+/**
+ * Resets all active count events for a specific line and stage back to 0.
+ */
+export async function resetLineStageCount(
+  orderLineId: number,
+  stage: Stage
+): Promise<number> {
+  const events = await db.countEvents
+    .where('orderLineId')
+    .equals(orderLineId)
+    .toArray();
+  const activeEvents = events.filter((e) => e.stage === stage && !e.undone);
+  if (activeEvents.length === 0) return 0;
+
+  const totalReset = activeEvents.reduce((s, e) => s + e.quantity, 0);
+
+  for (const ev of activeEvents) {
+    await db.countEvents.update(ev.id!, { undone: true });
+  }
+
+  const sample = activeEvents[0];
+  await db.auditEvents.add({
+    billId: sample.billId,
+    orderLineId,
+    stage,
+    type: 'count_event_undone',
+    oldValue: String(totalReset),
+    newValue: '0',
+    reason: 'reset_to_zero',
+    timestamp: new Date().toISOString(),
+  });
+
+  return totalReset;
+}
+
+/**
+ * Sets the exact counted quantity for a specific line and stage directly.
+ * Marks existing active events undone and creates a single event with the target quantity.
+ */
+export async function setLineStageTotalCount(
+  billId: number,
+  orderLineId: number,
+  stage: Stage,
+  targetQty: number,
+  outcome: PointageOutcome | null = null,
+  note: string | null = null
+): Promise<void> {
+  const safeTarget = Math.max(0, targetQty);
+  await resetLineStageCount(orderLineId, stage);
+
+  if (safeTarget > 0) {
+    await addCountEvent(
+      billId,
+      orderLineId,
+      stage,
+      safeTarget,
+      null,
+      outcome,
+      note
+    );
+  }
+}
+
 export async function updateOrderLineField(
   lineId: number,
   field: string,

@@ -208,11 +208,13 @@ export interface FinalBillRow {
   code: string; // Product reference / Code article
   ean: string | null;
   designation: string;
+  um?: string; // U.M (Unité(s))
   colisage: string | null;
   orderedQty: number;
   actualQty: number; // Quantité physiquement pointée en surface
   diffQty: number; // actualQty - orderedQty
   unitPrice: number | null; // P.U. HT en DA
+  discountPercent?: number | null; // Remise Paiement (%)
   totalTtc: number | null; // actualQty * (unitPrice || 0)
   status: FinalBillRowStatus;
   observation: string;
@@ -222,10 +224,19 @@ export interface FinalBillExportData {
   billNumber: string;
   client: string;
   date: string;
+  paymentMode?: string | null;
+  agentName?: string | null;
+  clientAddress?: string | null;
+  nif?: string | null;
+  nis?: string | null;
+  rc?: string | null;
+  ai?: string | null;
   totalOrderedQty: number;
   totalActualQty: number;
   totalDiffQty: number;
   totalAmountTtc: number;
+  totalAmountWithDiscount?: number | null;
+  discountPercent?: number | null;
   isPriced: boolean;
   checksumValid: boolean;
   rows: FinalBillRow[];

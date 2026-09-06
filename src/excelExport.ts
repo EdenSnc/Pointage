@@ -82,20 +82,23 @@ export function buildFinalBillRows(
       continue;
     }
 
-    const safeColisage = line.packagesRaw || (line.outerPackSize ? `${line.outerPackSize}/CT` : (line.colisage ? `${line.colisage}` : null));
+    const safeColisage = line.packagesRaw || (line.outerPackSize ? `${line.outerPackSize},00` : (line.colisage ? `${line.colisage}` : '1,00'));
     const safeCode = line.reference || line.originalReference || (line.no ? `ART-${line.no}` : '-');
     const safeDesignation = line.designation || line.originalDesignation || 'Article sans désignation';
+    const lineDiscount = (line as any).discountPercent ?? (line as any).remise ?? null;
 
     rows.push({
       no: line.no || line.originalNo || String(rows.length + 1),
       code: safeCode,
       ean: line.ean || line.originalEan || null,
       designation: safeDesignation,
+      um: 'Unité(s)',
       colisage: safeColisage,
       orderedQty,
       actualQty,
       diffQty,
       unitPrice,
+      discountPercent: lineDiscount,
       totalTtc,
       status,
       observation,
@@ -106,7 +109,7 @@ export function buildFinalBillRows(
 }
 
 /**
- * Compiles full bill export metadata with exact totals.
+ * Compiles full bill export metadata with exact totals matching real warehouse bills.
  */
 export function compileFinalBillData(
   bill: Bill,
@@ -128,14 +131,43 @@ export function compileFinalBillData(
     }
   }
 
+  const billDiscount = (bill as any).discountPercent ?? null;
+  let totalAmountWithDiscount: number | null = null;
+  let hasAnyDiscount = (billDiscount != null && billDiscount > 0);
+
+  if (hasAnyDiscount) {
+    totalAmountWithDiscount = Math.round((totalAmountTtc * (1 - billDiscount / 100) + Number.EPSILON) * 100) / 100;
+  } else {
+    let sumDiscounted = 0;
+    let foundLineDisc = false;
+    for (const r of rows) {
+      const d = r.discountPercent || 0;
+      if (d > 0) foundLineDisc = true;
+      sumDiscounted += (r.totalTtc || 0) * (1 - d / 100);
+    }
+    if (foundLineDisc) {
+      hasAnyDiscount = true;
+      totalAmountWithDiscount = Math.round((sumDiscounted + Number.EPSILON) * 100) / 100;
+    }
+  }
+
   return {
     billNumber: bill.billNumber || 'SANS_NUMERO',
     client: bill.client || 'Client Inconnu',
-    date: bill.date || new Date().toISOString().split('T')[0],
+    date: bill.date || new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+    paymentMode: (bill as any).paymentMode || (hasAnyDiscount ? `CLIENT ${billDiscount || 6}%` : null),
+    agentName: (bill as any).agentName || 'ZDjaber',
+    clientAddress: (bill as any).clientAddress || null,
+    nif: (bill as any).nif || null,
+    nis: (bill as any).nis || null,
+    rc: (bill as any).rc || null,
+    ai: (bill as any).ai || null,
     totalOrderedQty,
     totalActualQty,
     totalDiffQty,
     totalAmountTtc,
+    totalAmountWithDiscount,
+    discountPercent: billDiscount,
     isPriced: pricedRowsCount > 0,
     checksumValid: true,
     rows,
@@ -144,136 +176,139 @@ export function compileFinalBillData(
 
 /**
  * Builds native Excel Workbook (.xlsx) matching warehouse bill structure
- * with dynamic formulas and high-contrast table layout.
+ * 1:1 exactly as on the official paper bills.
  */
 export function createFinalBillWorkbook(data: FinalBillExportData): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
 
-  // Excel Sheet data matrix
+  const hasDiscount = Boolean(
+    (data.discountPercent != null && data.discountPercent > 0) ||
+    data.rows.some((r) => r.discountPercent != null && r.discountPercent > 0)
+  );
+
+  // Exact header block reproduced from the warehouse paper bills:
   const wsData: (string | number | null)[][] = [
-    // Header block
-    ['POINTAGE DE SURFACE — FACTURE ET BON DE RECEPTION DEFINITIF'],
-    [`Client : ${data.client || 'Client Inconnu'}`, '', '', `Date : ${data.date || ''}`, '', '', `Statut : RECEPTION VERIFIEE EN SURFACE`],
-    [`N° Bon d'origine : ${data.billNumber || 'Sans Numéro'}`, '', '', `Version : Pointage Surface v1.4 (Document de Controle)`],
-    [], // Spacer row
-    // Column Headers
-    [
-      'N°',
-      'CODE ARTICLE',
-      'CODE-BARRES (EAN)',
-      'DESIGNATION',
-      'COLISAGE',
-      'QTE COMMANDEE',
-      'QTE RECEPTIONNEE',
-      'ECART',
-      'P.U. (DA)',
-      'TOTAL TTC (DA)',
-      'STATUT',
-      'OBSERVATION',
-    ],
+    [`Bon de commande : ${data.billNumber || 'Sans Numéro'}`, '', '', '', '', '', `Bir El Djir , le : ${data.date || ''}`],
+    [`Mode de paiement: ${data.paymentMode || 'CLIENT 6%'}`, '', '', '', `Client : ${data.client || 'Client Inconnu'}`],
+    [`Par: ${data.agentName || 'ZDjaber'}`, '', '', '', data.clientAddress ? `${data.clientAddress}` : ''],
+    ['', '', '', '', data.ai ? `AI : ${data.ai}` : 'AI :'],
+    ['', '', '', '', data.nif ? `NIF : ${data.nif}` : 'NIF :'],
+    ['', '', '', '', data.nis ? `NIS : ${data.nis}` : 'NIS :'],
+    ['', '', '', '', data.rc ? `RC : ${data.rc}` : 'RC :'],
+    [],
+    hasDiscount
+      ? ['N°', 'CODE', 'Désignation', 'QTÉ', 'U.M', 'Colisage', 'PU', 'Rem. Paiement(%)']
+      : ['N°', 'CODE', 'Désignation', 'QTÉ', 'U.M', 'Colisage', 'PU'],
   ];
 
-  const firstDataRowIdx = 6; // 1-indexed row 6 in Excel
+  const firstDataRowIdx = 10; // 1-indexed row 10 in Excel
   const rows = data.rows;
 
-  // Add line items
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
-    const excelRow = firstDataRowIdx + i;
-
-    wsData.push([
+    const rowCells: (string | number | null)[] = [
       r.no,
       r.code,
-      r.ean || '',
       r.designation,
-      r.colisage || '',
-      r.orderedQty,
       r.actualQty,
-      // Formula for Diff: actualQty - orderedQty (Column G - Column F)
-      { f: `G${excelRow}-F${excelRow}`, v: r.diffQty } as any,
+      r.um || 'Unité(s)',
+      r.colisage || '1,00',
       r.unitPrice != null ? r.unitPrice : '',
-      // Formula for Line Total: actualQty * unitPrice (Column G * Column I)
-      r.unitPrice != null
-        ? ({ f: `G${excelRow}*I${excelRow}`, v: r.totalTtc } as any)
-        : '',
-      r.status,
-      r.observation,
-    ]);
+    ];
+
+    if (hasDiscount) {
+      rowCells.push(r.discountPercent != null ? r.discountPercent : (data.discountPercent || 0));
+    }
+
+    wsData.push(rowCells);
   }
 
   const lastDataRowIdx = firstDataRowIdx + rows.length - 1;
-  const totalsRowIdx = lastDataRowIdx + 1;
 
-  // Bottom Summary Row or Empty state
+  // Bottom Summary Block: TOTAL TTC and TOTAL AVEC REMISE
   if (rows.length === 0) {
     wsData.push([
       '-',
-      'AUCUN ARTICLE',
-      '',
-      'Aucun article dans cette sélection (filtre actif ou bon vide)',
-      '',
+      '-',
+      'Aucun article dans cette sélection',
       0,
+      'Unité(s)',
+      '1,00',
       0,
-      0,
-      '',
-      '',
-      'CONFORME',
-      'Rien à signaler',
+      ...(hasDiscount ? [0] : []),
     ]);
   } else {
+    wsData.push([]);
+    const totalTtcRowIdx = wsData.length + 1; // 1-indexed
     wsData.push([
-      'TOTAL GENERAL',
       '',
       '',
       '',
       '',
-      { f: `SUM(F${firstDataRowIdx}:F${lastDataRowIdx})`, v: data.totalOrderedQty } as any,
-      { f: `SUM(G${firstDataRowIdx}:G${lastDataRowIdx})`, v: data.totalActualQty } as any,
-      { f: `SUM(H${firstDataRowIdx}:H${lastDataRowIdx})`, v: data.totalDiffQty } as any,
       '',
+      'TOTAL TTC',
       data.isPriced
-        ? ({ f: `SUM(J${firstDataRowIdx}:J${lastDataRowIdx})`, v: data.totalAmountTtc } as any)
+        ? ({ f: `SUMPRODUCT(D${firstDataRowIdx}:D${lastDataRowIdx}, G${firstDataRowIdx}:G${lastDataRowIdx})`, v: data.totalAmountTtc } as any)
         : '',
-      '',
-      'Arrete a la presente reception physique de surface',
+      ...(hasDiscount ? ['DA'] : []),
     ]);
+
+    if (hasDiscount && data.isPriced) {
+      const finalWithDiscount = data.totalAmountWithDiscount || data.totalAmountTtc;
+      wsData.push([
+        '',
+        '',
+        '',
+        '',
+        '',
+        'TOTAL AVEC REMISE',
+        ({
+          f: data.discountPercent
+            ? `G${totalTtcRowIdx}*(1-${data.discountPercent}/100)`
+            : `SUMPRODUCT(D${firstDataRowIdx}:D${lastDataRowIdx}, G${firstDataRowIdx}:G${lastDataRowIdx}, 1-H${firstDataRowIdx}:H${lastDataRowIdx}/100)`,
+          v: finalWithDiscount,
+        } as any),
+        ...(hasDiscount ? ['DA'] : []),
+      ]);
+    }
+
+    wsData.push([]);
+    wsData.push(['', '', 'Page 1 sur 1']);
   }
 
   const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-  // Set optimized column widths for readable display
+  // Set optimized column widths matching the paper layout
   ws['!cols'] = [
     { wch: 6 },  // N°
-    { wch: 16 }, // Code article
-    { wch: 18 }, // EAN
-    { wch: 42 }, // Designation
-    { wch: 14 }, // Colisage
-    { wch: 16 }, // Qte Commandee
-    { wch: 18 }, // Qte Receptionnee
-    { wch: 12 }, // Ecart
-    { wch: 14 }, // P.U.
-    { wch: 18 }, // Total TTC
-    { wch: 14 }, // Statut
-    { wch: 35 }, // Observation
+    { wch: 14 }, // CODE
+    { wch: 55 }, // Désignation
+    { wch: 14 }, // QTÉ
+    { wch: 12 }, // U.M
+    { wch: 12 }, // Colisage
+    { wch: 14 }, // PU
+    ...(hasDiscount ? [{ wch: 18 }] : []), // Rem. Paiement(%)
   ];
 
-  // Apply number formatting
+  // Number formatting
   if (rows.length > 0) {
-    for (let r = firstDataRowIdx; r <= totalsRowIdx; r++) {
-      const cellF = ws[`F${r}`];
-      if (cellF && (typeof cellF.v === 'number' || cellF.f)) cellF.z = '#,##0';
+    for (let r = firstDataRowIdx; r <= lastDataRowIdx; r++) {
+      const cellD = ws[`D${r}`];
+      if (cellD && (typeof cellD.v === 'number' || cellD.f)) cellD.z = '#,##0.00';
       const cellG = ws[`G${r}`];
-      if (cellG && (typeof cellG.v === 'number' || cellG.f)) cellG.z = '#,##0';
-      const cellH = ws[`H${r}`];
-      if (cellH && (typeof cellH.v === 'number' || cellH.f)) cellH.z = '#,##0';
-      const cellI = ws[`I${r}`];
-      if (cellI && (typeof cellI.v === 'number' || cellI.f)) cellI.z = '#,##0.00';
-      const cellJ = ws[`J${r}`];
-      if (cellJ && (typeof cellJ.v === 'number' || cellJ.f)) cellJ.z = '#,##0.00';
+      if (cellG && (typeof cellG.v === 'number' || cellG.f)) cellG.z = '#,##0.00';
+      if (hasDiscount) {
+        const cellH = ws[`H${r}`];
+        if (cellH && (typeof cellH.v === 'number' || cellH.f)) cellH.z = '#,##0.00';
+      }
     }
   }
 
-  XLSX.utils.book_append_sheet(wb, ws, 'BL_FINAL_SURFACE');
+  const cleanSheetName = (data.billNumber || 'Bon_de_commande')
+    .replace(/[\\\/\?\*\[\]\:]/g, '_')
+    .slice(0, 31);
+  XLSX.utils.book_append_sheet(wb, ws, cleanSheetName || 'Bon_de_commande');
+
   return wb;
 }
 

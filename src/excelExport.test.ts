@@ -222,16 +222,35 @@ describe('excelExport — createFinalBillWorkbook', () => {
     };
 
     const wb = createFinalBillWorkbook(data);
-    expect(wb.SheetNames).toContain('BL_FINAL_SURFACE');
-    const ws = wb.Sheets['BL_FINAL_SURFACE'];
+    expect(wb.SheetNames.length).toBe(1);
+    const sheetName = wb.SheetNames[0];
+    expect(sheetName).toBe('BC_OU126_03808');
+    const ws = wb.Sheets[sheetName];
     expect(ws).toBeDefined();
 
-    // Verify cell formulas in worksheet
-    // Row 6 is first data row:
-    // H6 has formula for diff (G6-F6)
-    // J6 has formula for total (G6*I6)
-    expect(ws['H6'].f).toBe('G6-F6');
-    expect(ws['J6'].f).toBe('G6*I6');
+    // Verify cell content matching authentic warehouse paper bills 1:1
+    // Row 1: Bon de commande : BC/OU126/03808
+    expect(ws['A1'].v).toContain('Bon de commande : BC/OU126/03808');
+    // Row 9: Headers: N°, CODE, Désignation, QTÉ, U.M, Colisage, PU
+    expect(ws['A9'].v).toBe('N°');
+    expect(ws['B9'].v).toBe('CODE');
+    expect(ws['C9'].v).toBe('Désignation');
+    expect(ws['D9'].v).toBe('QTÉ');
+    expect(ws['E9'].v).toBe('U.M');
+    expect(ws['F9'].v).toBe('Colisage');
+    expect(ws['G9'].v).toBe('PU');
+
+    // Row 10: First data row
+    expect(ws['A10'].v).toBe('1');
+    expect(ws['B10'].v).toBe('84012');
+    expect(ws['C10'].v).toBe('CORRECTEUR STYLO');
+    expect(ws['D10'].v).toBe(100);
+    expect(ws['G10'].v).toBe(42.50);
+
+    // Bottom Summary: TOTAL TTC formula
+    expect(ws['F12'].v).toBe('TOTAL TTC');
+    expect(ws['G12'].f).toBe('SUMPRODUCT(D10:D10, G10:G10)');
+    expect(ws['G12'].v).toBe(4250.00);
   });
 });
 
@@ -358,12 +377,11 @@ describe('excelExport — Extensive Edge Cases Resilience', () => {
     expect(data.isPriced).toBe(false);
 
     const wb = createFinalBillWorkbook(data);
-    expect(wb.SheetNames).toContain('BL_FINAL_SURFACE');
-    const ws = wb.Sheets['BL_FINAL_SURFACE'];
-    expect(ws['A6'].v).toBe('-');
-    expect(ws['B6'].v).toBe('AUCUN ARTICLE');
-    // Ensure no broken SUM(F6:F5) was generated
-    expect(ws['F6'].v).toBe(0);
+    expect(wb.SheetNames.length).toBe(1);
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    expect(ws).toBeDefined();
+    expect(ws['A10'].v).toBe('-');
+    expect(ws['C10'].v).toBe('Aucun article dans cette sélection');
   });
 
   it('handles onlyPresent filter when all counts are 0', () => {
@@ -402,7 +420,8 @@ describe('excelExport — Extensive Edge Cases Resilience', () => {
 
     const data = compileFinalBillData(dummyBill, rows);
     const wb = createFinalBillWorkbook(data);
-    expect(wb.Sheets['BL_FINAL_SURFACE']).toBeDefined();
+    expect(wb.SheetNames.length).toBe(1);
+    expect(wb.Sheets[wb.SheetNames[0]]).toBeDefined();
   });
 
   it('handles missing line references, designations, colisage, and EANs with safe fallbacks', () => {
@@ -440,7 +459,7 @@ describe('excelExport — Extensive Edge Cases Resilience', () => {
     expect(rows[0].code).toBe('ART-5');
     expect(rows[0].designation).toBe('Article sans désignation');
     expect(rows[0].ean).toBeNull();
-    expect(rows[0].colisage).toBeNull();
+    expect(rows[0].colisage).toBe('1,00');
   });
 
   it('handles item added on the fly (orderedQty = 0, actualQty > 0) as SURPLUS', () => {

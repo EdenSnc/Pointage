@@ -148,6 +148,13 @@ export function getStageProblemLines(
     targetStage = currentStage;
   }
 
+  const billHasLoadEvents = Array.from(eventsByLine.values()).some((arr) =>
+    arr.some((e) => e.stage === 'chargement' && !e.undone)
+  );
+  const billHasPrepEvents = Array.from(eventsByLine.values()).some((arr) =>
+    arr.some((e) => e.stage === 'preparation' && !e.undone)
+  );
+
   return lines.filter((line) => {
     if (line.status === 'out_of_stock' || line.status === 'not_found' || line.status === 'cancelled') {
       return true;
@@ -167,10 +174,22 @@ export function getStageProblemLines(
 
     if (targetStage === 'pointage') {
       const totals = getStageTotals(evts, 'pointage');
-      const hasDamageOrRefusal = totals.byOutcome.damaged_accepted > 0 ||
+      const hasDamageOrRefusal =
+        totals.byOutcome.damaged_accepted > 0 ||
         totals.byOutcome.damaged_refused > 0 ||
         totals.byOutcome.refused > 0;
-      return totals.total !== loadTotal || hasDamageOrRefusal;
+
+      // Determine the legitimate logistical baseline:
+      // If chargement occurred on the bill, pointage verifies what was loaded.
+      // If only preparation occurred, pointage verifies what was prepared.
+      // If neither occurred (direct reception at store surface), pointage verifies against orderedQty.
+      const referenceQty = billHasLoadEvents
+        ? loadTotal
+        : billHasPrepEvents
+        ? prepTotal
+        : line.orderedQty;
+
+      return totals.total !== referenceQty || hasDamageOrRefusal;
     }
 
     return false;
