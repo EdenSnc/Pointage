@@ -2453,3 +2453,58 @@ button,
   opacity: 1;
   box-shadow: inset 0 0 55px 16px rgba(239, 68, 68, 0.65), inset 0 0 20px 6px rgba(239, 68, 68, 0.95);
 }
+
+/* Visual Continuity: Just Updated Card Animation */
+@keyframes pulseSubtleGreen {
+  0% {
+    box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.5);
+    border-color: #059669 !important;
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(5, 150, 105, 0);
+    border-color: #059669 !important;
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(5, 150, 105, 0);
+  }
+}
+
+.just-updated-card {
+  animation: pulseSubtleGreen 1.8s ease-out;
+  border-color: rgba(5, 150, 105, 0.6) !important;
+}
+
+/* Floating Scroll-to-Top Pill */
+.scroll-top-pill {
+  position: fixed;
+  bottom: 84px;
+  right: 18px;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.scroll-top-pill:active {
+  transform: scale(0.95);
+}
+
+[data-theme="light"] .scroll-top-pill {
+  background: rgba(255, 255, 255, 0.94);
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+

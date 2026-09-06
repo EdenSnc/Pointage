@@ -47,7 +47,6 @@ import {
   calcBillProgress,
   getStageTotals,
   calcPackBreakdown,
-  roundDownToPack,
   getStageProblemLines,
   parsePackagingString,
   serializeCountsForQR,
@@ -1942,6 +1941,30 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const [showQRSync, setShowQRSync] = useState(false);
   const [unknownBarcodeModal, setUnknownBarcodeModal] = useState<string | null>(null);
 
+  // Focus & visual continuity for recently updated line
+  const [lastUpdatedLineId, setLastUpdatedLineId] = useState<number>(() => {
+    return Number(sessionStorage.getItem('pointage_last_updated_line_id') || 0);
+  });
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useEffect(() => {
+    if (lastUpdatedLineId) {
+      const timer = setTimeout(() => {
+        sessionStorage.removeItem('pointage_last_updated_line_id');
+        setLastUpdatedLineId(0);
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [lastUpdatedLineId]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 350);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   const handleSearchChange = (q: string) => {
     setSearchQuery(q);
     if (q) {
@@ -2229,7 +2252,8 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           return (
             <div
               key={line.id}
-              className="product-card"
+              id={`line-${line.id}`}
+              className={`product-card ${line.id === lastUpdatedLineId ? 'just-updated-card' : ''}`}
               onClick={() => nav(`/bill/${line.billId}/line/${line.id}?stage=${stage}`)}
             >
               <div className="flex items-center justify-between">
@@ -2430,6 +2454,16 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         </div>
       )}
+      {showScrollTop && (
+        <button
+          type="button"
+          className="scroll-top-pill"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          title="Retourner en haut"
+        >
+          ↑ Haut
+        </button>
+      )}
     </>
   );
 }
@@ -2445,6 +2479,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const lineId = Number(lineIdStr);
 
   const bill = useBill(billId);
+  const allBillLines = useBillLines(billId);
   const line = useOrderLine(lineId);
   const events = useLineEvents(lineId);
   const containers = useBillContainers(billId);
@@ -2453,6 +2488,25 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const stageParam = (searchParams.get('stage') || sessionStorage.getItem(`pointage_stage_${billId}`) || 'preparation') as Stage;
   const [stage, setStage] = useState<Stage>(stageParam);
   const fromParam = searchParams.get('from');
+
+  // Next article in sequential order
+  const nextLine = React.useMemo(() => {
+    if (!allBillLines || !line) return null;
+    const sorted = [...allBillLines].sort((a, b) => {
+      const pageDiff = (a.page || 0) - (b.page || 0);
+      if (pageDiff !== 0) return pageDiff;
+      return (Number(a.no) || 0) - (Number(b.no) || 0);
+    });
+    const currentIndex = sorted.findIndex((l) => l.id === lineId);
+    if (currentIndex >= 0 && currentIndex < sorted.length - 1) {
+      return sorted[currentIndex + 1];
+    }
+    return null;
+  }, [allBillLines, line, lineId]);
+
+  const isSubmittingRef = useRef(false);
+  const lastSubmitTimeRef = useRef(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleBack = () => {
     if (fromParam === 'home') {
@@ -2484,7 +2538,6 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const [refusalNote, setRefusalNote] = useState('');
 
   // Substitution state
-  const allBillLines = useBillLines(billId);
   const [showSubModal, setShowSubModal] = useState(false);
   const [subSearch, setSubSearch] = useState('');
   const [selectedSubLine, setSelectedSubLine] = useState<OrderLine | null>(null);
@@ -2538,46 +2591,64 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const pointageTotals = getStageTotals(events, 'pointage');
 
   const handleAddCount = async () => {
-    if (batchQty <= 0) return;
+    const now = Date.now();
+    if (now - lastSubmitTimeRef.current < 600) return;
+    if (isSubmittingRef.current || batchQty <= 0) return;
+    isSubmittingRef.current = true;
+    lastSubmitTimeRef.current = now;
+    setIsSubmitting(true);
 
-    await addCountEvent(
-      billId,
-      lineId,
-      stage,
-      batchQty,
-      (stage === 'preparation' || stage === 'chargement') ? selectedContainer : null,
-      stage === 'pointage' ? outcome : null,
-      stage === 'pointage' && outcome !== 'accepted' ? refusalNote : null
-    );
+    try {
+      hapticTap('medium');
+      const qtyAdded = batchQty;
 
-    if (stage === 'pointage') setRefusalNote('');
+      await addCountEvent(
+        billId,
+        lineId,
+        stage,
+        batchQty,
+        (stage === 'preparation' || stage === 'chargement') ? selectedContainer : null,
+        stage === 'pointage' ? outcome : null,
+        stage === 'pointage' && outcome !== 'accepted' ? refusalNote : null
+      );
 
-    // Save packaging if set
-    if (line.reference && (outerPack || innerPack)) {
-      await db.orderLines.update(lineId, {
-        outerPackSize: outerPack,
-        innerPackSize: innerPack,
-      });
-      await saveProductProfile(line.reference, {
-        outerPackSize: outerPack,
-        innerPackSize: innerPack,
-      });
+      if (stage === 'pointage') setRefusalNote('');
+
+      // Save packaging if set
+      if (line.reference && (outerPack || innerPack)) {
+        await db.orderLines.update(lineId, {
+          outerPackSize: outerPack,
+          innerPackSize: innerPack,
+        });
+        await saveProductProfile(line.reference, {
+          outerPackSize: outerPack,
+          innerPackSize: innerPack,
+        });
+      }
+
+      // Reset synchronously
+      setOuterCount(0);
+      setInnerCount(0);
+      setLoose(0);
+      setDirectTotal('');
+
+      // Track line ID in sessionStorage for highlight in bill view
+      sessionStorage.setItem('pointage_last_updated_line_id', String(lineId));
+
+      if (afterDisc.isExact) {
+        playExactMatchChime();
+      } else if (afterDisc.isOver) {
+        playWarningBeep();
+      } else {
+        playSuccessChime();
+      }
+      showToast(`+${qtyAdded} enregistré`, setToast);
+    } finally {
+      setTimeout(() => {
+        setIsSubmitting(false);
+        isSubmittingRef.current = false;
+      }, 500);
     }
-
-    // Reset
-    setOuterCount(0);
-    setInnerCount(0);
-    setLoose(0);
-    setDirectTotal('');
-
-    if (afterDisc.isExact) {
-      playExactMatchChime();
-    } else if (afterDisc.isOver) {
-      playWarningBeep();
-    } else {
-      playSuccessChime();
-    }
-    showToast(`+${batchQty} enregistré`, setToast);
   };
 
   const handleUndo = async () => {
@@ -3193,38 +3264,6 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             )}
           </div>
 
-          {/* Sealed pack 1-tap round down option (Only if quantities are visible) */}
-          {(() => {
-            if (!showQuantities) return null;
-            const packSize = innerPack || outerPack;
-            if (packSize && packSize > 1 && disc.remaining > 0 && disc.remaining % packSize !== 0) {
-              const rounded = roundDownToPack(disc.remaining, packSize);
-              if (rounded.servedQty > 0) {
-                return (
-                  <div className="mt-2 p-2" style={{ background: 'rgba(234, 179, 8, 0.1)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
-                    <div className="text-xs font-semibold mb-1" style={{ color: 'var(--warning)' }}>
-                      Colisage scellé ({packSize} pcs / carton)
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-warning btn-full flex items-center justify-center gap-1"
-                      onClick={() => {
-                        hapticTap('medium');
-                        playSuccessChime();
-                        if (useDirectEntry) setDirectTotal(String(rounded.servedQty));
-                        else setLoose(rounded.servedQty);
-                        showToast(`Lot scellé : ${rounded.servedQty} servis (${rounded.missingQty} reliquat)`, setToast);
-                      }}
-                    >
-                      <IconBox size={14} /> Servir {rounded.servedQty} ({rounded.missingQty} reliquat)
-                    </button>
-                  </div>
-                );
-              }
-            }
-            return null;
-          })()}
-
           {/* Batch preview */}
           {batchQty > 0 && (
             <div className="mt-3 p-2" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-badge)', border: 'var(--glass-border-subtle)' }}>
@@ -3793,15 +3832,31 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
         )}
       </div>
 
-      {/* Sticky confirm button */}
-      <div className="bottom-bar">
+      {/* Sticky confirm button & Next button */}
+      <div className="bottom-bar flex gap-2">
         <button
-          className="btn btn-success btn-lg btn-full flex items-center justify-center gap-2"
+          className="btn btn-success btn-lg flex-1 flex items-center justify-center gap-2"
           onClick={handleAddCount}
-          disabled={batchQty <= 0 || line.status !== 'active'}
+          disabled={isSubmitting || batchQty <= 0 || line.status !== 'active'}
         >
-          <IconCheck size={20} /> AJOUTER {batchQty > 0 ? batchQty : ''} {stage === 'preparation' ? 'PRÉPARÉ' : stage === 'chargement' ? 'CHARGÉ' : 'POINTÉ'}
+          <IconCheck size={20} />
+          {isSubmitting
+            ? 'ENREGISTRÉ !'
+            : `AJOUTER ${batchQty > 0 ? batchQty : ''} ${stage === 'preparation' ? 'PRÉPARÉ' : stage === 'chargement' ? 'CHARGÉ' : 'POINTÉ'}`}
         </button>
+
+        {nextLine && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-lg flex items-center justify-center gap-1"
+            onClick={() => nav(`/bill/${billId}/line/${nextLine.id}?stage=${stage}${fromParam ? `&from=${fromParam}` : ''}`)}
+            title={`Passer à l'article suivant N°${nextLine.no}`}
+            style={{ padding: '0 16px', fontWeight: 800 }}
+          >
+            <span>N°{nextLine.no}</span>
+            <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>›</span>
+          </button>
+        )}
       </div>
     </ErrorBoundary>
   );

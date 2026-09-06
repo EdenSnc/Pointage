@@ -73,9 +73,16 @@ export function FastScanQuantityCard({
   const isExact = totalCounted === line.orderedQty;
   const isOver = totalCounted > line.orderedQty;
   const packSize = line.outerPackSize || line.innerPackSize || 0;
+  const isSubmittingRef = useRef(false);
+  const lastSubmitTimeRef = useRef(0);
 
   const handleAdd = async (qty: number) => {
-    if (qty <= 0) return;
+    const now = Date.now();
+    if (now - lastSubmitTimeRef.current < 600) return;
+    if (isSubmittingRef.current || qty <= 0) return;
+    isSubmittingRef.current = true;
+    lastSubmitTimeRef.current = now;
+
     try {
       await addCountEvent(
         line.billId,
@@ -98,6 +105,10 @@ export function FastScanQuantityCard({
       setToast(`+${qty} validé pour N°${line.no}`);
     } catch (err) {
       console.error('Erreur lors de l’ajout de quantité:', err);
+    } finally {
+      setTimeout(() => {
+        isSubmittingRef.current = false;
+      }, 500);
     }
   };
 
