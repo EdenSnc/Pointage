@@ -64,6 +64,47 @@ export function addOperator(name: string): string[] {
 }
 
 /**
+ * Modifies / renames an existing operator in the roster.
+ * Also updates the active operator if the renamed operator was active.
+ */
+export function renameOperator(
+  oldName: string,
+  newName: string
+): { success: boolean; error?: string; list: string[] } {
+  const oldClean = oldName.trim();
+  const newClean = newName.trim();
+  const current = getOperators();
+
+  if (!newClean) {
+    return { success: false, error: 'Le prénom ne peut pas être vide.', list: current };
+  }
+
+  // If identical, nothing to change
+  if (oldClean === newClean) {
+    return { success: true, list: current };
+  }
+
+  // Check if target name conflicts with another operator
+  const conflict = current.some(
+    (o) => o.toLowerCase() === newClean.toLowerCase() && o.toLowerCase() !== oldClean.toLowerCase()
+  );
+  if (conflict) {
+    return { success: false, error: `Le prénom "${newClean}" existe déjà.`, list: current };
+  }
+
+  const updated = current.map((o) => (o.toLowerCase() === oldClean.toLowerCase() ? newClean : o));
+  safeSetItem(STORAGE_KEY_OPERATORS, JSON.stringify(updated));
+
+  // If the renamed operator was active, update active operator
+  const savedActive = safeGetItem(STORAGE_KEY_ACTIVE_OPERATOR);
+  if (savedActive && savedActive.trim().toLowerCase() === oldClean.toLowerCase()) {
+    safeSetItem(STORAGE_KEY_ACTIVE_OPERATOR, newClean);
+  }
+
+  return { success: true, list: updated };
+}
+
+/**
  * Removes an operator from the roster.
  */
 export function removeOperator(name: string): string[] {

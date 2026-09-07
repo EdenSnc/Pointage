@@ -4,6 +4,7 @@ import { db } from './db';
 import {
   getOperators,
   addOperator,
+  renameOperator,
   removeOperator,
   getActiveOperator,
   setActiveOperator,
@@ -51,6 +52,28 @@ describe('Warehouse Operator Roster & Stage Accountability System', () => {
     setActiveOperator('Nassim');
     expect(getActiveOperator()).toBe('Nassim');
     expect(getOperators()).toContain('Nassim');
+  });
+
+  it('modifies / renames operator and rolls over active operator seamlessly', () => {
+    setActiveOperator('Amine');
+    expect(getActiveOperator()).toBe('Amine');
+
+    // Rename Amine to Amine B
+    const res = renameOperator('Amine', 'Amine B');
+    expect(res.success).toBe(true);
+    expect(res.list).toContain('Amine B');
+    expect(res.list).not.toContain('Amine');
+    expect(getActiveOperator()).toBe('Amine B');
+
+    // Reject empty
+    const resEmpty = renameOperator('Amine B', '   ');
+    expect(resEmpty.success).toBe(false);
+    expect(resEmpty.error).toBeDefined();
+
+    // Reject conflict with another existing operator
+    const resConflict = renameOperator('Amine B', 'Mohamed');
+    expect(resConflict.success).toBe(false);
+    expect(resConflict.error).toContain('existe déjà');
   });
 
   it('assigns stage operator to a bill and logs audit event', async () => {

@@ -129,7 +129,6 @@ import {
 
 import {
   loadOperatorsRoster,
-  saveOperatorsRoster,
   getActiveOperator,
   setActiveOperator,
   assignBatchBillsStageOperator,
@@ -373,7 +372,7 @@ function AudioMuteButton({ className, style }: { className?: string; style?: Rea
   );
 }
 
-// ---- Reusable Operator Header Button ----
+// ---- Reusable Operator Header Button (Minimalist, Icon-Only) ----
 function OperatorHeaderButton({
   activeOperator,
   onClick,
@@ -386,13 +385,25 @@ function OperatorHeaderButton({
   return (
     <button
       type="button"
-      className={className || 'operator-pill-btn'}
+      className={className || 'header-icon-btn'}
       onClick={onClick}
       title={`Opérateur actif : ${activeOperator}. Cliquer pour changer.`}
-      aria-label="Opérateur du terminal"
+      aria-label={`Opérateur actif : ${activeOperator}`}
+      style={{ position: 'relative' }}
     >
-      <IconUser size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-      <span className="truncate">{activeOperator}</span>
+      <IconUser size={18} style={{ color: 'var(--accent)' }} />
+      <span
+        style={{
+          position: 'absolute',
+          top: 6,
+          right: 6,
+          width: 7,
+          height: 7,
+          borderRadius: '50%',
+          background: 'var(--accent)',
+          boxShadow: '0 0 6px var(--accent)',
+        }}
+      />
     </button>
   );
 }
@@ -923,16 +934,9 @@ function HomeScreen({
     showToast(`Opérateur actif : ${op}`, setToast);
   };
 
-  const handleAddOperator = (name: string) => {
-    const updated = [...operators, name];
-    saveOperatorsRoster(updated);
-    setOperators(updated);
-  };
-
-  const handleRemoveOperator = (name: string) => {
-    const updated = operators.filter((o: string) => o !== name);
-    saveOperatorsRoster(updated);
-    setOperators(updated);
+  const handleRosterChange = (newOperators: string[], newActive: string) => {
+    setOperators(newOperators);
+    setActiveOperatorState(newActive);
   };
 
   const toggleShowQuantities = () => {
@@ -1001,7 +1005,6 @@ function HomeScreen({
           <BrandLogo size={32} />
           <div className="brand-text">
             <span className="brand-title">Pointage</span>
-            <span className="brand-pill">SURFACE</span>
           </div>
         </div>
 
@@ -1237,8 +1240,7 @@ function HomeScreen({
         activeOperator={activeOperator}
         onSelectOperator={handleSelectOperator}
         operators={operators}
-        onAddOperator={handleAddOperator}
-        onRemoveOperator={handleRemoveOperator}
+        onRosterChange={handleRosterChange}
       />
     </>
   );
@@ -2708,16 +2710,9 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
     showToast(`Opérateur actif : ${op}`, setToast);
   };
 
-  const handleAddOperator = (name: string) => {
-    const updated = [...operators, name];
-    saveOperatorsRoster(updated);
-    setOperators(updated);
-  };
-
-  const handleRemoveOperator = (name: string) => {
-    const updated = operators.filter((o: string) => o !== name);
-    saveOperatorsRoster(updated);
-    setOperators(updated);
+  const handleRosterChange = (newOperators: string[], newActive: string) => {
+    setOperators(newOperators);
+    setActiveOperatorState(newActive);
   };
 
   // Focus & visual continuity for recently updated line
@@ -3030,26 +3025,39 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             )}
           </div>
         </div>
-        <OperatorHeaderButton
-          activeOperator={activeOperator}
-          onClick={() => setShowOperatorModal(true)}
-        />
-        <AudioMuteButton />
-        <button
-          type="button"
-          className="btn btn-sm btn-secondary flex items-center gap-1"
-          style={{ padding: '6px 10px', fontSize: '0.78rem', fontWeight: 700 }}
-          onClick={() => setShowQRSync(true)}
-          title="Fusion multi-téléphones (QR)"
-        >
-          <IconLayers size={14} /> FUSION QR
-        </button>
-        <button className="btn btn-sm btn-secondary btn-icon" onClick={() => setShowWholeBillTransferModal(true)} title="Transférer les étapes du bon">
-          <IconTransfer size={17} />
-        </button>
-        <button className="btn btn-sm btn-secondary btn-icon" onClick={() => nav(`/bill/${billId}/summary?stage=${stage}`)} title="Récapitulatif">
-          <IconChart size={18} />
-        </button>
+        <div className="header-meta">
+          <OperatorHeaderButton
+            activeOperator={activeOperator}
+            onClick={() => setShowOperatorModal(true)}
+          />
+          <button
+            type="button"
+            className="header-icon-btn"
+            onClick={() => setShowQRSync(true)}
+            title="Fusion multi-téléphones (QR)"
+            aria-label="Fusion multi-téléphones (QR)"
+          >
+            <IconLayers size={18} />
+          </button>
+          <button
+            type="button"
+            className="header-icon-btn"
+            onClick={() => setShowWholeBillTransferModal(true)}
+            title="Transférer les étapes du bon"
+            aria-label="Transférer les étapes du bon"
+          >
+            <IconTransfer size={18} />
+          </button>
+          <button
+            type="button"
+            className="header-icon-btn"
+            onClick={() => nav(`/bill/${billId}/summary?stage=${stage}`)}
+            title="Récapitulatif"
+            aria-label="Récapitulatif"
+          >
+            <IconChart size={18} />
+          </button>
+        </div>
       </header>
 
       <div className="app-content">
@@ -3908,8 +3916,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         activeOperator={activeOperator}
         onSelectOperator={handleSelectOperator}
         operators={operators}
-        onAddOperator={handleAddOperator}
-        onRemoveOperator={handleRemoveOperator}
+        onRosterChange={handleRosterChange}
       />
 
       <StageSignOffModal
@@ -4069,16 +4076,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     showToast(`Opérateur actif : ${op}`, setToast);
   };
 
-  const handleAddOperator = (name: string) => {
-    const updated = [...operators, name];
-    saveOperatorsRoster(updated);
-    setOperators(updated);
-  };
-
-  const handleRemoveOperator = (name: string) => {
-    const updated = operators.filter((o: string) => o !== name);
-    saveOperatorsRoster(updated);
-    setOperators(updated);
+  const handleRosterChange = (newOperators: string[], newActive: string) => {
+    setOperators(newOperators);
+    setActiveOperatorState(newActive);
   };
 
   const toggleShowQuantities = () => {
@@ -4385,11 +4385,12 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             </span>
           </div>
         </div>
-        <OperatorHeaderButton
-          activeOperator={activeOperator}
-          onClick={() => setShowOperatorModal(true)}
-        />
-        <AudioMuteButton />
+        <div className="header-meta">
+          <OperatorHeaderButton
+            activeOperator={activeOperator}
+            onClick={() => setShowOperatorModal(true)}
+          />
+        </div>
       </header>
 
       <div className="app-content">
@@ -6033,8 +6034,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           activeOperator={activeOperator}
           onSelectOperator={handleSelectOperator}
           operators={operators}
-          onAddOperator={handleAddOperator}
-          onRemoveOperator={handleRemoveOperator}
+          onRosterChange={handleRosterChange}
         />
 
         <CrossBillReallocationModal
@@ -6788,16 +6788,9 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
     if (setToast) setToast(`Opérateur actif : ${op}`);
   };
 
-  const handleAddOperator = (name: string) => {
-    const updated = [...operators, name];
-    saveOperatorsRoster(updated);
-    setOperators(updated);
-  };
-
-  const handleRemoveOperator = (name: string) => {
-    const updated = operators.filter((o: string) => o !== name);
-    saveOperatorsRoster(updated);
-    setOperators(updated);
+  const handleRosterChange = (newOperators: string[], newActive: string) => {
+    setOperators(newOperators);
+    setActiveOperatorState(newActive);
   };
 
   const eventsByLine = new Map<number, CountEvent[]>();
@@ -7929,8 +7922,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
         activeOperator={activeOperator}
         onSelectOperator={handleSelectOperator}
         operators={operators}
-        onAddOperator={handleAddOperator}
-        onRemoveOperator={handleRemoveOperator}
+        onRosterChange={handleRosterChange}
       />
 
       <StageSignOffModal
