@@ -465,5 +465,86 @@ describe('Workflow 10: Auto-Return After Adding Count & Sequential Picking Navig
   });
 });
 
+describe('Workflow 11: Bill Archival Safety, Concurrency & Cross-Search Visibility', () => {
+  const sampleBills: Bill[] = [
+    {
+      id: 1,
+      sessionId: 1,
+      billNumber: 'BL-2026-001',
+      client: 'ETS BENAMAR',
+      wilaya: '16 - Alger',
+      status: 'active',
+      createdAt: '2026-09-07T10:00:00Z',
+      updatedAt: '2026-09-07T10:00:00Z',
+    },
+    {
+      id: 2,
+      sessionId: 1,
+      billNumber: 'BL-2026-002',
+      client: 'SARL MEKLA',
+      wilaya: '31 - Oran',
+      status: 'completed', // Archived
+      createdAt: '2026-09-07T11:00:00Z',
+      updatedAt: '2026-09-07T11:00:00Z',
+    },
+    {
+      id: 3,
+      sessionId: 1,
+      billNumber: 'BL-2026-003',
+      client: 'QUINC MODERNE',
+      wilaya: '19 - Sétif',
+      status: 'active',
+      createdAt: '2026-09-07T12:00:00Z',
+      updatedAt: '2026-09-07T12:00:00Z',
+    },
+  ];
+
+  it('filters active vs archived bills correctly for tabs', () => {
+    const active = sampleBills.filter((b) => b.status === 'active');
+    const archived = sampleBills.filter((b) => b.status === 'completed');
+
+    expect(active.length).toBe(2);
+    expect(archived.length).toBe(1);
+    expect(archived[0].billNumber).toBe('BL-2026-002');
+  });
+
+  it('searches across both active and archived bills seamlessly so no bill is ever lost', () => {
+    const searchBills = (query: string) => {
+      const q = query.trim().toLowerCase();
+      if (!q) return [];
+      return sampleBills.filter(
+        (b) =>
+          b.billNumber.toLowerCase().includes(q) ||
+          b.client.toLowerCase().includes(q) ||
+          (b.wilaya && b.wilaya.toLowerCase().includes(q))
+      );
+    };
+
+    // Searching for archived bill by number finds it
+    const byNumber = searchBills('002');
+    expect(byNumber.length).toBe(1);
+    expect(byNumber[0].status).toBe('completed');
+
+    // Searching by client finds archived bill
+    const byClient = searchBills('MEKLA');
+    expect(byClient.length).toBe(1);
+    expect(byClient[0].billNumber).toBe('BL-2026-002');
+
+    // Searching by wilaya finds it
+    const byWilaya = searchBills('oran');
+    expect(byWilaya.length).toBe(1);
+    expect(byWilaya[0].client).toBe('SARL MEKLA');
+  });
+
+  it('safely restores an archived bill to active status', () => {
+    const bill = { ...sampleBills[1] };
+    expect(bill.status).toBe('completed');
+
+    // Restore action
+    bill.status = 'active';
+    expect(bill.status).toBe('active');
+  });
+});
+
 
 

@@ -1,4 +1,4 @@
-import { IconBox, IconClipboard, IconCheck, IconUndo } from './icons';
+import { IconBox, IconClipboard, IconCheck, IconUndo, IconArchive } from './icons';
 
 interface ConformityDonutChartProps {
   totalLines: number;
@@ -98,12 +98,11 @@ export function ConformityDonutChart({
 
   return (
     <div className="donut-card">
-      {/* Top Header Row: Status Toggle */}
-      {billStatus && onToggleStatus && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%', marginBottom: 4 }}>
-          <button
-            type="button"
-            className="btn btn-xs flex items-center gap-1.5"
+      {/* Top Header Row: Status Badge & Safe Action Button */}
+      {billStatus && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, width: '100%', marginBottom: 6 }}>
+          <span
+            className="badge"
             style={{
               background: billStatus === 'completed' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(16, 185, 129, 0.12)',
               color: billStatus === 'completed' ? 'var(--text-muted)' : 'var(--accent)',
@@ -111,20 +110,40 @@ export function ConformityDonutChart({
               borderRadius: 9999,
               padding: '3px 10px',
               fontWeight: 700,
+              fontSize: '0.72rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
             }}
-            onClick={onToggleStatus}
-            title={billStatus === 'completed' ? 'Réouvrir ce bon' : 'Clôturer et archiver'}
           >
-            {billStatus === 'completed' ? (
-              <>
-                <IconUndo size={11} /> Archivé
-              </>
-            ) : (
-              <>
-                <IconCheck size={11} /> Bon Actif
-              </>
-            )}
-          </button>
+            {billStatus === 'completed' ? <IconClipboard size={12} /> : <IconBox size={12} />}
+            {billStatus === 'completed' ? 'Archivé' : 'Bon Actif'}
+          </span>
+
+          {onToggleStatus && (
+            <button
+              type="button"
+              className={`btn btn-xs ${billStatus === 'completed' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
+              style={{
+                borderRadius: 9999,
+                padding: '3px 10px',
+                fontSize: '0.72rem',
+                fontWeight: 600,
+              }}
+              onClick={onToggleStatus}
+              title={billStatus === 'completed' ? 'Restaurer dans les bons actifs' : 'Clôturer et archiver'}
+            >
+              {billStatus === 'completed' ? (
+                <>
+                  <IconUndo size={11} /> Restaurer
+                </>
+              ) : (
+                <>
+                  <IconArchive size={11} /> Archiver
+                </>
+              )}
+            </button>
+          )}
         </div>
       )}
 

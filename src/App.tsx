@@ -125,6 +125,7 @@ import {
   IconArrowLeftRight,
   IconAlertTriangle,
   IconTruck,
+  IconArchive,
 } from './icons';
 
 import {
@@ -964,19 +965,42 @@ function HomeScreen({
   const archivedBills = bills.filter(b => b.status === 'completed');
   const displayBills = billFilter === 'active' ? activeBills : archivedBills;
 
+  const matchedBills = React.useMemo(() => {
+    if (!homeSearch.trim()) return [];
+    const q = homeSearch.trim().toLowerCase();
+    return bills.filter(
+      (b) =>
+        b.billNumber.toLowerCase().includes(q) ||
+        b.client.toLowerCase().includes(q) ||
+        (b.bcNumber && b.bcNumber.toLowerCase().includes(q)) ||
+        (b.wilaya && b.wilaya.toLowerCase().includes(q))
+    );
+  }, [homeSearch, bills]);
+
   const matchedGlobalLines = React.useMemo(() => {
     if (!homeSearch.trim() || !allLines) return [];
     return searchLines(allLines, homeSearch, 'smart');
   }, [homeSearch, allLines]);
 
-  const handleArchiveBill = async (billId: number) => {
-    await db.bills.update(billId, { status: 'completed' });
+  const [billToArchive, setBillToArchive] = useState<Bill | null>(null);
+
+  const handleRequestArchiveBill = (billId: number) => {
+    const target = bills.find((b) => b.id === billId);
+    if (target) setBillToArchive(target);
+  };
+
+  const handleConfirmArchive = async () => {
+    if (!billToArchive?.id) return;
+    const bId = billToArchive.id;
+    const bNum = billToArchive.billNumber;
+    await db.bills.update(bId, { status: 'completed' });
+    setBillToArchive(null);
     showToast(
       {
-        message: 'Bon archivé dans l’historique',
+        message: `Bon ${bNum} archivé dans l’historique`,
         onUndo: async () => {
-          await db.bills.update(billId, { status: 'active' });
-          showToast('Bon restauré dans les bons actifs', setToast);
+          await db.bills.update(bId, { status: 'active' });
+          showToast(`Bon ${bNum} restauré dans les bons actifs`, setToast);
         },
         undoLabel: 'Annuler (5s)',
       },
@@ -986,8 +1010,9 @@ function HomeScreen({
   };
 
   const handleRestoreBill = async (billId: number) => {
+    const b = bills.find((x) => x.id === billId);
     await db.bills.update(billId, { status: 'active' });
-    showToast('Bon restauré dans les bons actifs', setToast);
+    showToast(`Bon ${b?.billNumber || ''} restauré dans les bons actifs`, setToast);
   };
 
   // Group displayed bills by client entity
@@ -1089,12 +1114,81 @@ function HomeScreen({
         {homeSearch.trim() ? (
           <div className="flex flex-col gap-2 mb-4">
             <div className="text-xs text-muted flex justify-between items-center px-1">
-              <span>{matchedGlobalLines.length} article(s) trouvé(s) dans la session</span>
+              <span>{matchedBills.length} bon(s) • {matchedGlobalLines.length} article(s) trouvé(s)</span>
               <button className="text-accent text-xs font-bold" onClick={() => setHomeSearch('')}>Voir tous les bons</button>
             </div>
-            {matchedGlobalLines.length === 0 ? (
+
+            {/* Matched Bills (Active & Archived) */}
+            {matchedBills.length > 0 && (
+              <div className="flex flex-col gap-2 mb-2">
+                {matchedBills.map((b) => (
+                  <div
+                    key={b.id}
+                    className="card p-3 flex items-center justify-between cursor-pointer"
+                    style={{
+                      background: 'var(--bg-surface)',
+                      border: '1px solid var(--glass-border-subtle)',
+                      borderRadius: 16,
+                    }}
+                    onClick={() => nav(`/bill/${b.id}`)}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-sm">{b.billNumber}</span>
+                        <span className="text-xs text-muted truncate">• {b.client}</span>
+                        {b.status === 'completed' && (
+                          <span
+                            className="badge flex items-center gap-1"
+                            style={{
+                              background: 'rgba(255, 255, 255, 0.08)',
+                              color: 'var(--text-muted)',
+                              fontSize: '0.65rem',
+                              fontWeight: 700,
+                            }}
+                          >
+                            <IconClipboard size={10} /> Dans l’Historique
+                          </span>
+                        )}
+                        {b.status === 'active' && (
+                          <span
+                            className="badge flex items-center gap-1"
+                            style={{
+                              background: 'var(--accent-glow)',
+                              color: 'var(--accent)',
+                              fontSize: '0.65rem',
+                              fontWeight: 700,
+                            }}
+                          >
+                            <IconBox size={10} /> Bon Actif
+                          </span>
+                        )}
+                      </div>
+                      {b.wilaya && (
+                        <span className="text-xs text-muted mt-0.5 block">{b.wilaya}</span>
+                      )}
+                    </div>
+                    {b.status === 'completed' && (
+                      <button
+                        type="button"
+                        className="btn btn-xs btn-primary flex items-center gap-1 ml-2"
+                        style={{ flexShrink: 0 }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRestoreBill(b.id!);
+                        }}
+                        title="Restaurer dans les bons actifs"
+                      >
+                        <IconUndo size={11} /> Restaurer
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {matchedBills.length === 0 && matchedGlobalLines.length === 0 ? (
               <div className="card text-center text-xs text-muted py-4">
-                Aucun article correspondant à « {homeSearch} »
+                Aucun bon ni article correspondant à « {homeSearch} »
               </div>
             ) : (
               matchedGlobalLines.slice(0, 30).map((line) => {
@@ -1178,7 +1272,7 @@ function HomeScreen({
                     key={group.bills[0].id}
                     bill={group.bills[0]}
                     onClick={() => nav(`/bill/${group.bills[0].id}`)}
-                    onArchive={() => handleArchiveBill(group.bills[0].id!)}
+                    onArchive={() => handleRequestArchiveBill(group.bills[0].id!)}
                     onRestore={() => handleRestoreBill(group.bills[0].id!)}
                   />
                 );
@@ -1190,7 +1284,7 @@ function HomeScreen({
                   bills={group.bills}
                   activeOperator={activeOperator}
                   onSelectBill={(id) => nav(`/bill/${id}`)}
-                  onArchiveBill={handleArchiveBill}
+                  onArchiveBill={handleRequestArchiveBill}
                   onRestoreBill={handleRestoreBill}
                   onBatchAssigned={() => showToast(`Commande de ${group.client} assignée à ${activeOperator}`, setToast)}
                 />
@@ -1247,6 +1341,13 @@ function HomeScreen({
         onSelectOperator={handleSelectOperator}
         operators={operators}
         onRosterChange={handleRosterChange}
+      />
+
+      <ArchiveConfirmModal
+        bill={billToArchive}
+        isOpen={!!billToArchive}
+        onClose={() => setBillToArchive(null)}
+        onConfirm={handleConfirmArchive}
       />
     </>
   );
@@ -1406,6 +1507,97 @@ function ManualBillModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// ---- Modal: Confirmation d'Archivage de Bon ----
+function ArchiveConfirmModal({
+  bill,
+  isOpen,
+  onClose,
+  onConfirm,
+}: {
+  bill: Bill | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  if (!isOpen || !bill) return null;
+
+  return (
+    <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 9999 }}>
+      <div
+        className="modal-content card"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: 400,
+          width: '92%',
+          borderRadius: '28px',
+          padding: '24px 22px 20px',
+          boxShadow: 'var(--glass-shadow-lg)',
+          border: '1px solid var(--glass-border)',
+        }}
+      >
+        <div className="flex justify-between items-center mb-3">
+          <div className="modal-title flex items-center gap-2" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>
+            <IconArchive size={20} style={{ color: 'var(--accent)' }} />
+            <span>Archiver ce bon ?</span>
+          </div>
+          <button
+            type="button"
+            className="header-icon-btn"
+            style={{ width: 34, height: 34 }}
+            onClick={onClose}
+            aria-label="Fermer"
+          >
+            <IconX size={16} />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-3 py-1">
+          <div
+            style={{
+              background: 'var(--bg-surface-elevated)',
+              padding: '12px 14px',
+              borderRadius: '16px',
+              border: '1px solid var(--glass-border-subtle)',
+            }}
+          >
+            <div className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{bill.billNumber}</div>
+            <div className="text-xs text-muted truncate mt-0.5">{bill.client}</div>
+            {bill.wilaya && <div className="text-xs text-muted mt-0.5">{bill.wilaya}</div>}
+          </div>
+
+          <p className="text-xs text-muted" style={{ lineHeight: 1.5, margin: 0 }}>
+            Le bon sera déplacé dans l’onglet <strong>Historique</strong>. Vous pourrez le consulter ou le restaurer à tout moment d’un simple clic ou via la recherche.
+          </p>
+        </div>
+
+        <div className="flex gap-2 justify-end mt-4">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ borderRadius: '16px', height: 42, padding: '0 18px' }}
+            onClick={onClose}
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary flex items-center gap-1.5"
+            style={{
+              borderRadius: '16px',
+              height: 42,
+              padding: '0 20px',
+              fontWeight: 700,
+            }}
+            onClick={onConfirm}
+          >
+            <IconArchive size={16} /> Archiver
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1724,14 +1916,15 @@ function BillCard({
             {onArchive && bill.status === 'active' && (
               <button
                 className="btn btn-xs btn-ghost btn-icon"
-                title="Clôturer et archiver ce bon"
-                style={{ padding: 4 }}
+                title="Archiver ce bon dans l’historique"
+                style={{ padding: 4, color: 'var(--text-muted)' }}
                 onClick={(e) => {
                   e.stopPropagation();
                   onArchive();
                 }}
+                aria-label="Archiver le bon"
               >
-                <IconCheck size={16} style={{ color: 'var(--accent)' }} />
+                <IconArchive size={15} />
               </button>
             )}
             {onRestore && bill.status === 'completed' && (
@@ -3175,7 +3368,25 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
     return 0;
   });
 
-  if (!bill) return <div className="app-content"><div className="spinner" /></div>;
+  if (!bill) {
+    return (
+      <>
+        <header className="app-header">
+          <button className="back-btn" onClick={() => nav('/')} aria-label="Retour">
+            <IconArrowLeft size={18} />
+          </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="font-semibold truncate">Chargement du bon...</div>
+            <div className="text-xs text-muted">Veuillez patienter</div>
+          </div>
+        </header>
+        <div className="app-content flex flex-col items-center justify-center p-8 text-center" style={{ minHeight: '50vh' }}>
+          <div className="spinner mb-4" />
+          <p className="text-xs text-muted font-medium">Chargement des données du bon...</p>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -7362,8 +7573,12 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           billStatus={bill.status}
           onToggleStatus={async () => {
             const nextStatus = bill.status === 'completed' ? 'active' : 'completed';
+            if (nextStatus === 'completed') {
+              const ok = window.confirm(`Archiver le bon ${bill.billNumber} ? Il restera accessible dans l'Historique.`);
+              if (!ok) return;
+            }
             await db.bills.update(bill.id!, { status: nextStatus });
-            if (setToast) setToast(nextStatus === 'completed' ? 'Bon archivé' : 'Bon réouvert');
+            if (setToast) setToast(nextStatus === 'completed' ? 'Bon archivé dans l’historique' : 'Bon restauré dans les bons actifs');
           }}
         />
 
