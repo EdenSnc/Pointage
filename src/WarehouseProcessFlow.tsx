@@ -1,6 +1,6 @@
 // ============================================================
 // POINTAGE — WarehouseProcessFlow (Interactive Logistical Pipeline)
-// Visual Pipeline Diagram: [📦 Préparation] ➔ [🚚 Chargement] ➔ [📋 Pointage]
+// Visual Pipeline Diagram: [Préparation] -> [Chargement] -> [Pointage]
 // With luminous connectors, completion badges, active pulse, and VAKT feedback
 // ============================================================
 

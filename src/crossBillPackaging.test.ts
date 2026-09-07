@@ -251,11 +251,11 @@ describe('Shared Packaging Boxes / Cartons Across Bills for Same Seller', () => 
     expect(tag1).not.toBe(tag2);
 
     // Warehouse worker felt-tip physical marking instruction
-    const physicalMarker1 = `🏷️ MARQUAGE : ${clientName} — BL ${bill1Number} — ${bill1Container.label}`;
-    const physicalMarker2 = `🏷️ MARQUAGE : ${clientName} — BL ${bill2Number} — ${bill2Container.label}`;
+    const physicalMarker1 = `MARQUAGE : ${clientName} — BL ${bill1Number} — ${bill1Container.label}`;
+    const physicalMarker2 = `MARQUAGE : ${clientName} — BL ${bill2Number} — ${bill2Container.label}`;
 
-    expect(physicalMarker1).toBe('🏷️ MARQUAGE : SARL PAPETERIE CENTRALE — BL 03808 — CARTON A');
-    expect(physicalMarker2).toBe('🏷️ MARQUAGE : SARL PAPETERIE CENTRALE — BL 03809 — CARTON A');
+    expect(physicalMarker1).toBe('MARQUAGE : SARL PAPETERIE CENTRALE — BL 03808 — CARTON A');
+    expect(physicalMarker2).toBe('MARQUAGE : SARL PAPETERIE CENTRALE — BL 03809 — CARTON A');
   });
 
   it('computes substitution price discrepancy and warns when client paid in advance', () => {

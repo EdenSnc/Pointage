@@ -283,19 +283,19 @@ export function formatTripWhatsAppMessage(
     year: 'numeric',
   });
 
-  let msg = `🚚 *AVIS DE DÉPART — VOYAGE N° ${trip.tripNumber}${trip.isLastTrip ? ' (SOLDE)' : ''}*\n`;
+  let msg = `*AVIS DE DÉPART — VOYAGE N° ${trip.tripNumber}${trip.isLastTrip ? ' (SOLDE)' : ''}*\n`;
   msg += `Client : *${bill.client}*\n`;
   msg += `N° Bon : *${bill.billNumber}*\n`;
   msg += `Date & Heure : ${dateStr} à ${timeStr}\n`;
   msg += `------------------------------------\n`;
-  if (trip.driverName) msg += `👤 Chauffeur : *${trip.driverName}*\n`;
-  if (trip.truckPlate) msg += `🚛 Véhicule : *${trip.truckPlate}*\n`;
-  if (trip.operatorName) msg += `🏗️ Responsable Quai : *${trip.operatorName}*\n`;
+  if (trip.driverName) msg += `Chauffeur : *${trip.driverName}*\n`;
+  if (trip.truckPlate) msg += `Véhicule : *${trip.truckPlate}*\n`;
+  if (trip.operatorName) msg += `Responsable Quai : *${trip.operatorName}*\n`;
   msg += `------------------------------------\n\n`;
 
   // List containers
   if (trip.containerIds.length > 0) {
-    msg += `📦 *COLIS EMBARQUÉS (${trip.totalContainers}) :*\n`;
+    msg += `*COLIS EMBARQUÉS (${trip.totalContainers}) :*\n`;
     trip.containerIds.forEach((cid) => {
       const c = containerMap.get(cid);
       if (c) {
@@ -306,15 +306,15 @@ export function formatTripWhatsAppMessage(
   }
 
   // Summary
-  msg += `📊 *Total chargé dans ce voyage :* ${trip.totalUnits} pièces\n`;
+  msg += `*Total chargé dans ce voyage :* ${trip.totalUnits} pièces\n`;
   if (trip.isLastTrip || remainingDockUnits === 0) {
-    msg += `🏁 *EXPÉDITION SOLDÉE & COMPLÈTE* (Tous les colis ont quitté l'entrepôt)\n`;
+    msg += `*EXPÉDITION SOLDÉE & COMPLÈTE* (Tous les colis ont quitté l'entrepôt)\n`;
   } else {
-    msg += `⏳ *Reste à quai pour Voyage N° ${trip.tripNumber + 1} :* ${remainingDockUnits} pièces\n`;
+    msg += `*Reste à quai pour Voyage N° ${trip.tripNumber + 1} :* ${remainingDockUnits} pièces\n`;
   }
 
   if (trip.notes) {
-    msg += `\n📝 Note : _${trip.notes}_\n`;
+    msg += `\nNote : _${trip.notes}_\n`;
   }
 
   return msg;

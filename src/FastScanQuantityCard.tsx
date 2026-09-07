@@ -340,9 +340,9 @@ export function FastScanQuantityCard({
               pointageOutcome === 'accepted' ? 'btn-primary' : 'btn-secondary'
             }`}
             onClick={() => setPointageOutcome('accepted')}
-            style={{ minHeight: 44, fontSize: '0.82rem', fontWeight: 700 }}
+            style={{ minHeight: 44, fontSize: '0.82rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
           >
-            ✓ Conforme
+            <IconCheck size={15} /> Conforme
           </button>
           <button
             type="button"
@@ -412,9 +412,13 @@ export function FastScanQuantityCard({
                 minHeight: 48,
                 fontSize: '0.90rem',
                 borderRadius: 18,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
               }}
             >
-              ✓ Reste ({remaining})
+              <IconCheck size={16} /> Reste ({remaining})
             </button>
           )}
         </div>

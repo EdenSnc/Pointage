@@ -436,12 +436,12 @@ describe('QA: WhatsApp Discrepancy Report Generator', () => {
     expect(problems.length).toBe(0);
 
     // Build sample report string
-    let report = `📦 *RAPPORT D'EXPÉDITION / ÉCARTS - POINTAGE*\n`;
-    report += `🏢 Client : *${bill.client}*\n`;
+    let report = `*RAPPORT D'EXPÉDITION / ÉCARTS - POINTAGE*\n`;
+    report += `Client : *${bill.client}*\n`;
 
-    report += `📄 N° Bon : *${bill.billNumber}*\n`;
+    report += `N° Bon : *${bill.billNumber}*\n`;
     if (problems.length === 0) {
-      report += `✅ *Aucun écart signalé :* Toutes les lignes préparées sont conformes.\n`;
+      report += `*Aucun écart signalé :* Toutes les lignes préparées sont conformes.\n`;
     }
 
     expect(report).toContain('ETS BENALI & CIE');
@@ -473,9 +473,9 @@ describe('QA: WhatsApp Discrepancy Report Generator', () => {
       const prepQty = sumStageEvents(evts, 'preparation');
       report += `${idx + 1}. *N°${p.no}* - ${p.designation}\n`;
       if (p.status === 'out_of_stock') {
-        report += `   🔴 *RUPTURE DÉFINITIVE EN ENTREPÔT*\n`;
+        report += `   *RUPTURE DÉFINITIVE EN ENTREPÔT*\n`;
       } else if (prepQty < p.orderedQty) {
-        report += `   📉 *MANQUANT :* Préparé ${prepQty} / ${p.orderedQty} (Reliquat: -${p.orderedQty - prepQty})\n`;
+        report += `   *MANQUANT :* Préparé ${prepQty} / ${p.orderedQty} (Reliquat: -${p.orderedQty - prepQty})\n`;
       }
     });
 

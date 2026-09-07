@@ -3,7 +3,7 @@
 // Intuitive graphical map of truck cargo vs dock staging
 // Zero text clutter, pure visual boxes with status indicators
 // ============================================================
-import { IconTruck, IconBox } from './icons';
+import { IconTruck, IconBox, IconCheck } from './icons';
 
 interface TruckLoadingDiagramProps {
   tripNumber?: number;
@@ -71,9 +71,13 @@ export function TruckLoadingDiagram({
             borderRadius: '9999px',
             background: isFullyShipped ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)',
             color: isFullyShipped ? 'var(--accent)' : 'var(--warning)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
           }}
         >
-          {isFullyShipped ? '✓ Expédition Complète' : 'En rotation'}
+          {isFullyShipped && <IconCheck size={12} />}
+          <span>{isFullyShipped ? 'Expédition Complète' : 'En rotation'}</span>
         </span>
       </div>
 
@@ -92,8 +96,8 @@ export function TruckLoadingDiagram({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--accent)' }}>
-              🚚 Dans ce Camion
+            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--accent)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <IconTruck size={14} /> Dans ce Camion
             </span>
             <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--accent)' }}>
               {loadedContainersCount} colis
@@ -153,9 +157,12 @@ export function TruckLoadingDiagram({
                 fontSize: '0.74rem',
                 fontWeight: 700,
                 color: dockRemainingContainersCount > 0 ? 'var(--warning)' : 'var(--text-muted)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
               }}
             >
-              📦 Reste à Quai
+              <IconBox size={13} /> Reste à Quai
             </span>
             <span
               style={{
@@ -204,8 +211,8 @@ export function TruckLoadingDiagram({
                 )}
               </>
             ) : (
-              <span style={{ fontSize: '0.72rem', color: 'var(--accent)', fontWeight: 700 }}>
-                Quai libéré ✓
+              <span style={{ fontSize: '0.72rem', color: 'var(--accent)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <IconCheck size={12} /> Quai libéré
               </span>
             )}
           </div>

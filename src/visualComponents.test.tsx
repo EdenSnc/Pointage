@@ -47,7 +47,7 @@ describe('Apple Glass Visual Components Test Suite', () => {
           showCenterText={true}
         />
       );
-      expect(htmlFull).toContain('✓');
+      expect(htmlFull).toContain('svg');
     });
   });
 
@@ -112,7 +112,7 @@ describe('Apple Glass Visual Components Test Suite', () => {
       );
 
       expect(html).toContain('Expédition Complète');
-      expect(html).toContain('Quai libéré ✓');
+      expect(html).toContain('Quai libéré');
     });
   });
 

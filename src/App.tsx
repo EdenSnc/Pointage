@@ -267,7 +267,7 @@ export default function App() {
           }}
           onClick={() => {
             showToast(
-              '⚡ Mode Hors-Ligne : Le pointage, les scans code-barres, le colisage et l’export Excel fonctionnent à 100% sans connexion.',
+              'Mode Hors-Ligne : Le pointage, les scans code-barres, le colisage et l’export Excel fonctionnent à 100% sans connexion.',
               setToast as any,
               5000
             );
@@ -833,8 +833,9 @@ function QRSyncModal({
                 </div>
 
                 {payload.billNumber && payload.billNumber !== bill.billNumber && (
-                  <div className="p-2.5 mb-2 text-xs" style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', borderRadius: 14 }}>
-                    ⚠️ QR issu de "{payload.billNumber}" (actuel : "{bill.billNumber}")
+                  <div className="p-2.5 mb-2 text-xs flex items-center gap-1.5" style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', borderRadius: 14 }}>
+                    <IconAlertTriangle size={14} style={{ flexShrink: 0 }} />
+                    <span>QR issu de "{payload.billNumber}" (actuel : "{bill.billNumber}")</span>
                   </div>
                 )}
 
@@ -1657,7 +1658,7 @@ function BillCard({
                 }}
                 title={`Wilaya : ${bill.wilaya}`}
               >
-                📍 {bill.wilaya}
+                {bill.wilaya}
               </span>
             )}
             {bill.date && (
@@ -1671,7 +1672,7 @@ function BillCard({
                   color: 'var(--text-muted)',
                 }}
               >
-                🕒 {bill.date}
+                {bill.date}
               </span>
             )}
             {bill.shippingStatus && (
@@ -1759,10 +1760,10 @@ function BillCard({
       {(bill.preparedBy || bill.loadedBy || bill.checkedBy || bill.tripCount) && (
         <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-glass text-[11px] text-muted flex-wrap">
           <IconUser size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-          {bill.preparedBy && <span>📦 Prép : <strong style={{ color: 'var(--text-primary)' }}>{bill.preparedBy}</strong></span>}
-          {bill.loadedBy && <span>🚚 Charge : <strong style={{ color: 'var(--text-primary)' }}>{bill.loadedBy}</strong></span>}
-          {bill.checkedBy && <span>📋 Point : <strong style={{ color: 'var(--text-primary)' }}>{bill.checkedBy}</strong></span>}
-          {bill.tripCount && <span>🚛 <strong style={{ color: 'var(--text-primary)' }}>{bill.tripCount} {bill.tripCount > 1 ? 'voyages' : 'voyage'}</strong></span>}
+          {bill.preparedBy && <span>Prép : <strong style={{ color: 'var(--text-primary)' }}>{bill.preparedBy}</strong></span>}
+          {bill.loadedBy && <span>Charge : <strong style={{ color: 'var(--text-primary)' }}>{bill.loadedBy}</strong></span>}
+          {bill.checkedBy && <span>Point : <strong style={{ color: 'var(--text-primary)' }}>{bill.checkedBy}</strong></span>}
+          {bill.tripCount && <span><strong style={{ color: 'var(--text-primary)' }}>{bill.tripCount} {bill.tripCount > 1 ? 'voyages' : 'voyage'}</strong></span>}
         </div>
       )}
     </div>
@@ -2062,7 +2063,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                 fontSize: '0.68rem',
               }}
             >
-              ⚡ 100% sans internet
+              100% sans internet
             </span>
           </div>
           <p className="text-xs text-muted mb-3" style={{ lineHeight: 1.45 }}>
@@ -3270,7 +3271,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         >
           <div className="flex items-center gap-2 text-xs">
             <span style={{ fontWeight: 800, color: 'var(--accent)' }}>
-              {stage === 'preparation' ? '📦 Prépa' : stage === 'chargement' ? '🚚 Chargement' : '📋 Pointage'}
+              {stage === 'preparation' ? 'Prépa' : stage === 'chargement' ? 'Chargement' : 'Pointage'}
             </span>
             <span style={{ color: 'var(--text-muted)' }}>•</span>
             <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
@@ -3374,7 +3375,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                       color: 'var(--accent)',
                     }}
                   >
-                    ✓ Soldé
+                    Soldé
                   </span>
                 ) : bill.shippingStatus === 'partially_shipped' ? (
                   <span
@@ -3387,7 +3388,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                       color: 'var(--warning)',
                     }}
                   >
-                    ⏳ Partiel
+                    Partiel
                   </span>
                 ) : null}
               </div>
@@ -3448,7 +3449,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                             title="Télécharger le Bon de Sortie Excel"
                             onClick={() => downloadTripExitWorkbook(t, bill, lines, containers)}
                           >
-                            📄 Bon Sortie
+                            Bon Sortie
                           </button>
                           <button
                             type="button"
@@ -3460,7 +3461,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                               window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
                             }}
                           >
-                            📱 WhatsApp
+                            WhatsApp
                           </button>
                         </div>
                       )}
@@ -3517,7 +3518,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                     const res = await transferBatchStageCounts(billId, null, otherStage, stage);
                     playSuccessChime();
                     hapticTap('medium');
-                    showToast(`✓ ${res.unitsCount} pièces transférées vers ${currentStageName} (${res.linesCount} articles)`, setToast);
+                    showToast(`${res.unitsCount} pièces transférées vers ${currentStageName} (${res.linesCount} articles)`, setToast);
                   }
                 }}
               >
@@ -3994,7 +3995,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                       outcome: 'accepted',
                     });
                     playSuccessChime();
-                    showToast(`✓ ${res.processedCount} articles validés en pointage`, setToast);
+                    showToast(`${res.processedCount} articles validés en pointage`, setToast);
                     setSelectedLineIds(new Set());
                     setIsSelectionMode(false);
                   }}
@@ -4053,7 +4054,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         containers={activeContainers}
         onSuccess={(processedCount, unitsAdded, label) => {
           playSuccessChime();
-          showToast(`✓ ${processedCount} articles (${unitsAdded} unités) rangés dans ${label}`, setToast);
+          showToast(`${processedCount} articles (${unitsAdded} unités) rangés dans ${label}`, setToast);
           setSelectedLineIds(new Set());
           setIsSelectionMode(false);
         }}
@@ -4071,7 +4072,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           playSuccessChime();
           hapticTap('medium');
           const STAGE_NAMES = { preparation: 'Préparation', chargement: 'Chargement', pointage: 'Pointage' };
-          showToast(`✓ ${units} pièces basculées de ${STAGE_NAMES[from]} vers ${STAGE_NAMES[to]} (${linesCount} articles)`, setToast);
+          showToast(`${units} pièces basculées de ${STAGE_NAMES[from]} vers ${STAGE_NAMES[to]} (${linesCount} articles)`, setToast);
           setSelectedLineIds(new Set());
           setIsSelectionMode(false);
         }}
@@ -4088,7 +4089,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           playSuccessChime();
           hapticTap('medium');
           const STAGE_NAMES = { preparation: 'Préparation', chargement: 'Chargement', pointage: 'Pointage' };
-          showToast(`✓ ${units} pièces de tout le bon basculées vers ${STAGE_NAMES[to]} (${linesCount} articles)`, setToast);
+          showToast(`${units} pièces de tout le bon basculées vers ${STAGE_NAMES[to]} (${linesCount} articles)`, setToast);
         }}
       />
 
@@ -4196,7 +4197,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           onDispatched={(trip) => {
             setShowTripDispatchModal(false);
             showToast(
-              `🚚 Voyage N°${trip.tripNumber} validé (${trip.totalUnits} pcs, ${trip.totalContainers} colis)`,
+              `Voyage N°${trip.tripNumber} validé (${trip.totalUnits} pcs, ${trip.totalContainers} colis)`,
               setToast
             );
           }}
@@ -4618,7 +4619,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               {stageTotal === 0
                 ? `0 / ${line.orderedQty} pcs`
                 : disc.isExact
-                ? `✓ ${stageTotal} / ${line.orderedQty} pcs`
+                ? `${stageTotal} / ${line.orderedQty} pcs`
                 : disc.isOver
                 ? `+${disc.over} excédent (${stageTotal}/${line.orderedQty})`
                 : `${stageTotal} / ${line.orderedQty} pcs`}
@@ -4823,7 +4824,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 playSuccessChime();
                 hapticTap('medium');
                 const STAGE_NAMES = { preparation: 'Préparation', chargement: 'Chargement', pointage: 'Pointage' };
-                showToast(`✓ ${units} pièces basculées vers ${STAGE_NAMES[stage]}`, setToast);
+                showToast(`${units} pièces basculées vers ${STAGE_NAMES[stage]}`, setToast);
               }}
             >
               ⇄ Basculer ici
@@ -4986,7 +4987,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                         missingQty: missing,
                         operatorName: activeOperator,
                       });
-                      showToast(`✓ Clôturé : ${delivered} livrées, ${missing} manquantes`, setToast);
+                      showToast(`Clôturé : ${delivered} livrées, ${missing} manquantes`, setToast);
                     }}
                   >
                     Livrer stock restant ({stageTotal} pcs)
@@ -5015,7 +5016,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   missingQty: missing,
                   operatorName: activeOperator,
                 });
-                showToast(`✓ Clôturé avec le stock restant (${delivered} pcs)`, setToast);
+                showToast(`Clôturé avec le stock restant (${delivered} pcs)`, setToast);
               }}
             >
               <IconCheck size={12} />
@@ -5149,7 +5150,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                       fontWeight: 700,
                     }}
                   >
-                    {rec.isExactMultiple ? '✓ Multiple exact' : '🎯 Règle du plus proche'}
+                    {rec.isExactMultiple ? 'Multiple exact' : 'Règle du plus proche'}
                   </span>
                 </div>
 
@@ -5182,8 +5183,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                     >
                       <div>
                         <div className="text-xs font-extrabold flex items-center gap-1.5">
-                          <span style={{ color: rec.closestAction === 'round_down' ? 'var(--warning)' : 'var(--accent)' }}>
-                            🎯 Recommandé : {rec.closestPacks} Colis = {rec.closestQty} pcs
+                          <span style={{ color: rec.closestAction === 'round_down' ? 'var(--warning)' : 'var(--accent)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                            <IconSparkles size={14} />
+                            <span>Recommandé : {rec.closestPacks} Colis = {rec.closestQty} pcs</span>
                           </span>
                           <span
                             style={{
@@ -5210,7 +5212,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                         onClick={() => handleApplyPackQty(rec.closestQty, rec.closestPacks, activePack)}
                         title="Pré-remplir la quantité au plus proche"
                       >
-                        <span>⚡ Appliquer {rec.closestQty} pcs</span>
+                        <span>Appliquer {rec.closestQty} pcs</span>
                       </button>
                     </div>
 
@@ -5226,7 +5228,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                         onClick={() => handleApplyPackQty(rec.lowerQty, rec.lowerPacks, activePack)}
                         title={`Colis complets inférieurs : ${rec.lowerQty} pcs`}
                       >
-                        📦 {rec.lowerPacks} Colis ({rec.lowerQty} pcs)
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <IconBox size={12} /> {rec.lowerPacks} Colis ({rec.lowerQty} pcs)
+                        </span>
                         <span className="text-muted ml-1">({rec.lowerDiff} pcs)</span>
                       </button>
 
@@ -5240,7 +5244,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                         onClick={() => handleApplyPackQty(rec.upperQty, rec.upperPacks, activePack)}
                         title={`Colis complets supérieurs : ${rec.upperQty} pcs`}
                       >
-                        📦 {rec.upperPacks} Colis ({rec.upperQty} pcs)
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <IconBox size={12} /> {rec.upperPacks} Colis ({rec.upperQty} pcs)
+                        </span>
                         <span className="text-muted ml-1">(+{rec.upperDiff} pcs)</span>
                       </button>
 
@@ -5251,7 +5257,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                         onClick={() => handleApplyPackQty(disc.remaining, 0, activePack, true)}
                         title={`Conserver exactement ${disc.remaining} pièces en vrac`}
                       >
-                        ✋ Vrac exact ({disc.remaining} pcs)
+                        Vrac exact ({disc.remaining} pcs)
                       </button>
                     </div>
                   </div>
@@ -5702,7 +5708,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               if (!curC) return null;
               return (
                 <div className="mt-2 p-2" style={{ background: 'rgba(255, 255, 255, 0.04)', borderRadius: 'var(--radius-sm)', border: '1px dashed var(--glass-border-bright)' }}>
-                  <div className="text-xs font-mono text-muted">🏷️ MARQUAGE AU FEUTRE DU COLIS :</div>
+                  <div className="text-xs font-mono text-muted">MARQUAGE AU FEUTRE DU COLIS :</div>
                   <div className="text-xs font-mono font-bold text-accent">
                     {bill.client || 'CLIENT'} — BL {bill.billNumber} — {curC.label}
                   </div>
@@ -5976,8 +5982,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   </label>
 
                   {subPaidAdvance && ((selectedSubLine.unitPrice || 0) !== (line.unitPrice || 0)) && (
-                    <div className="text-xs p-3" style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: 16, color: '#f59e0b' }}>
-                      ⚠️ <strong>Attention paiement d'avance :</strong> L'écart financier ({(selectedSubLine.unitPrice || 0) - (line.unitPrice || 0)} DA) nécessite validation ou régularisation avec le client.
+                    <div className="text-xs p-3 flex items-center gap-2" style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: 16, color: '#f59e0b' }}>
+                      <IconAlertTriangle size={16} style={{ flexShrink: 0 }} />
+                      <div><strong>Attention paiement d'avance :</strong> L'écart financier ({(selectedSubLine.unitPrice || 0) - (line.unitPrice || 0)} DA) nécessite validation ou régularisation avec le client.</div>
                     </div>
                   )}
 
@@ -6151,7 +6158,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             playSuccessChime();
             hapticTap('medium');
             const STAGE_NAMES = { preparation: 'Préparation', chargement: 'Chargement', pointage: 'Pointage' };
-            showToast(`✓ ${units} pièces basculées de ${STAGE_NAMES[from]} vers ${STAGE_NAMES[to]}`, setToast);
+            showToast(`${units} pièces basculées de ${STAGE_NAMES[from]} vers ${STAGE_NAMES[to]}`, setToast);
           }}
         />
       </div>
@@ -6201,7 +6208,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             className={`badge ${disc.isExact && stageTotal > 0 ? 'badge-exact' : disc.isOver ? 'badge-over' : disc.isShort && stageTotal > 0 ? 'badge-short' : ''}`}
             style={{ fontSize: '0.68rem', fontWeight: 800, padding: '1px 7px', flexShrink: 0 }}
           >
-            {stageTotal === 0 ? 'Non compté' : disc.isExact ? '✓ Complet' : disc.isOver ? `+${disc.over} Excédent` : `-${disc.remaining} Manquant`}
+            {stageTotal === 0 ? 'Non compté' : disc.isExact ? 'Complet' : disc.isOver ? `+${disc.over} Excédent` : `-${disc.remaining} Manquant`}
           </span>
         </div>
 
@@ -6313,7 +6320,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   onClick={async () => {
                     await replenishReallocatedLine(billId, lineId, replenishQtyInput, activeOperator);
                     setShowReplenishModal(false);
-                    showToast(`✓ +${replenishQtyInput} pcs réapprovisionnées`, setToast);
+                    showToast(`+${replenishQtyInput} pcs réapprovisionnées`, setToast);
                   }}
                 >
                   <IconCheck size={16} /> Valider
@@ -6342,7 +6349,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           stage={stage}
           activeOperator={activeOperator}
           onSuccess={(qty) => {
-            showToast(`✓ +${qty} pcs prélevées avec succès`, setToast);
+            showToast(`+${qty} pcs prélevées avec succès`, setToast);
           }}
         />
       </div>
@@ -7379,11 +7386,11 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
             <div className="text-xs min-w-0">
               <div className="font-bold mb-0.5">Responsables du bon</div>
               <div className="text-muted flex items-center gap-2 flex-wrap text-[11px]">
-                <span>📦 Prép : <strong style={{ color: 'var(--text-primary)' }}>{bill.preparedBy || 'Non assigné'}</strong></span>
+                <span>Prép : <strong style={{ color: 'var(--text-primary)' }}>{bill.preparedBy || 'Non assigné'}</strong></span>
                 <span>•</span>
-                <span>🚚 Charge : <strong style={{ color: 'var(--text-primary)' }}>{bill.loadedBy || 'Non assigné'}</strong></span>
+                <span>Charge : <strong style={{ color: 'var(--text-primary)' }}>{bill.loadedBy || 'Non assigné'}</strong></span>
                 <span>•</span>
-                <span>📋 Point : <strong style={{ color: 'var(--text-primary)' }}>{bill.checkedBy || 'Non assigné'}</strong></span>
+                <span>Point : <strong style={{ color: 'var(--text-primary)' }}>{bill.checkedBy || 'Non assigné'}</strong></span>
               </div>
             </div>
           </div>
@@ -7433,12 +7440,12 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
                 }}
               >
                 {resolvedDocType === 'invoice'
-                  ? '💰 Facture SAJ'
+                  ? 'Facture SAJ'
                   : resolvedDocType === 'bl_official'
-                  ? '📋 BL Officiel (EAN)'
+                  ? 'BL Officiel (EAN)'
                   : resolvedDocType === 'bl_workshop'
-                  ? '📦 Bordereau Atelier'
-                  : '🛒 Bon Commande'}
+                  ? 'Bordereau Atelier'
+                  : 'Bon Commande'}
               </span>
             </div>
             <div className="seg-control-fit" style={{ fontSize: '0.74rem' }}>
@@ -8260,7 +8267,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
             setShowTripDispatchModal(false);
             if (setToast) {
               setToast(
-                `🚚 Voyage N°${trip.tripNumber} validé (${trip.totalUnits} pcs, ${trip.totalContainers} colis)`
+                `Voyage N°${trip.tripNumber} validé (${trip.totalUnits} pcs, ${trip.totalContainers} colis)`
               );
             }
           }}

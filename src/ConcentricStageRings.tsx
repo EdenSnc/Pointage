@@ -5,6 +5,7 @@
 // ============================================================
 
 import React from 'react';
+import { IconCheck } from './icons';
 
 export interface StageProgressValue {
   done: number;
@@ -211,7 +212,7 @@ export function ConcentricStageRings({
           }}
         >
           {isAllComplete ? (
-            <span style={{ fontSize: config.fontSize, color: 'var(--accent)', fontWeight: 800 }}>✓</span>
+            <IconCheck size={Math.round(config.size * 0.32)} style={{ color: 'var(--accent)' }} />
           ) : (
             <span
               style={{

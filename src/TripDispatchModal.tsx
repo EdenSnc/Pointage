@@ -284,8 +284,9 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
           }}
         >
           <div>
-            <div className="text-xs font-bold" style={{ color: 'var(--accent)' }}>
-              🚚 Dans ce camion (Voyage {dockStatus.nextTripNumber}) :
+            <div className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--accent)' }}>
+              <IconTruck size={14} />
+              <span>Dans ce camion (Voyage {dockStatus.nextTripNumber}) :</span>
             </div>
             <div className="text-lg font-bold">
               {tripUnits} pièces{' '}
