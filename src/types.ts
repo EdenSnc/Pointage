@@ -113,6 +113,19 @@ export interface Bill {
   loadedAt?: string | null;
   checkedBy?: string | null;
   checkedAt?: string | null;
+  // Temporal Decomposition for Central DB, Analytics & Granular Filtering
+  timestamp?: number;
+  year?: number;
+  month?: number;
+  day?: number;
+  hour?: number;
+  minute?: number;
+  time?: string | null;
+  closedAt?: string | null;
+  // Algerian Territorial Logistics (58 Wilayas)
+  wilaya?: string | null;
+  wilayaCode?: string | null;
+  destinationCity?: string | null;
   createdAt: string;
   updatedAt: string;
 }

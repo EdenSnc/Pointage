@@ -11,6 +11,7 @@ import type {
   Bill,
   OrderLine,
 } from './types';
+import { decomposeTimestamp, detectWilaya } from './wilayas';
 
 export interface ImportIssue {
   billIndex: number;
@@ -369,11 +370,23 @@ export async function importBills(
       const defaultBillNumber = billData.billNumber?.trim() || `BL-${Date.now().toString().slice(-6)}`;
       const defaultClient = billData.client?.trim() || 'Client inconnu';
 
+      const decomposed = decomposeTimestamp(billData.date || now);
+      const detectedWilaya = detectWilaya(billData.clientAddress || billData.client);
+
       const bill: Bill = {
         sessionId,
         billNumber: defaultBillNumber,
         client: defaultClient,
-        date: billData.date || undefined,
+        date: billData.date || decomposed.dateStr,
+        timestamp: decomposed.timestamp,
+        year: decomposed.year,
+        month: decomposed.month,
+        day: decomposed.day,
+        hour: decomposed.hour,
+        minute: decomposed.minute,
+        time: decomposed.timeStr,
+        wilaya: detectedWilaya?.wilaya || null,
+        wilayaCode: detectedWilaya?.wilayaCode || null,
         status: 'active',
         paymentMode: billData.paymentMode || null,
         agentName: billData.agentName || null,

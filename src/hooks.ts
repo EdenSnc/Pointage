@@ -27,13 +27,17 @@ export function useActiveSession() {
 // ---------- Bills ----------
 export function useSessionBills(sessionId: number | undefined) {
   return useLiveQuery(
-    () =>
-      sessionId !== undefined
-        ? db.bills.where('sessionId').equals(sessionId).toArray()
-        : [],
+    async () => {
+      // Return all bills in persistent storage so past bills are NEVER dropped or hidden across updates/sessions
+      return db.bills.toArray();
+    },
     [sessionId],
     []
   );
+}
+
+export function useAllBills() {
+  return useLiveQuery(() => db.bills.toArray(), [], []);
 }
 
 export function useBill(billId: number | undefined) {
@@ -58,14 +62,8 @@ export function useBillLines(billId: number | undefined) {
 export function useAllSessionLines(sessionId: number | undefined) {
   return useLiveQuery(
     async () => {
-      if (!sessionId) return [];
-      const bills = await db.bills
-        .where('sessionId')
-        .equals(sessionId)
-        .toArray();
-      const billIds = bills.map((b) => b.id!);
-      if (billIds.length === 0) return [];
-      return db.orderLines.where('billId').anyOf(billIds).toArray();
+      // Return all order lines across all bills so search and matching never drop historical lines
+      return db.orderLines.toArray();
     },
     [sessionId],
     []

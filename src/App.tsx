@@ -164,6 +164,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { SettingsModal } from './SettingsModal';
 import { FastScanQuantityCard } from './FastScanQuantityCard';
 import { ConformityDonutChart } from './ConformityDonutChart';
+import { decomposeTimestamp, detectWilaya, ALGERIAN_WILAYAS } from './wilayas';
 import {
   playSuccessChime,
   playWarningBeep,
@@ -1261,8 +1262,17 @@ function ManualBillModal({
   const nav = useNavigate();
   const [client, setClient] = useState('');
   const [billNumber, setBillNumber] = useState('');
+  const [selectedWilaya, setSelectedWilaya] = useState('');
 
   if (!isOpen) return null;
+
+  const handleClientChange = (val: string) => {
+    setClient(val);
+    const detected = detectWilaya(val);
+    if (detected && !selectedWilaya) {
+      setSelectedWilaya(detected.wilaya);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1273,16 +1283,32 @@ function ManualBillModal({
     const finalClient = client.trim().toUpperCase() || 'CLIENT COMPTOIR';
     const finalBillNumber = billNumber.trim().toUpperCase() || `BL-${Date.now().toString().slice(-4)}`;
     const now = new Date().toISOString();
+    const decomposed = decomposeTimestamp(now);
+    const detected = selectedWilaya
+      ? { wilaya: selectedWilaya, wilayaCode: selectedWilaya.slice(0, 2) }
+      : detectWilaya(finalClient);
 
     const id = await db.bills.add({
       sessionId,
       billNumber: finalBillNumber,
       client: finalClient,
+      date: decomposed.dateStr,
+      timestamp: decomposed.timestamp,
+      year: decomposed.year,
+      month: decomposed.month,
+      day: decomposed.day,
+      hour: decomposed.hour,
+      minute: decomposed.minute,
+      time: decomposed.timeStr,
+      wilaya: detected?.wilaya || null,
+      wilayaCode: detected?.wilayaCode || null,
       status: 'active',
       createdAt: now,
       updatedAt: now,
     });
 
+    hapticTap('medium');
+    playSuccessChime();
     showToast(`Bon ${finalBillNumber} créé avec succès`, setToast);
     onClose();
     nav(`/bill/${id}`);
@@ -1290,10 +1316,27 @@ function ManualBillModal({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+      <div
+        className="modal-content card"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: 420,
+          width: '92%',
+          borderRadius: '28px',
+          padding: '24px 22px 20px',
+          boxShadow: 'var(--glass-shadow-lg)',
+        }}
+      >
         <div className="flex justify-between items-center mb-3">
-          <div className="modal-title" style={{ margin: 0 }}>NOUVEAU BON</div>
-          <button className="btn btn-ghost btn-xs btn-icon" onClick={onClose}><IconX size={18} /></button>
+          <div className="modal-title" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>NOUVEAU BON</div>
+          <button
+            type="button"
+            className="header-icon-btn"
+            style={{ width: 34, height: 34 }}
+            onClick={onClose}
+          >
+            <IconX size={16} />
+          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
@@ -1302,12 +1345,30 @@ function ManualBillModal({
             <input
               className="input"
               type="text"
-              placeholder="Ex: AISSAOUI HICHAM"
+              placeholder="Ex: AISSAOUI HICHAM (ALGER)..."
               value={client}
-              onChange={(e) => setClient(e.target.value)}
+              onChange={(e) => handleClientChange(e.target.value)}
               autoFocus
               required
+              style={{ borderRadius: '16px', height: 44, padding: '0 14px' }}
             />
+          </div>
+
+          <div>
+            <label className="text-xs text-muted font-bold block mb-1">WILAYA DE DESTINATION (58 WILAYAS)</label>
+            <select
+              className="input"
+              value={selectedWilaya}
+              onChange={(e) => setSelectedWilaya(e.target.value)}
+              style={{ borderRadius: '16px', height: 44, padding: '0 14px', fontSize: '0.86rem' }}
+            >
+              <option value="">Sélectionner ou auto-détectée...</option>
+              {ALGERIAN_WILAYAS.map((w) => (
+                <option key={w.code} value={`${w.code} - ${w.name}`}>
+                  {w.code} - {w.name} ({w.nameAr})
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -1318,12 +1379,24 @@ function ManualBillModal({
               placeholder="Ex: BC/OU126/03835"
               value={billNumber}
               onChange={(e) => setBillNumber(e.target.value)}
+              style={{ borderRadius: '16px', height: 44, padding: '0 14px' }}
             />
           </div>
 
-          <div className="flex gap-2 justify-end mt-2">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>ANNULER</button>
-            <button type="submit" className="btn btn-primary flex items-center gap-1">
+          <div className="flex gap-2 justify-end mt-3">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ borderRadius: '16px', height: 42, padding: '0 18px' }}
+              onClick={onClose}
+            >
+              ANNULER
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary flex items-center gap-1.5"
+              style={{ borderRadius: '16px', height: 42, padding: '0 20px', fontWeight: 700 }}
+            >
               <IconCheck size={16} /> CRÉER
             </button>
           </div>
@@ -1564,6 +1637,38 @@ function BillCard({
                 title="Numéro Bon de Commande"
               >
                 BC:{bill.bcNumber}
+              </span>
+            )}
+            {bill.wilaya && (
+              <span
+                style={{
+                  fontSize: '0.62rem',
+                  fontWeight: 700,
+                  padding: '1px 6px',
+                  borderRadius: '9999px',
+                  background: 'rgba(168, 85, 247, 0.15)',
+                  color: '#a855f7',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                }}
+                title={`Wilaya : ${bill.wilaya}`}
+              >
+                📍 {bill.wilaya}
+              </span>
+            )}
+            {bill.date && (
+              <span
+                style={{
+                  fontSize: '0.62rem',
+                  fontWeight: 600,
+                  padding: '1px 6px',
+                  borderRadius: '9999px',
+                  background: 'var(--bg-surface)',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                🕒 {bill.date}
               </span>
             )}
             {bill.shippingStatus && (
