@@ -143,4 +143,23 @@ describe('Modular LLM Provider Architecture', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('throws a friendly offline message when navigator is offline', async () => {
+    const dummyFile = new File(['fake'], 'doc.jpg', { type: 'image/jpeg' });
+    const originalOnLine = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+    try {
+      Object.defineProperty(navigator, 'onLine', {
+        value: false,
+        configurable: true,
+      });
+
+      await expect(
+        geminiProvider.extractFromImage(dummyFile, 'test-key')
+      ).rejects.toThrow('Connexion Internet indisponible en entrepôt');
+    } finally {
+      if (originalOnLine) {
+        Object.defineProperty(navigator, 'onLine', originalOnLine);
+      }
+    }
+  });
 });

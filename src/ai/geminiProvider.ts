@@ -153,11 +153,19 @@ async function callGeminiApiWithRetry(
 ): Promise<any> {
   let attempt = 0;
   while (attempt <= maxRetries) {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+    } catch (networkErr: any) {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        throw new Error('Connexion Internet interrompue : La numérisation photo requiert du réseau. L\'import Excel et le pointage restent 100% opérationnels hors-ligne.');
+      }
+      throw new Error(`Réseau faible ou indisponible : Impossible de joindre les serveurs Gemini (${networkErr?.message || 'échec connexion'}). Réessayez dans une zone couverte ou utilisez l'import de fichier Excel.`);
+    }
 
     if (!response.ok) {
       const errJson = await response.json().catch(() => null);
@@ -207,6 +215,10 @@ export const geminiProvider: LLMProvider = {
   ): Promise<ExtractionResult> {
     if (!apiKey.trim()) {
       throw new Error('Veuillez renseigner votre clé API Google Gemini.');
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      throw new Error('Connexion Internet indisponible en entrepôt : La numérisation photo IA requiert du réseau. Utilisez l\'import de fichier Excel (.xlsx / .csv) ou le scan code-barres qui fonctionnent 100% hors-ligne.');
     }
 
     const files = Array.isArray(imageInput) ? imageInput : [imageInput];

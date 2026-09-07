@@ -63,6 +63,7 @@ import {
   QRSyncPayload,
 } from './logic';
 import { parseImportJSON, importBills, getOrCreateSession, validateImport } from './importer';
+import { parseExcelImport } from './excelImporter';
 import { exportBackup, importBackup, downloadBackup, shareBackup } from './backup';
 import type { BackupData } from './backup';
 import type {
@@ -118,6 +119,7 @@ import {
   IconRotate,
   IconTag,
   IconTransfer,
+  IconWifiOff,
 } from './icons';
 
 import {
@@ -162,8 +164,31 @@ function showToast(msg: string | ToastItem, setToast: (m: any) => void, duration
   toastTimeout = setTimeout(() => setToast(''), timeoutMs);
 }
 
+// Hook detecting real-time network connectivity
+export function useOnlineStatus(): boolean {
+  const [isOnline, setIsOnline] = useState<boolean>(() => {
+    return typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+  });
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  return isOnline;
+}
+
 // ---- App Shell ----
 export default function App() {
+  const isOnline = useOnlineStatus();
   const [toast, setToast] = useState<string | ToastItem>('');
   const [showWalkthrough, setShowWalkthrough] = useState(() => {
     return localStorage.getItem('pointage_onboarded') !== 'true';
@@ -189,6 +214,48 @@ export default function App() {
 
   return (
     <HashRouter>
+      {!isOnline && (
+        <div
+          className="offline-banner"
+          style={{
+            background: 'rgba(16, 185, 129, 0.16)',
+            borderBottom: '1px solid rgba(16, 185, 129, 0.35)',
+            padding: '6px 12px',
+            fontSize: '0.74rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            color: 'var(--accent-light)',
+            fontWeight: 700,
+            cursor: 'pointer',
+            zIndex: 9999,
+            position: 'sticky',
+            top: 0,
+            backdropFilter: 'blur(8px)',
+          }}
+          onClick={() => {
+            showToast(
+              '⚡ Mode Hors-Ligne : Le pointage, les scans code-barres, le colisage et l’export Excel fonctionnent à 100% sans connexion.',
+              setToast as any,
+              5000
+            );
+          }}
+          title="Cliquez pour plus d'informations"
+        >
+          <span
+            style={{
+              display: 'inline-block',
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              background: 'var(--accent)',
+              boxShadow: '0 0 8px var(--accent)',
+            }}
+          />
+          <span>Mode Hors-Ligne • Sauvegarde & scans 100% locaux</span>
+        </div>
+      )}
       <ErrorBoundary>
         <Routes>
           <Route
@@ -1452,6 +1519,8 @@ function ProgressRow({ label, progress }: { label: string; progress: { done: num
 function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
   const nav = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const excelFileInputRef = useRef<HTMLInputElement>(null);
+  const isOnline = useOnlineStatus();
 
   // Modular AI state
   const activeProvider = providerRegistry.getActiveProvider();
@@ -1486,7 +1555,43 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
     showToast('Clé Gemini enregistrée sur votre appareil', setToast);
   };
 
+  const handleExcelFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const buffer = await file.arrayBuffer();
+      const result = parseExcelImport(buffer, file.name);
+      setPreview(result);
+      if (result.payload) {
+        setIssues(validateImport(result.payload));
+        playSuccessChime();
+        const totalLines = result.payload.bills?.reduce((acc, b) => acc + (b.lines?.length || 0), 0) || 0;
+        showToast(
+          `Fichier Excel importé : ${result.payload.bills?.length || 1} bon(s), ${totalLines} article(s) (100% hors-ligne)`,
+          setToast
+        );
+      } else if (result.parseError) {
+        playErrorBeep();
+        showToast(result.parseError, setToast);
+      }
+    } catch (err: any) {
+      playErrorBeep();
+      showToast(`Erreur lecture Excel: ${err?.message || 'Format de fichier non supporté'}`, setToast);
+    } finally {
+      if (excelFileInputRef.current) excelFileInputRef.current.value = '';
+    }
+  };
+
   const handleTriggerPhoto = () => {
+    if (!isOnline) {
+      playErrorBeep();
+      showToast(
+        'Mode Hors-Ligne : La numérisation photo IA requiert du réseau. Utilisez l\'import de fichier Excel (.xlsx) qui fonctionne 100% sans connexion.',
+        setToast,
+        5000
+      );
+      return;
+    }
     if (!apiKey.trim()) {
       setTempApiKey(apiKey);
       setShowKeyModal(true);
@@ -1526,6 +1631,15 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
 
   const handleExtractAll = async () => {
     if (stagedPhotos.length === 0) return;
+    if (!isOnline) {
+      playErrorBeep();
+      showToast(
+        'Mode Hors-Ligne : La numérisation photo IA requiert du réseau.',
+        setToast,
+        5000
+      );
+      return;
+    }
     setIsExtracting(true);
     setExtractProgress("1/3 Optimisation des images...");
 
@@ -1600,6 +1714,15 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
       </header>
 
       <div className="app-content">
+        {/* Hidden file input for 100% offline Excel & CSV import */}
+        <input
+          ref={excelFileInputRef}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          style={{ display: 'none' }}
+          onChange={handleExcelFileChange}
+        />
+
         {/* Hidden file inputs for camera and gallery */}
         <input
           ref={fileInputRef}
@@ -1618,14 +1741,61 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
           onChange={handleFileChange}
         />
 
-        {/* If no API key is entered yet, show prominent direct setup card */}
+        {/* Primary 100% Offline Excel / CSV Card */}
+        <div
+          className="card mb-3"
+          style={{
+            borderColor: 'var(--accent)',
+            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(22, 23, 27, 0.98) 100%)',
+          }}
+        >
+          <div className="flex justify-between items-center mb-2">
+            <div className="card-client flex items-center gap-2" style={{ color: 'var(--accent-light)' }}>
+              <IconFileSpreadsheet size={20} /> Fichier Excel / CSV
+            </div>
+            <span
+              className="badge"
+              style={{
+                background: 'var(--accent-glow)',
+                color: 'var(--accent)',
+                fontWeight: 800,
+                fontSize: '0.68rem',
+              }}
+            >
+              ⚡ 100% SANS INTERNET
+            </span>
+          </div>
+          <p className="text-xs text-muted mb-3" style={{ lineHeight: 1.45 }}>
+            Importez directement vos bons (.xlsx, .xls, .csv). Détection automatique des colonnes sans aucune connexion réseau ni clé API.
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary btn-full flex items-center justify-center gap-2"
+            style={{ minHeight: 48, fontSize: '0.88rem', fontWeight: 700 }}
+            onClick={() => excelFileInputRef.current?.click()}
+          >
+            <IconFileSpreadsheet size={18} /> CHARGER FICHIER EXCEL / CSV
+          </button>
+        </div>
+
+        {/* If no API key is entered yet, show photo setup card */}
         {!apiKey ? (
-          <div className="card" style={{ borderColor: 'var(--accent)', background: 'rgba(59, 130, 246, 0.05)' }}>
-            <div className="card-client flex items-center gap-2 mb-1">
-              <IconKey size={20} style={{ color: 'var(--accent)' }} /> Clé API Google Gemini Requise
+          <div className="card" style={{ borderColor: 'var(--glass-border-bright)', background: 'rgba(255, 255, 255, 0.03)' }}>
+            <div className="flex justify-between items-center mb-1">
+              <div className="card-client flex items-center gap-2">
+                <IconCamera size={20} style={{ color: 'var(--accent)' }} /> Numérisation Photo (IA Gemini)
+              </div>
+              {!isOnline && (
+                <span
+                  className="badge flex items-center gap-1"
+                  style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', fontSize: '0.68rem' }}
+                >
+                  <IconWifiOff size={11} /> Requis Internet
+                </span>
+              )}
             </div>
             <p className="text-xs text-muted mb-3" style={{ lineHeight: 1.4 }}>
-              Collez votre clé Google Gemini pour activer la numérisation :
+              Pour numériser des bons papier par photo, collez votre clé Google Gemini (l'import Excel ci-dessus fonctionne sans clé) :
             </p>
             <form
               className="flex gap-2"
@@ -1667,20 +1837,29 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
           <div className="card">
             <div className="flex justify-between items-center mb-3">
               <div className="card-client flex items-center gap-2">
-                <IconCamera size={20} style={{ color: 'var(--accent)' }} /> Numérisation Photo
+                <IconCamera size={20} style={{ color: 'var(--accent)' }} /> Numérisation Photo IA
               </div>
-              <button
-                type="button"
-                className="btn btn-secondary btn-xs"
-                onClick={() => {
-                  setTempApiKey(apiKey);
-                  setShowKeyModal(true);
-                }}
-                title="Modifier la clé"
-                style={{ flexShrink: 0, padding: '4px 10px', fontSize: '0.72rem' }}
-              >
-                <IconKey size={12} /> Clé configurée
-              </button>
+              {!isOnline ? (
+                <span
+                  className="badge flex items-center gap-1"
+                  style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', fontSize: '0.68rem' }}
+                >
+                  <IconWifiOff size={11} /> Requis Internet
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-xs"
+                  onClick={() => {
+                    setTempApiKey(apiKey);
+                    setShowKeyModal(true);
+                  }}
+                  title="Modifier la clé"
+                  style={{ flexShrink: 0, padding: '4px 10px', fontSize: '0.72rem' }}
+                >
+                  <IconKey size={12} /> Clé configurée
+                </button>
+              )}
             </div>
 
             {/* Quick Model Selector */}
