@@ -408,7 +408,7 @@ export function smartSearchScore(
   // 5. exact original EAN
   if (line.originalEan?.toLowerCase() === q) return 5;
   // 6. reference aliases
-  if (line.referenceAliases.some(a => a.toLowerCase() === q)) return 6;
+  if ((line.referenceAliases || []).some(a => a?.toLowerCase() === q)) return 6;
   // 7. partial reference match (contains query or clean alphanumeric substring)
   if (
     line.reference?.toLowerCase().includes(q) ||
@@ -437,7 +437,10 @@ export function smartSearchScore(
   }
 
   // 8. partial designation match
-  if (line.designation.toLowerCase().includes(q)) return 8;
+  const desigLower = (line.designation || '').toLowerCase();
+  if (desigLower.includes(q) || (cleanQ.length >= 3 && desigLower.replace(/[^a-z0-9]/gi, '').includes(cleanQ))) {
+    return 8;
+  }
 
   return -1;
 }
@@ -451,8 +454,16 @@ export const MEASUREMENT_UNIT_PATTERN = /^(?:cm|mm|m\b|km|gr?|grammes?|kg|kilos?
  */
 export function isDimensionInDesignation(num: number, designation?: string | null): boolean {
   if (!designation || typeof designation !== 'string') return false;
-  const regex = new RegExp(`\\b${num}\\s*(?:cm|mm|m\\b|km|gr?|grammes?|kg|ml|cl|dl|litres?|l\\b|pages?|feuilles?|microns?|µm|volts?|v\\b|watts?|w\\b|mah|ah|hz|pouces?|"|'|°|deg)`, 'i');
-  return regex.test(designation);
+
+  // 1. Followed by a unit of measurement: e.g. "30 CM", "100 MM", "50 ML"
+  const unitRegex = new RegExp(`(?:^|[^0-9])${num}\\s*(?:cm|mm|m\\b|km|gr?|grammes?|kg|ml|cl|dl|litres?|l\\b|pages?|feuilles?|microns?|µm|volts?|v\\b|watts?|w\\b|mah|ah|hz|pouces?|"|'|°|deg)`, 'i');
+  if (unitRegex.test(designation)) return true;
+
+  // 2. Part of a geometric dimension specification: e.g. "30x40", "30 X 40", "17X22", "12x100"
+  const multRegex = new RegExp(`(?:^|[^0-9])(?:${num}\\s*[x*×]\\s*\\d+|\\d+\\s*[x*×]\\s*${num})(?:[^0-9]|$)`, 'i');
+  if (multRegex.test(designation)) return true;
+
+  return false;
 }
 
 /**
@@ -717,7 +728,7 @@ export function planQRMerge(
   const unmatched: QRSyncCountItem[] = [];
   let totalQtyAdded = 0;
 
-  for (const countItem of payload.counts) {
+  for (const countItem of (payload?.counts || [])) {
     if (!countItem || countItem.qty <= 0) continue;
 
     const noKey = String(countItem.no || '').trim().toLowerCase();
@@ -765,7 +776,7 @@ export function planQRMerge(
   }
 
   return {
-    totalItems: payload.counts.length,
+    totalItems: (payload?.counts || []).length,
     totalQtyAdded,
     matchedLinesCount: items.length,
     unmatchedItemsCount: unmatched.length,

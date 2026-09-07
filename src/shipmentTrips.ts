@@ -137,6 +137,7 @@ export async function createAndDispatchTrip(params: {
   operatorName?: string | null;
   containerIds: number[];
   lineQuantities?: { orderLineId: number; quantity: number }[];
+  includeLoose?: boolean;
   isLastTrip?: boolean;
   notes?: string | null;
 }): Promise<ShipmentTrip> {
@@ -145,13 +146,17 @@ export async function createAndDispatchTrip(params: {
   const tripNumber = params.tripNumber || maxTripNum + 1;
 
   let resolvedLineQuantities = params.lineQuantities || [];
-  if (resolvedLineQuantities.length === 0 && params.containerIds.length > 0) {
+  if (resolvedLineQuantities.length === 0 && (params.containerIds.length > 0 || params.includeLoose)) {
     const containerSet = new Set(params.containerIds);
     const events = await db.countEvents.where('billId').equals(params.billId).toArray();
     const lqMap = new Map<number, number>();
     for (const e of events) {
-      if (!e.undone && e.containerId && containerSet.has(e.containerId) && e.quantity > 0) {
-        lqMap.set(e.orderLineId, (lqMap.get(e.orderLineId) || 0) + e.quantity);
+      if (!e.undone && e.quantity > 0) {
+        const inContainer = e.containerId && containerSet.has(e.containerId);
+        const isLoose = !e.containerId && params.includeLoose;
+        if (inContainer || isLoose) {
+          lqMap.set(e.orderLineId, (lqMap.get(e.orderLineId) || 0) + e.quantity);
+        }
       }
     }
     resolvedLineQuantities = Array.from(lqMap.entries()).map(([orderLineId, quantity]) => ({
