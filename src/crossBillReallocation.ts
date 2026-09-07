@@ -252,11 +252,16 @@ export async function resolveShortageAsPartialStock(
   const reasonText = note || `Stock entrepôt épuisé : ${deliveredQty} livrées, ${missingQty} manquantes en rupture`;
 
   await db.transaction('rw', [db.orderLines, db.auditEvents], async () => {
-    await db.orderLines.update(lineId, {
+    const updates: Partial<OrderLine> = {
       shortageResolvedAsPartial: true,
       reallocationNote: reasonText,
       updatedAt: now,
-    });
+    };
+    if (deliveredQty === 0) {
+      updates.status = 'out_of_stock';
+    }
+
+    await db.orderLines.update(lineId, updates);
 
     await db.auditEvents.add({
       billId,

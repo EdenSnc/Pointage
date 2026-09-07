@@ -11,21 +11,25 @@ export const DEFAULT_OPERATORS = ['Amine', 'Mohamed', 'Walid', 'Karim', 'Yacine'
 const STORAGE_KEY_OPERATORS = 'pointage_operators_list';
 const STORAGE_KEY_ACTIVE_OPERATOR = 'pointage_active_operator';
 
+let inMemoryFallback: Record<string, string> = {};
+
 function safeGetItem(key: string): string | null {
   if (typeof localStorage !== 'undefined') {
     try {
       return localStorage.getItem(key);
     } catch {}
   }
-  return null;
+  return inMemoryFallback[key] ?? null;
 }
 
 function safeSetItem(key: string, value: string): void {
   if (typeof localStorage !== 'undefined') {
     try {
       localStorage.setItem(key, value);
+      return;
     } catch {}
   }
+  inMemoryFallback[key] = value;
 }
 
 /**
@@ -68,6 +72,12 @@ export function removeOperator(name: string): string[] {
   const updated = current.filter((o) => o.toLowerCase() !== clean.toLowerCase());
   const final = updated.length > 0 ? updated : [...DEFAULT_OPERATORS];
   safeSetItem(STORAGE_KEY_OPERATORS, JSON.stringify(final));
+
+  // If deleted operator was active, rollover to the first available operator
+  const saved = safeGetItem(STORAGE_KEY_ACTIVE_OPERATOR);
+  if (saved && saved.trim().toLowerCase() === clean.toLowerCase()) {
+    safeSetItem(STORAGE_KEY_ACTIVE_OPERATOR, final[0]);
+  }
   return final;
 }
 
@@ -76,16 +86,18 @@ export function saveOperatorsRoster(list: string[]): void {
   safeSetItem(STORAGE_KEY_OPERATORS, JSON.stringify(list));
 }
 
-
 /**
  * Gets the current active operator holding this terminal.
  */
 export function getActiveOperator(): string {
+  const list = getOperators();
   try {
     const saved = safeGetItem(STORAGE_KEY_ACTIVE_OPERATOR);
-    if (saved && saved.trim()) return saved.trim();
+    if (saved && saved.trim()) {
+      const match = list.find((o) => o.toLowerCase() === saved.trim().toLowerCase());
+      if (match) return match;
+    }
   } catch {}
-  const list = getOperators();
   return list[0] || 'Amine';
 }
 

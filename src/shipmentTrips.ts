@@ -136,7 +136,7 @@ export async function createAndDispatchTrip(params: {
   truckPlate?: string | null;
   operatorName?: string | null;
   containerIds: number[];
-  lineQuantities: { orderLineId: number; quantity: number }[];
+  lineQuantities?: { orderLineId: number; quantity: number }[];
   isLastTrip?: boolean;
   notes?: string | null;
 }): Promise<ShipmentTrip> {
@@ -144,8 +144,24 @@ export async function createAndDispatchTrip(params: {
   const maxTripNum = existing.reduce((max, t) => Math.max(max, t.tripNumber), 0);
   const tripNumber = params.tripNumber || maxTripNum + 1;
 
+  let resolvedLineQuantities = params.lineQuantities || [];
+  if (resolvedLineQuantities.length === 0 && params.containerIds.length > 0) {
+    const containerSet = new Set(params.containerIds);
+    const events = await db.countEvents.where('billId').equals(params.billId).toArray();
+    const lqMap = new Map<number, number>();
+    for (const e of events) {
+      if (!e.undone && e.containerId && containerSet.has(e.containerId) && e.quantity > 0) {
+        lqMap.set(e.orderLineId, (lqMap.get(e.orderLineId) || 0) + e.quantity);
+      }
+    }
+    resolvedLineQuantities = Array.from(lqMap.entries()).map(([orderLineId, quantity]) => ({
+      orderLineId,
+      quantity,
+    }));
+  }
+
   const totalContainers = params.containerIds.length;
-  const totalUnits = params.lineQuantities.reduce((sum, item) => sum + item.quantity, 0);
+  const totalUnits = resolvedLineQuantities.reduce((sum, item) => sum + item.quantity, 0);
 
   const now = new Date().toISOString();
 
@@ -158,7 +174,7 @@ export async function createAndDispatchTrip(params: {
     truckPlate: params.truckPlate?.trim() || null,
     operatorName: params.operatorName?.trim() || null,
     containerIds: params.containerIds,
-    lineQuantities: params.lineQuantities,
+    lineQuantities: resolvedLineQuantities,
     totalUnits,
     totalContainers,
     isLastTrip: !!params.isLastTrip,
@@ -222,6 +238,7 @@ export async function cancelShipmentTrip(tripId: number, reason?: string): Promi
 
     await db.bills.update(trip.billId, {
       shippingStatus: newShippingStatus,
+      tripCount: otherActive.length,
       updatedAt: now,
     });
 
