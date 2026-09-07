@@ -1148,6 +1148,58 @@ describe('excelExport — Comprehensive Edge Cases & Precision Testing', () => {
     expect(data.totalAvecRemise).toBe(950.00);
     expect(data.amountInWords).toContain('MILLE DZD');
   });
+
+  it('correctly includes operator attribution in export data, workshop visa, and WhatsApp dispatch', () => {
+    const billWithOps: Bill = {
+      id: 20,
+      sessionId: 1,
+      billNumber: 'BL/OU126/03608',
+      client: 'BLEU BLANC NAKHIL',
+      date: '2026-09-07',
+      status: 'active',
+      preparedBy: 'Amine',
+      loadedBy: 'Mohamed',
+      checkedBy: 'Walid',
+      createdAt: '2026-09-07T10:00:00Z',
+      updatedAt: '2026-09-07T10:00:00Z',
+    };
+
+    const rows = [
+      {
+        no: '1',
+        code: 'ART-1',
+        ean: null,
+        designation: 'Article Test',
+        colisage: '1,00',
+        orderedQty: 10,
+        actualQty: 10,
+        diffQty: 0,
+        unitPrice: 50.0,
+        discountPercent: null,
+        totalTtc: 500.0,
+        status: 'CONFORME' as const,
+        observation: '',
+      },
+    ];
+
+    const data = compileFinalBillData(billWithOps, rows);
+    expect(data.preparedBy).toBe('Amine');
+    expect(data.loadedBy).toBe('Mohamed');
+    expect(data.checkedBy).toBe('Walid');
+
+    // Workshop workbook includes operator visa
+    const wb = createWorkshopDeliveryWorkbook(data);
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const sheetValues = Object.values(sheet).map((cell: any) => cell?.v).filter(Boolean);
+    expect(sheetValues.some((v) => typeof v === 'string' && v.includes('Visa Préparateur : Amine'))).toBe(true);
+
+    // WhatsApp dispatch contains operator accountability block
+    const whatsapp = formatFinalBillWhatsAppMessage(data, 'bl_workshop');
+    expect(whatsapp).toContain('Préparé par : *Amine*');
+    expect(whatsapp).toContain('Chargé par : *Mohamed*');
+    expect(whatsapp).toContain('Pointé par : *Walid*');
+  });
 });
+
 
 

@@ -181,6 +181,9 @@ export function compileFinalBillData(
     ai: (bill as any).ai || null,
     bcNumber: (bill as any).bcNumber || null,
     documentType: (bill as any).documentType || null,
+    preparedBy: (bill as any).preparedBy || null,
+    loadedBy: (bill as any).loadedBy || null,
+    checkedBy: (bill as any).checkedBy || null,
     totalOrderedQty,
     totalActualQty,
     totalDiffQty,
@@ -631,7 +634,8 @@ export function createWorkshopDeliveryWorkbook(data: FinalBillExportData): XLSX.
   ]);
 
   wsData.push([]);
-  wsData.push(['Visa Préparateur / Chef d\'Atelier']);
+  const visaText = data.preparedBy ? `Visa Préparateur : ${data.preparedBy}` : 'Visa Préparateur / Chef d\'Atelier';
+  wsData.push([visaText]);
 
   const ws = XLSX.utils.aoa_to_sheet(wsData);
 
@@ -909,6 +913,11 @@ export function formatFinalBillWhatsAppMessage(
     msg += `N° Bon de Commande (BC) : *${data.bcNumber}*\n`;
   }
   msg += `Date : ${data.date || ''}\n`;
+  if (data.preparedBy || data.loadedBy || data.checkedBy) {
+    if (data.preparedBy) msg += `Préparé par : *${data.preparedBy}*\n`;
+    if (data.loadedBy) msg += `Chargé par : *${data.loadedBy}*\n`;
+    if (data.checkedBy) msg += `Pointé par : *${data.checkedBy}*\n`;
+  }
   msg += `------------------------------------\n`;
   msg += `Total articles : ${data.rows.length}\n`;
   msg += `Pieces commandees : ${data.totalOrderedQty}\n`;

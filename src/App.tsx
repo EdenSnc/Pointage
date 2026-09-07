@@ -120,7 +120,27 @@ import {
   IconTag,
   IconTransfer,
   IconWifiOff,
+  IconUser,
+  IconArrowLeftRight,
+  IconAlertTriangle,
 } from './icons';
+
+import {
+  loadOperatorsRoster,
+  saveOperatorsRoster,
+  getActiveOperator,
+  setActiveOperator,
+  assignBatchBillsStageOperator,
+} from './operators';
+import {
+  findCrossBillPreparedStock,
+  resolveShortageAsPartialStock,
+  replenishReallocatedLine,
+  type CrossBillPreparedStockOption,
+} from './crossBillReallocation';
+import { OperatorModal } from './OperatorModal';
+import { StageSignOffModal } from './StageSignOffModal';
+import { CrossBillReallocationModal } from './CrossBillReallocationModal';
 
 import {
   buildFinalBillRows,
@@ -345,6 +365,31 @@ function AudioMuteButton({ className, style }: { className?: string; style?: Rea
     </button>
   );
 }
+
+// ---- Reusable Operator Header Button ----
+function OperatorHeaderButton({
+  activeOperator,
+  onClick,
+  className,
+}: {
+  activeOperator: string;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={className || 'operator-pill-btn'}
+      onClick={onClick}
+      title={`Opérateur actif : ${activeOperator}. Cliquer pour changer.`}
+      aria-label="Opérateur du terminal"
+    >
+      <IconUser size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+      <span className="truncate">{activeOperator}</span>
+    </button>
+  );
+}
+
 
 // ---- Reusable API Key Configuration Modal ----
 function ApiKeyModal({
@@ -861,6 +906,27 @@ function HomeScreen({
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [showManualBillModal, setShowManualBillModal] = useState(false);
   const [showQuantities, setShowQuantities] = useState(() => localStorage.getItem('pointage_show_quantities') === 'true');
+  const [activeOperator, setActiveOperatorState] = useState(() => getActiveOperator());
+  const [operators, setOperators] = useState(() => loadOperatorsRoster());
+  const [showOperatorModal, setShowOperatorModal] = useState(false);
+
+  const handleSelectOperator = (op: string) => {
+    setActiveOperator(op);
+    setActiveOperatorState(op);
+    showToast(`Opérateur actif : ${op}`, setToast);
+  };
+
+  const handleAddOperator = (name: string) => {
+    const updated = [...operators, name];
+    saveOperatorsRoster(updated);
+    setOperators(updated);
+  };
+
+  const handleRemoveOperator = (name: string) => {
+    const updated = operators.filter((o: string) => o !== name);
+    saveOperatorsRoster(updated);
+    setOperators(updated);
+  };
 
   const toggleShowQuantities = () => {
     setShowQuantities(prev => {
@@ -933,6 +999,10 @@ function HomeScreen({
         </div>
 
         <div className="header-meta">
+          <OperatorHeaderButton
+            activeOperator={activeOperator}
+            onClick={() => setShowOperatorModal(true)}
+          />
           <button
             type="button"
             className="header-icon-btn"
@@ -1102,9 +1172,11 @@ function HomeScreen({
                   key={group.client}
                   client={group.client}
                   bills={group.bills}
+                  activeOperator={activeOperator}
                   onSelectBill={(id) => nav(`/bill/${id}`)}
                   onArchiveBill={handleArchiveBill}
                   onRestoreBill={handleRestoreBill}
+                  onBatchAssigned={() => showToast(`Commande de ${group.client} assignée à ${activeOperator}`, setToast)}
                 />
               );
             })}
@@ -1150,6 +1222,16 @@ function HomeScreen({
         onClose={() => setShowManualBillModal(false)}
         sessionId={session?.id}
         setToast={setToast}
+      />
+
+      <OperatorModal
+        isOpen={showOperatorModal}
+        onClose={() => setShowOperatorModal(false)}
+        activeOperator={activeOperator}
+        onSelectOperator={handleSelectOperator}
+        operators={operators}
+        onAddOperator={handleAddOperator}
+        onRemoveOperator={handleRemoveOperator}
       />
     </>
   );
@@ -1246,15 +1328,19 @@ function ManualBillModal({
 function ClientGroupCard({
   client,
   bills,
+  activeOperator,
   onSelectBill,
   onArchiveBill,
   onRestoreBill,
+  onBatchAssigned,
 }: {
   client: string;
   bills: Bill[];
+  activeOperator?: string;
   onSelectBill: (id: number) => void;
   onArchiveBill?: (id: number) => void;
   onRestoreBill?: (id: number) => void;
+  onBatchAssigned?: () => void;
 }) {
   const nav = useNavigate();
   const [expanded, setExpanded] = useState(true);
@@ -1295,6 +1381,27 @@ function ClientGroupCard({
 
       {expanded && (
         <div className="flex flex-col gap-2">
+          {bills.length > 1 && activeOperator && (
+            <div className="flex items-center justify-between mb-1 px-1 text-xs">
+              <span className="text-muted">Commande ({bills.length} bons)</span>
+              <button
+                type="button"
+                className="btn btn-secondary btn-xs flex items-center gap-1"
+                style={{ fontSize: '0.72rem', padding: '3px 8px' }}
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  const ids = bills.map((b) => b.id!).filter(Boolean);
+                  await assignBatchBillsStageOperator(ids, 'preparation', activeOperator);
+                  if (onBatchAssigned) onBatchAssigned();
+                }}
+                title={`Attribuer les ${bills.length} bons à ${activeOperator}`}
+              >
+                <IconUser size={12} style={{ color: 'var(--accent)' }} />
+                <span>Assigner à {activeOperator}</span>
+              </button>
+            </div>
+          )}
+
           {bills.length > 1 && (
             <div className="search-wrapper mb-1" onClick={(e) => e.stopPropagation()}>
               <input
@@ -1491,6 +1598,14 @@ function BillCard({
       <ProgressRow label="Préparation" progress={prep} />
       <ProgressRow label="Chargement" progress={load} />
       <ProgressRow label="Pointage" progress={point} />
+      {(bill.preparedBy || bill.loadedBy || bill.checkedBy) && (
+        <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-glass text-[11px] text-muted flex-wrap">
+          <IconUser size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+          {bill.preparedBy && <span>📦 Prép : <strong style={{ color: 'var(--text-primary)' }}>{bill.preparedBy}</strong></span>}
+          {bill.loadedBy && <span>🚚 Charge : <strong style={{ color: 'var(--text-primary)' }}>{bill.loadedBy}</strong></span>}
+          {bill.checkedBy && <span>📋 Point : <strong style={{ color: 'var(--text-primary)' }}>{bill.checkedBy}</strong></span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -2546,6 +2661,29 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const [showQRSync, setShowQRSync] = useState(false);
   const [unknownBarcodeModal, setUnknownBarcodeModal] = useState<string | null>(null);
 
+  const [activeOperator, setActiveOperatorState] = useState(() => getActiveOperator());
+  const [operators, setOperators] = useState(() => loadOperatorsRoster());
+  const [showOperatorModal, setShowOperatorModal] = useState(false);
+  const [showStageSignOffModal, setShowStageSignOffModal] = useState(false);
+
+  const handleSelectOperator = (op: string) => {
+    setActiveOperator(op);
+    setActiveOperatorState(op);
+    showToast(`Opérateur actif : ${op}`, setToast);
+  };
+
+  const handleAddOperator = (name: string) => {
+    const updated = [...operators, name];
+    saveOperatorsRoster(updated);
+    setOperators(updated);
+  };
+
+  const handleRemoveOperator = (name: string) => {
+    const updated = operators.filter((o: string) => o !== name);
+    saveOperatorsRoster(updated);
+    setOperators(updated);
+  };
+
   // Focus & visual continuity for recently updated line
   const [lastUpdatedLineId, setLastUpdatedLineId] = useState<number>(() => {
     return Number(sessionStorage.getItem('pointage_last_updated_line_id') || 0);
@@ -2856,6 +2994,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             )}
           </div>
         </div>
+        <OperatorHeaderButton
+          activeOperator={activeOperator}
+          onClick={() => setShowOperatorModal(true)}
+        />
         <AudioMuteButton />
         <button
           type="button"
@@ -2886,6 +3028,39 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               {s === 'preparation' ? 'Préparation' : s === 'chargement' ? 'Chargement' : 'Pointage'}
             </button>
           ))}
+        </div>
+
+        {/* Stage Operator Attribution Pill */}
+        <div
+          className="card p-2 mb-2 flex items-center justify-between"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--glass-border-subtle)' }}
+        >
+          <div className="flex items-center gap-2">
+            <IconUser size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+            <div className="text-xs">
+              <span className="text-muted">
+                {stage === 'preparation' ? 'Préparateur :' : stage === 'chargement' ? 'Chargeur :' : 'Pointeur :'}
+              </span>{' '}
+              <strong style={{ color: 'var(--text-primary)' }}>
+                {stage === 'preparation'
+                  ? bill.preparedBy || 'Non assigné'
+                  : stage === 'chargement'
+                  ? bill.loadedBy || 'Non assigné'
+                  : bill.checkedBy || 'Non assigné'}
+              </strong>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-xs flex items-center gap-1"
+            style={{ fontSize: '0.72rem', padding: '3px 8px' }}
+            onClick={() => setShowStageSignOffModal(true)}
+          >
+            <IconCheck size={12} />
+            {(stage === 'preparation' ? bill.preparedBy : stage === 'chargement' ? bill.loadedBy : bill.checkedBy)
+              ? 'Changer'
+              : 'Signer'}
+          </button>
         </div>
 
         {/* Smart Bill-Wide Stage Mistake Recovery Banner */}
@@ -3559,6 +3734,34 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           ↑ Haut
         </button>
       )}
+
+      <OperatorModal
+        isOpen={showOperatorModal}
+        onClose={() => setShowOperatorModal(false)}
+        activeOperator={activeOperator}
+        onSelectOperator={handleSelectOperator}
+        operators={operators}
+        onAddOperator={handleAddOperator}
+        onRemoveOperator={handleRemoveOperator}
+      />
+
+      <StageSignOffModal
+        isOpen={showStageSignOffModal}
+        onClose={() => setShowStageSignOffModal(false)}
+        bill={bill}
+        stage={stage}
+        operators={operators}
+        activeOperator={activeOperator}
+        relatedBills={entityBills || []}
+        onSigned={(opName, batch) => {
+          showToast(
+            batch
+              ? `Toute la commande signée par ${opName}`
+              : `Phase ${stage} signée par ${opName}`,
+            setToast
+          );
+        }}
+      />
     </>
   );
 }
@@ -3665,6 +3868,34 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const [editFieldVal, setEditFieldVal] = useState('');
   const [showQuantities, setShowQuantities] = useState(() => localStorage.getItem('pointage_show_quantities') === 'true');
 
+  const [activeOperator, setActiveOperatorState] = useState(() => getActiveOperator());
+  const [operators, setOperators] = useState(() => loadOperatorsRoster());
+  const [showOperatorModal, setShowOperatorModal] = useState(false);
+
+  const [crossBillOptions, setCrossBillOptions] = useState<CrossBillPreparedStockOption[]>([]);
+  const [selectedCrossBillOption, setSelectedCrossBillOption] = useState<CrossBillPreparedStockOption | null>(null);
+  const [showCrossBillModal, setShowCrossBillModal] = useState(false);
+  const [showReplenishModal, setShowReplenishModal] = useState(false);
+  const [replenishQtyInput, setReplenishQtyInput] = useState<number>(1);
+
+  const handleSelectOperator = (op: string) => {
+    setActiveOperator(op);
+    setActiveOperatorState(op);
+    showToast(`Opérateur actif : ${op}`, setToast);
+  };
+
+  const handleAddOperator = (name: string) => {
+    const updated = [...operators, name];
+    saveOperatorsRoster(updated);
+    setOperators(updated);
+  };
+
+  const handleRemoveOperator = (name: string) => {
+    const updated = operators.filter((o: string) => o !== name);
+    saveOperatorsRoster(updated);
+    setOperators(updated);
+  };
+
   const toggleShowQuantities = () => {
     setShowQuantities(prev => {
       const next = !prev;
@@ -3726,6 +3957,27 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     else if (stage === 'pointage' && stageTotals.chargement > 0) mismatchedStage = 'chargement';
     else if (stage === 'pointage' && stageTotals.preparation > 0) mismatchedStage = 'preparation';
   }
+
+  useEffect(() => {
+    let isCurrent = true;
+    if (billId && line && stageTotal < line.orderedQty && !line.shortageResolvedAsPartial) {
+      findCrossBillPreparedStock(billId, line)
+        .then((opts) => {
+          if (isCurrent) {
+            setCrossBillOptions(opts);
+          }
+        })
+        .catch((err) => {
+          console.error('Error finding cross-bill stock:', err);
+        });
+    } else {
+      setCrossBillOptions([]);
+    }
+    return () => {
+      isCurrent = false;
+    };
+  }, [billId, line?.id, line?.orderedQty, line?.reference, line?.ean, line?.designation, line?.shortageResolvedAsPartial, stageTotal]);
+
 
   const handleAddCount = async (targetNextLineId?: number) => {
     const now = Date.now();
@@ -3948,6 +4200,10 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             </span>
           </div>
         </div>
+        <OperatorHeaderButton
+          activeOperator={activeOperator}
+          onClick={() => setShowOperatorModal(true)}
+        />
         <AudioMuteButton />
       </header>
 
@@ -4090,6 +4346,199 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               }}
             >
               ⇄ Basculer ici
+            </button>
+          </div>
+        )}
+
+        {/* Cannibalized Stock Restock Warning */}
+        {line.reallocatedQty && line.reallocatedQty < 0 && (
+          <div
+            className="card p-3 mb-3 flex flex-col gap-2"
+            style={{
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1.5px solid rgba(239, 68, 68, 0.4)',
+            }}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <IconArrowLeftRight size={18} className="text-danger flex-shrink-0" />
+                <div>
+                  <div className="font-bold text-xs text-danger">
+                    Prélèvement dépannage : {Math.abs(line.reallocatedQty)} pièces retirées
+                  </div>
+                  <div className="text-xs text-muted">
+                    {line.reallocationNote || 'Prélevé pour dépanner un autre client'}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-xs btn-primary flex items-center gap-1 flex-shrink-0"
+                style={{ fontWeight: 700 }}
+                onClick={() => {
+                  setReplenishQtyInput(Math.abs(line.reallocatedQty || 1));
+                  setShowReplenishModal(true);
+                }}
+              >
+                <IconPlus size={12} /> Réassort
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Received Dépannage Stock Badge */}
+        {line.reallocatedQty && line.reallocatedQty > 0 && (
+          <div
+            className="card p-2.5 mb-3 flex items-center gap-2"
+            style={{
+              background: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.35)',
+            }}
+          >
+            <IconArrowLeftRight size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+            <div className="text-xs">
+              <strong style={{ color: 'var(--accent-light)' }}>
+                Dépannage reçu (+{line.reallocatedQty} pièces)
+              </strong>
+              <div className="text-muted text-[11px]">{line.reallocationNote}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Shortage Signed off as Partial Stock Badge */}
+        {line.shortageResolvedAsPartial && (
+          <div
+            className="card p-2.5 mb-3 flex items-center justify-between"
+            style={{
+              background: 'rgba(234, 179, 8, 0.12)',
+              border: '1px solid rgba(234, 179, 8, 0.35)',
+            }}
+          >
+            <div className="flex items-center gap-2 text-xs">
+              <IconCheck size={16} className="text-warning flex-shrink-0" />
+              <div>
+                <div className="font-bold text-warning">Rupture clôturée avec le stock restant</div>
+                <div className="text-muted text-[11px]">{line.reallocationNote}</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs text-muted"
+              onClick={async () => {
+                await db.orderLines.update(lineId, { shortageResolvedAsPartial: false });
+                showToast('Statut de rupture réouvert', setToast);
+              }}
+            >
+              Réouvrir
+            </button>
+          </div>
+        )}
+
+        {/* Smart Cross-Customer Stock Dilemma Resolution Card */}
+        {stageTotal < line.orderedQty && !line.shortageResolvedAsPartial && crossBillOptions.length > 0 && (
+          <div
+            className="card p-3 mb-3"
+            style={{
+              background: 'rgba(56, 189, 248, 0.10)',
+              border: '1.5px solid rgba(56, 189, 248, 0.45)',
+            }}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <IconArrowLeftRight size={18} style={{ color: 'var(--accent-light)', flexShrink: 0 }} />
+              <div>
+                <div className="font-bold text-xs" style={{ color: 'var(--accent-light)' }}>
+                  STOCK TROUVÉ SUR D'AUTRES BONS ({crossBillOptions.length})
+                </div>
+                <div className="text-[11px] text-muted">
+                  Du stock déjà préparé pour un autre client peut dépanner ce bon urgent.
+                </div>
+              </div>
+            </div>
+
+            {crossBillOptions.map((opt, idx) => (
+              <div
+                key={opt.bill.id || idx}
+                className="p-2.5 rounded-lg mb-2 flex flex-col gap-1"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--glass-border-subtle)' }}
+              >
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-danger">
+                    {opt.bill.client} ({opt.bill.billNumber})
+                  </span>
+                  <span className="badge badge-exact font-bold">
+                    {opt.preparedQty} pcs prêtes
+                  </span>
+                </div>
+
+                {opt.allocatedContainers.length > 0 && (
+                  <div className="text-[11px] text-warning flex items-center gap-1">
+                    <IconAlertTriangle size={13} style={{ flexShrink: 0 }} />
+                    <span>Conditionné dans : <strong>{opt.allocatedContainers.join(', ')}</strong></span>
+                  </div>
+                )}
+
+                <div className="flex gap-2 mt-2">
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-xs flex-1 flex items-center justify-center gap-1"
+                    style={{ fontWeight: 700 }}
+                    onClick={() => {
+                      setSelectedCrossBillOption(opt);
+                      setShowCrossBillModal(true);
+                    }}
+                  >
+                    <IconArrowLeftRight size={13} />
+                    Prélever sur {opt.bill.client}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-xs flex-1"
+                    onClick={async () => {
+                      const delivered = stageTotal;
+                      const missing = Math.max(0, line.orderedQty - stageTotal);
+                      await resolveShortageAsPartialStock({
+                        billId,
+                        lineId,
+                        stage,
+                        deliveredQty: delivered,
+                        missingQty: missing,
+                        operatorName: activeOperator,
+                      });
+                      showToast(`✓ Clôturé : ${delivered} livrées, ${missing} manquantes`, setToast);
+                    }}
+                  >
+                    Livrer stock restant ({stageTotal} pcs)
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Clean Sign-Off as Remaining Warehouse Stock (when no cross-bill option is chosen) */}
+        {stageTotal > 0 && stageTotal < line.orderedQty && !line.shortageResolvedAsPartial && crossBillOptions.length === 0 && (
+          <div className="flex justify-end mb-3">
+            <button
+              type="button"
+              className="btn btn-xs btn-secondary flex items-center gap-1 text-muted"
+              style={{ fontSize: '0.72rem' }}
+              onClick={async () => {
+                const delivered = stageTotal;
+                const missing = Math.max(0, line.orderedQty - stageTotal);
+                await resolveShortageAsPartialStock({
+                  billId,
+                  lineId,
+                  stage,
+                  deliveredQty: delivered,
+                  missingQty: missing,
+                  operatorName: activeOperator,
+                });
+                showToast(`✓ Clôturé avec le stock restant (${delivered} pcs)`, setToast);
+              }}
+            >
+              <IconCheck size={12} />
+              Clôturer avec le stock restant ({stageTotal} pcs)
             </button>
           </div>
         )}
@@ -5307,6 +5756,115 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             </button>
           )}
         </div>
+
+        {/* Replenish / Restock Modal */}
+        {showReplenishModal && (
+          <div className="modal-overlay" onClick={() => setShowReplenishModal(false)}>
+            <div
+              className="modal-content card"
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: 360, width: '92%' }}
+            >
+              <div className="flex justify-between items-center mb-2">
+                <div className="flex items-center gap-2 font-bold text-base" style={{ color: 'var(--accent-light)' }}>
+                  <IconPlus size={20} />
+                  <span>Réapprovisionnement Stock</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-icon btn-xs"
+                  onClick={() => setShowReplenishModal(false)}
+                  aria-label="Fermer"
+                >
+                  <IconX size={16} />
+                </button>
+              </div>
+
+              <p className="text-xs text-muted mb-3" style={{ lineHeight: 1.4 }}>
+                Réassort reçu du fournisseur pour compenser le prélèvement dépannage sur <strong>{line.designation}</strong>.
+              </p>
+
+              <div className="mb-4">
+                <label className="text-xs font-bold block mb-1">Quantité réassortie :</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ width: 44, height: 44, fontSize: '1.2rem', fontWeight: 800 }}
+                    onClick={() => setReplenishQtyInput(Math.max(1, replenishQtyInput - 1))}
+                    disabled={replenishQtyInput <= 1}
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    className="input text-center font-bold"
+                    style={{ fontSize: '1.2rem', height: 44 }}
+                    min={1}
+                    value={replenishQtyInput}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (!isNaN(v) && v > 0) setReplenishQtyInput(v);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ width: 44, height: 44, fontSize: '1.2rem', fontWeight: 800 }}
+                    onClick={() => setReplenishQtyInput(replenishQtyInput + 1)}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-secondary flex-1"
+                  onClick={() => setShowReplenishModal(false)}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary flex-1 flex items-center justify-center gap-1"
+                  onClick={async () => {
+                    await replenishReallocatedLine(billId, lineId, replenishQtyInput, activeOperator);
+                    setShowReplenishModal(false);
+                    showToast(`✓ +${replenishQtyInput} pcs réapprovisionnées`, setToast);
+                  }}
+                >
+                  <IconCheck size={16} /> Valider
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <OperatorModal
+          isOpen={showOperatorModal}
+          onClose={() => setShowOperatorModal(false)}
+          activeOperator={activeOperator}
+          onSelectOperator={handleSelectOperator}
+          operators={operators}
+          onAddOperator={handleAddOperator}
+          onRemoveOperator={handleRemoveOperator}
+        />
+
+        <CrossBillReallocationModal
+          isOpen={showCrossBillModal}
+          onClose={() => setShowCrossBillModal(false)}
+          sourceOption={selectedCrossBillOption}
+          currentBill={bill}
+          currentLine={line}
+          currentCount={stageTotal}
+          stage={stage}
+          activeOperator={activeOperator}
+          onSuccess={(qty) => {
+            showToast(`✓ +${qty} pcs prélevées avec succès`, setToast);
+          }}
+        />
       </div>
     </ErrorBoundary>
   );
@@ -6032,6 +6590,29 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   const [priceSearchQuery, setPriceSearchQuery] = useState('');
   const [exportDocFormat, setExportDocFormat] = useState<DocumentExportType>('auto');
 
+  const [activeOperator, setActiveOperatorState] = useState(() => getActiveOperator());
+  const [operators, setOperators] = useState(() => loadOperatorsRoster());
+  const [showOperatorModal, setShowOperatorModal] = useState(false);
+  const [showStageSignOffModal, setShowStageSignOffModal] = useState(false);
+
+  const handleSelectOperator = (op: string) => {
+    setActiveOperator(op);
+    setActiveOperatorState(op);
+    if (setToast) setToast(`Opérateur actif : ${op}`);
+  };
+
+  const handleAddOperator = (name: string) => {
+    const updated = [...operators, name];
+    saveOperatorsRoster(updated);
+    setOperators(updated);
+  };
+
+  const handleRemoveOperator = (name: string) => {
+    const updated = operators.filter((o: string) => o !== name);
+    saveOperatorsRoster(updated);
+    setOperators(updated);
+  };
+
   const eventsByLine = new Map<number, CountEvent[]>();
   for (const e of events) {
     const arr = eventsByLine.get(e.orderLineId) || [];
@@ -6267,6 +6848,10 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           </div>
         </div>
         <div className="header-meta">
+          <OperatorHeaderButton
+            activeOperator={activeOperator}
+            onClick={() => setShowOperatorModal(true)}
+          />
           <AudioMuteButton className="header-icon-btn" />
           <button
             type="button"
@@ -6299,6 +6884,34 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
             if (setToast) setToast(nextStatus === 'completed' ? 'Bon archivé' : 'Bon réouvert');
           }}
         />
+
+        {/* Operator Signatures Card */}
+        <div
+          className="card p-3 mb-3 flex items-center justify-between"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--glass-border-subtle)' }}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <IconUser size={20} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+            <div className="text-xs min-w-0">
+              <div className="font-bold mb-0.5">Responsables du bon</div>
+              <div className="text-muted flex items-center gap-2 flex-wrap text-[11px]">
+                <span>📦 Prép : <strong style={{ color: 'var(--text-primary)' }}>{bill.preparedBy || 'Non assigné'}</strong></span>
+                <span>•</span>
+                <span>🚚 Charge : <strong style={{ color: 'var(--text-primary)' }}>{bill.loadedBy || 'Non assigné'}</strong></span>
+                <span>•</span>
+                <span>📋 Point : <strong style={{ color: 'var(--text-primary)' }}>{bill.checkedBy || 'Non assigné'}</strong></span>
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-xs flex items-center gap-1 flex-shrink-0"
+            style={{ fontSize: '0.72rem', padding: '4px 8px' }}
+            onClick={() => setShowStageSignOffModal(true)}
+          >
+            <IconCheck size={12} /> Signer
+          </button>
+        </div>
 
         {/* Transmission & Export Hub (Apple Pill Buttons) */}
         <div className="transmission-card">
@@ -6952,6 +7565,35 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           </div>
         </div>
       )}
+
+      <OperatorModal
+        isOpen={showOperatorModal}
+        onClose={() => setShowOperatorModal(false)}
+        activeOperator={activeOperator}
+        onSelectOperator={handleSelectOperator}
+        operators={operators}
+        onAddOperator={handleAddOperator}
+        onRemoveOperator={handleRemoveOperator}
+      />
+
+      <StageSignOffModal
+        isOpen={showStageSignOffModal}
+        onClose={() => setShowStageSignOffModal(false)}
+        bill={bill}
+        stage={stageScope}
+        operators={operators}
+        activeOperator={activeOperator}
+        relatedBills={entityBills || []}
+        onSigned={(opName, batch) => {
+          if (setToast) {
+            setToast(
+              batch
+                ? `Toute la commande signée par ${opName}`
+                : `Phase ${stageScope} signée par ${opName}`
+            );
+          }
+        }}
+      />
     </>
   );
 }
@@ -6973,6 +7615,9 @@ function formatAuditType(type: string): string {
     status_changed: 'Statut modifié',
     no_corrected: 'N° corrigé',
     page_corrected: 'Page corrigée',
+    cross_bill_reallocation: 'Dépannage inter-bons',
+    shortage_partial_delivery: 'Clôture stock restant',
+    stage_operator_assigned: 'Attribution responsable',
   };
   return map[type] || type;
 }

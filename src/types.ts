@@ -40,6 +40,9 @@ export type AuditEventType =
   | 'count_event_undone'
   | 'line_removed_by_revision'
   | 'product_substituted'
+  | 'cross_bill_reallocation'
+  | 'shortage_partial_delivery'
+  | 'stage_operator_assigned'
   | 'status_changed';
 
 export type SessionStatus = 'active' | 'completed';
@@ -72,6 +75,13 @@ export interface Bill {
   discountPercent?: number | null;
   bcNumber?: string | null;
   documentType?: 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | null;
+  // Stage Operator Accountability
+  preparedBy?: string | null;
+  preparedAt?: string | null;
+  loadedBy?: string | null;
+  loadedAt?: string | null;
+  checkedBy?: string | null;
+  checkedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -111,6 +121,12 @@ export interface OrderLine {
   substitutedById?: number | null;
   substitutionNote?: string | null;
   sampleTaken?: number | null;
+  // Cross-Bill Reallocation & Shortage Tracking
+  reallocatedQty?: number | null;
+  reallocatedFromBillId?: number | null;
+  reallocatedToBillId?: number | null;
+  reallocationNote?: string | null;
+  shortageResolvedAsPartial?: boolean | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -271,6 +287,9 @@ export interface FinalBillExportData {
   ai?: string | null;
   bcNumber?: string | null;
   documentType?: 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | null;
+  preparedBy?: string | null;
+  loadedBy?: string | null;
+  checkedBy?: string | null;
   totalOrderedQty: number;
   totalActualQty: number;
   totalDiffQty: number;
