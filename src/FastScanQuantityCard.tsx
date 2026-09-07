@@ -243,7 +243,7 @@ export function FastScanQuantityCard({
         className="mb-3 p-2 rounded"
         style={{
           background: 'var(--bg-surface)',
-          borderRadius: 12,
+          borderRadius: 16,
           border: '1px solid var(--glass-border-subtle)',
         }}
       >
@@ -271,7 +271,7 @@ export function FastScanQuantityCard({
           </div>
         </div>
 
-        <div className="progress-bar" style={{ height: 10, borderRadius: 5 }}>
+        <div className="progress-bar" style={{ height: 10, borderRadius: 9999 }}>
           <div
             className={`progress-fill ${isExact ? 'complete' : ''}`}
             style={{
@@ -305,7 +305,7 @@ export function FastScanQuantityCard({
                   fontWeight: 700,
                   margin: 0,
                   cursor: 'pointer',
-                  borderRadius: 12,
+                  borderRadius: 9999,
                 }}
               >
                 {c.label}
@@ -322,7 +322,7 @@ export function FastScanQuantityCard({
                 fontWeight: 700,
                 margin: 0,
                 cursor: 'pointer',
-                borderRadius: 12,
+                borderRadius: 9999,
               }}
             >
               Hors Carton
@@ -380,7 +380,7 @@ export function FastScanQuantityCard({
             style={{
               minHeight: 48,
               fontSize: '1rem',
-              borderRadius: 14,
+              borderRadius: 18,
             }}
           >
             + 1
@@ -395,7 +395,7 @@ export function FastScanQuantityCard({
               style={{
                 minHeight: 48,
                 fontSize: '0.92rem',
-                borderRadius: 14,
+                borderRadius: 18,
               }}
             >
               + {packSize} <span className="text-xs text-muted ml-1 font-normal">(Boîte)</span>
@@ -411,7 +411,7 @@ export function FastScanQuantityCard({
               style={{
                 minHeight: 48,
                 fontSize: '0.90rem',
-                borderRadius: 14,
+                borderRadius: 18,
               }}
             >
               ✓ Reste ({remaining})
@@ -427,7 +427,7 @@ export function FastScanQuantityCard({
               minHeight: 48,
               justifyContent: 'space-between',
               padding: '0 4px',
-              borderRadius: 14,
+              borderRadius: 18,
             }}
           >
             {/* Accelerating Decrement Button */}
@@ -485,7 +485,7 @@ export function FastScanQuantityCard({
                   border: 'none',
                   cursor: 'pointer',
                   padding: '4px 10px',
-                  borderRadius: 8,
+                  borderRadius: 14,
                 }}
                 title="Cliquer pour taper la quantité directement au clavier"
               >
@@ -512,7 +512,7 @@ export function FastScanQuantityCard({
             type="button"
             className="btn btn-secondary font-bold flex items-center justify-center gap-1"
             onClick={() => handleAdd(customQty)}
-            style={{ minWidth: 104, minHeight: 48, borderRadius: 14 }}
+            style={{ minWidth: 104, minHeight: 48, borderRadius: 18 }}
           >
             <IconPlus size={15} /> Ajouter
           </button>
@@ -521,11 +521,11 @@ export function FastScanQuantityCard({
 
       {recentDelta !== null && (
         <div
-          className="text-xs font-bold text-center py-1 mb-2 rounded"
+          className="text-xs font-bold text-center py-1 mb-2"
           style={{
             background: 'rgba(16, 185, 129, 0.15)',
             color: 'var(--accent)',
-            borderRadius: 10,
+            borderRadius: '9999px',
           }}
         >
           +{recentDelta}
@@ -538,7 +538,7 @@ export function FastScanQuantityCard({
           type="button"
           className="btn btn-primary flex-1 flex items-center justify-center gap-2"
           onClick={onNextScan}
-          style={{ minHeight: 50, fontSize: '0.95rem', fontWeight: 800, borderRadius: 14 }}
+          style={{ minHeight: 50, fontSize: '0.95rem', fontWeight: 800, borderRadius: 18 }}
         >
           <IconScan size={18} /> Suivant
         </button>
@@ -547,7 +547,7 @@ export function FastScanQuantityCard({
           className="btn btn-secondary flex items-center justify-center gap-1"
           onClick={() => onOpenLine(line)}
           title="Ouvrir la fiche complète"
-          style={{ minHeight: 50, minWidth: 80, borderRadius: 14 }}
+          style={{ minHeight: 50, minWidth: 80, borderRadius: 18 }}
         >
           Détail <IconArrowRight size={15} />
         </button>

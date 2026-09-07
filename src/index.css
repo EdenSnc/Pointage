@@ -78,10 +78,10 @@
 
   /* Geometry */
   --radius-card: 22px;
-  --radius-button: 16px;
+  --radius-button: 18px;
   --radius-pill: 9999px;
   --radius-input: 16px;
-  --radius-badge: 10px;
+  --radius-badge: 9999px;
   --min-touch: 48px;
 }
 
@@ -1054,17 +1054,19 @@ button,
 
 .batch-action-bar {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: rgba(20, 24, 33, 0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid var(--glass-border-bright);
+  bottom: max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px));
+  left: max(16px, env(safe-area-inset-left, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
+  max-width: 492px;
+  margin: 0 auto;
+  background: var(--bg-card);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border-bright);
+  border-radius: var(--radius-card);
   padding: 12px 16px;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom));
-  z-index: 90;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  box-shadow: var(--glass-shadow-lg);
   animation: slideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -1298,7 +1300,7 @@ button,
   border: none;
   background: var(--accent-gradient);
   color: #fff;
-  border-radius: 12px;
+  border-radius: 50%;
   font-size: 1.15rem;
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
@@ -1590,7 +1592,7 @@ button,
   align-items: center;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 8px 12px;
 }
 
@@ -1993,11 +1995,11 @@ button,
 .mb-3 { margin-bottom: 16px; }
 .mb-4 { margin-bottom: 22px; }
 .mb-5 { margin-bottom: 28px; }
-.rounded-sm { border-radius: 10px; }
-.rounded-md { border-radius: 14px; }
-.rounded-lg { border-radius: 18px; }
-.rounded-xl { border-radius: 22px; }
-.rounded-2xl { border-radius: 26px; }
+.rounded-sm { border-radius: 14px; }
+.rounded-md { border-radius: 18px; }
+.rounded-lg { border-radius: 22px; }
+.rounded-xl { border-radius: 26px; }
+.rounded-2xl { border-radius: 32px; }
 .rounded-full { border-radius: 9999px; }
 .p-2 { padding: 10px; }
 .p-3 { padding: 16px; }
@@ -2171,7 +2173,7 @@ button,
 .tour-icon-box {
   width: 48px;
   height: 48px;
-  border-radius: 14px;
+  border-radius: 18px;
   background: rgba(59, 130, 246, 0.12);
   border: 1px solid rgba(59, 130, 246, 0.25);
   display: flex;
@@ -2267,7 +2269,7 @@ button,
   position: relative;
   width: 86px;
   height: 112px;
-  border-radius: 14px;
+  border-radius: 18px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.16);
   flex-shrink: 0;

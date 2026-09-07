@@ -232,7 +232,7 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
               style={{
                 width: 38,
                 height: 38,
-                borderRadius: 10,
+                borderRadius: 14,
                 background: 'rgba(16, 185, 129, 0.15)',
                 display: 'flex',
                 alignItems: 'center',
@@ -250,13 +250,13 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
                     style={{
                       fontSize: '0.65rem',
                       fontWeight: 700,
-                      padding: '2px 6px',
-                      borderRadius: 4,
+                      padding: '2px 8px',
+                      borderRadius: '9999px',
                       background: 'rgba(16, 185, 129, 0.2)',
                       color: 'var(--accent)',
                     }}
                   >
-                    DERNIER VOYAGE
+                    Dernier voyage
                   </span>
                 )}
               </div>
@@ -368,7 +368,7 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
                         style={{
                           width: 18,
                           height: 18,
-                          borderRadius: 4,
+                          borderRadius: 6,
                           border: isSelected
                             ? '1px solid var(--accent)'
                             : '1px solid var(--border)',
@@ -410,7 +410,7 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
                   style={{
                     width: 18,
                     height: 18,
-                    borderRadius: 4,
+                    borderRadius: 6,
                     border: includeLoose ? '1px solid var(--accent)' : '1px solid var(--border)',
                     background: includeLoose ? 'var(--accent)' : 'transparent',
                     display: 'flex',

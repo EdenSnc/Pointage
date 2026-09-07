@@ -833,7 +833,7 @@ function QRSyncModal({
                 </div>
 
                 {payload.billNumber && payload.billNumber !== bill.billNumber && (
-                  <div className="p-2 mb-2 text-xs" style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', borderRadius: 8 }}>
+                  <div className="p-2.5 mb-2 text-xs" style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', borderRadius: 14 }}>
                     ⚠️ QR issu de "{payload.billNumber}" (actuel : "{bill.billNumber}")
                   </div>
                 )}
@@ -1611,11 +1611,10 @@ function BillCard({
                 style={{
                   fontSize: '0.62rem',
                   fontWeight: 700,
-                  padding: '1px 5px',
-                  borderRadius: 4,
+                  padding: '1px 6px',
+                  borderRadius: '9999px',
                   background: 'var(--accent-dim)',
                   color: 'var(--accent)',
-                  textTransform: 'uppercase',
                   letterSpacing: '0.02em',
                 }}
               >
@@ -1633,8 +1632,8 @@ function BillCard({
                 style={{
                   fontSize: '0.62rem',
                   fontWeight: 600,
-                  padding: '1px 5px',
-                  borderRadius: 4,
+                  padding: '1px 6px',
+                  borderRadius: '9999px',
                   background: 'rgba(59, 130, 246, 0.15)',
                   color: '#3b82f6',
                 }}
@@ -1680,8 +1679,8 @@ function BillCard({
                 style={{
                   fontSize: '0.62rem',
                   fontWeight: 700,
-                  padding: '1px 5px',
-                  borderRadius: 4,
+                  padding: '1px 6px',
+                  borderRadius: '9999px',
                   background:
                     bill.shippingStatus === 'fully_shipped'
                       ? 'rgba(16, 185, 129, 0.15)'
@@ -3190,11 +3189,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                 style={{
                   fontSize: '0.62rem',
                   fontWeight: 700,
-                  padding: '1px 5px',
-                  borderRadius: 4,
+                  padding: '1px 6px',
+                  borderRadius: '9999px',
                   background: 'var(--accent-dim)',
                   color: 'var(--accent)',
-                  textTransform: 'uppercase',
                   letterSpacing: '0.02em',
                 }}
               >
@@ -3212,8 +3210,8 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                 style={{
                   fontSize: '0.62rem',
                   fontWeight: 600,
-                  padding: '1px 5px',
-                  borderRadius: 4,
+                  padding: '1px 6px',
+                  borderRadius: '9999px',
                   background: 'rgba(59, 130, 246, 0.15)',
                   color: '#3b82f6',
                 }}
@@ -3368,10 +3366,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                 {bill.shippingStatus === 'fully_shipped' ? (
                   <span
                     style={{
-                      fontSize: '0.62rem',
+                      fontSize: '0.65rem',
                       fontWeight: 700,
-                      padding: '1px 5px',
-                      borderRadius: 4,
+                      padding: '2px 8px',
+                      borderRadius: '9999px',
                       background: 'rgba(16, 185, 129, 0.2)',
                       color: 'var(--accent)',
                     }}
@@ -3381,10 +3379,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                 ) : bill.shippingStatus === 'partially_shipped' ? (
                   <span
                     style={{
-                      fontSize: '0.62rem',
+                      fontSize: '0.65rem',
                       fontWeight: 700,
-                      padding: '1px 5px',
-                      borderRadius: 4,
+                      padding: '2px 8px',
+                      borderRadius: '9999px',
                       background: 'rgba(245, 158, 11, 0.2)',
                       color: 'var(--warning)',
                     }}
@@ -3420,10 +3418,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                   return (
                     <div
                       key={t.id}
-                      className="flex items-center justify-between p-2"
+                      className="flex items-center justify-between p-2.5"
                       style={{
                         background: isCancelled ? 'rgba(255, 255, 255, 0.02)' : 'var(--bg-surface)',
-                        borderRadius: 12,
+                        borderRadius: 16,
                         border: isCancelled ? '1px dashed rgba(239, 68, 68, 0.3)' : '1px solid var(--border)',
                         opacity: isCancelled ? 0.6 : 1,
                       }}
@@ -3535,9 +3533,12 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             <button
               key={m}
               className={`seg-btn ${searchMode === m ? 'active' : ''}`}
-              onClick={() => setSearchMode(m)}
+              onClick={() => {
+                hapticTap('light');
+                setSearchMode(m);
+              }}
             >
-              {m === 'smart' ? 'SMART' : m === 'no' ? 'N°' : m.toUpperCase()}
+              {m === 'smart' ? 'Smart' : m === 'no' ? 'N°' : m === 'ref' ? 'Réf' : m === 'name' ? 'Nom' : 'EAN'}
             </button>
           ))}
         </div>
@@ -3650,13 +3651,19 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <div className="flex gap-2">
             <button
               className={`btn btn-sm ${showProblemsOnly ? 'btn-warning' : 'btn-secondary'}`}
-              onClick={() => setShowProblemsOnly(!showProblemsOnly)}
+              onClick={() => {
+                hapticTap('light');
+                setShowProblemsOnly(!showProblemsOnly);
+              }}
             >
-              <IconWarning size={14} /> {showProblemsOnly ? 'PROBLÈMES' : 'Problèmes'}
+              <IconWarning size={14} /> Problèmes
             </button>
             <button
               className={`btn btn-sm ${showQuantities ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
-              onClick={toggleShowQuantities}
+              onClick={() => {
+                hapticTap('light');
+                toggleShowQuantities();
+              }}
               title={showQuantities ? 'Masquer les quantités' : 'Afficher les quantités'}
             >
               {showQuantities ? <IconEye size={15} /> : <IconEyeOff size={15} />}
@@ -3666,6 +3673,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               type="button"
               className={`btn btn-sm ${isSelectionMode ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
               onClick={() => {
+                hapticTap('medium');
                 if (isSelectionMode) {
                   setIsSelectionMode(false);
                   setSelectedLineIds(new Set());
@@ -3784,7 +3792,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                         </span>
                       )}
                       <span className="line-no">N°{line.no}</span>
-                      {line.page != null && <span className="line-page">PAGE {line.page}</span>}
+                      {line.page != null && <span className="line-page">P{line.page}</span>}
                     </div>
                     <div className="flex gap-1 flex-wrap">
                       {line.status !== 'active' && (
@@ -4023,14 +4031,14 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             style={{ flex: 2 }}
             onClick={() => nav(`/scan?billId=${billId}&stage=${stage}`)}
           >
-            <IconScan size={18} /> SCANNER
+            <IconScan size={18} /> Scanner
           </button>
           <button
             className="btn btn-secondary"
             style={{ flex: 1 }}
             onClick={() => nav(`/bill/${billId}/extras?stage=${stage}`)}
           >
-            <IconPlus size={16} /> EXTRA
+            <IconPlus size={16} /> Extra
           </button>
         </div>
       )}
@@ -5181,8 +5189,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                             style={{
                               fontSize: '0.68rem',
                               fontWeight: 700,
-                              padding: '1px 5px',
-                              borderRadius: 4,
+                              padding: '2px 8px',
+                              borderRadius: '9999px',
                               background: rec.closestAction === 'round_down' ? 'rgba(234, 179, 8, 0.2)' : 'rgba(37, 99, 235, 0.2)',
                               color: rec.closestAction === 'round_down' ? 'var(--warning)' : 'var(--accent)',
                             }}
@@ -5968,7 +5976,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   </label>
 
                   {subPaidAdvance && ((selectedSubLine.unitPrice || 0) !== (line.unitPrice || 0)) && (
-                    <div className="text-xs p-2" style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: 6, color: '#f59e0b' }}>
+                    <div className="text-xs p-3" style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: 16, color: '#f59e0b' }}>
                       ⚠️ <strong>Attention paiement d'avance :</strong> L'écart financier ({(selectedSubLine.unitPrice || 0) - (line.unitPrice || 0)} DA) nécessite validation ou régularisation avec le client.
                     </div>
                   )}
@@ -7417,10 +7425,10 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
                 style={{
                   fontSize: '0.68rem',
                   fontWeight: 700,
-                  padding: '1px 7px',
+                  padding: '2px 8px',
                   background: 'var(--accent-dim)',
                   color: 'var(--accent)',
-                  borderRadius: 4,
+                  borderRadius: '9999px',
                   letterSpacing: '0.02em',
                 }}
               >
@@ -7533,7 +7541,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
               type="checkbox"
               checked={exportOnlyPresent}
               onChange={(e) => setExportOnlyPresent(e.target.checked)}
-              style={{ borderRadius: 4, accentColor: 'var(--accent)' }}
+              style={{ borderRadius: 6, accentColor: 'var(--accent)' }}
             />
             <span>Exclure les articles non reçus (Qté = 0)</span>
           </label>
@@ -7541,7 +7549,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
 
         {extras.length > 0 && (
           <div className="card mb-3">
-            <div className="section-title" style={{ marginTop: 0 }}>EXTRAS ({extras.length})</div>
+            <div className="section-title" style={{ marginTop: 0 }}>Articles extra ({extras.length})</div>
             {extras.map((ex) => (
               <div key={ex.id} className="text-sm mb-2">
                 <span className="font-bold">{ex.designation || ex.scannedEan || ex.reference || 'Extra'}</span>
@@ -7812,7 +7820,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
                             style={{
                               width: 32,
                               height: 32,
-                              borderRadius: 8,
+                              borderRadius: 14,
                               background: isCancelled
                                 ? 'rgba(239, 68, 68, 0.15)'
                                 : 'rgba(16, 185, 129, 0.15)',

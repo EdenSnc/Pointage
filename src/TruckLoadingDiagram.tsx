@@ -115,7 +115,7 @@ export function TruckLoadingDiagram({
                 style={{
                   width: 20,
                   height: 20,
-                  borderRadius: 6,
+                  borderRadius: 8,
                   background: 'var(--accent)',
                   color: '#ffffff',
                   display: 'flex',
@@ -185,7 +185,7 @@ export function TruckLoadingDiagram({
                     style={{
                       width: 20,
                       height: 20,
-                      borderRadius: 6,
+                      borderRadius: 8,
                       background: 'rgba(245, 158, 11, 0.7)',
                       color: '#ffffff',
                       display: 'flex',
