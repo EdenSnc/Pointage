@@ -2741,4 +2741,56 @@ button,
   }
 }
 
+/* ============================================================
+   SAMSUNG GALAXY A54 5G & SUPER AMOLED HARDWARE PROFILES
+   120Hz Fluid Motion, Infinite OLED Blacks, Safe Insets, 8GB RAM
+   ============================================================ */
+
+/* Super AMOLED Pitch-Black Dark Mode (Turns off OLED pixels for 0% battery drain & extreme contrast) */
+[data-theme="dark"][data-screen="amoled"],
+[data-theme="dark"][data-device*="samsung"],
+[data-theme="dark"][data-device="samsung-a54"] {
+  --bg-deep: #000000;
+  --bg-canvas: #050608;
+  --bg-card: rgba(16, 17, 21, 0.94);
+  --bg-card-hover: rgba(24, 25, 31, 0.98);
+  --bg-input: #0e0f13;
+  --glass-border: 1px solid rgba(255, 255, 255, 0.14);
+  --glass-border-bright: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+/* 120Hz High-Refresh Motion Pipeline */
+[data-refresh="120hz"],
+[data-device="samsung-a54"] {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  overscroll-behavior-y: contain;
+  touch-action: manipulation;
+}
+
+[data-device="samsung-a54"] .app-header,
+[data-device="samsung-a54"] .bottom-nav-bar,
+[data-device="samsung-a54"] .card,
+[data-device="samsung-a54"] .btn {
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
+
+/* Samsung Infinity-O Punch Hole & One UI Gesture Navigation Bar Protection */
+[data-device*="samsung"],
+[data-device="samsung-a54"] {
+  padding-top: max(env(safe-area-inset-top, 0px), 8px);
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 14px);
+}
+
+/* 8GB RAM High-Capacity Performance: Hardware GPU Compositing */
+[data-ram="8gb"] .chart-card,
+[data-ram="8gb"] .bill-card,
+[data-device="samsung-a54"] .chart-card,
+[data-device="samsung-a54"] .bill-card {
+  will-change: transform, opacity;
+  contain: paint layout;
+}
+
+
 

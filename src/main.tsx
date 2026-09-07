@@ -4,6 +4,10 @@ import './index.css'
 import App from './App'
 import { requestPersistence } from './db'
 import { registerSW } from 'virtual:pwa-register'
+import { applyDeviceOptimizations } from './deviceProfile'
+
+// Apply Samsung Galaxy A54 5G & mobile hardware profiling
+applyDeviceOptimizations();
 
 // Request persistent storage
 requestPersistence();

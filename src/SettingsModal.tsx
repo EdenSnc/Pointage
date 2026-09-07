@@ -7,8 +7,10 @@ import {
   IconHelp,
   IconSparkles,
   IconSend,
+  IconUndo,
 } from './icons';
 import { useDailyApiQuota } from './ai/quotaTracker';
+import { detectDeviceProfile, setForcedA54Mode, clearPwaCacheAndReload } from './deviceProfile';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -37,6 +39,8 @@ export function SettingsModal({
   const [autoReturn, setAutoReturn] = useState(
     () => localStorage.getItem('pointage_auto_return_after_add') !== 'false'
   );
+  const [profile, setProfile] = useState(() => detectDeviceProfile());
+  const [isA54Active, setIsA54Active] = useState(() => profile.isSamsungA54);
 
   if (!isOpen) return null;
 
@@ -192,6 +196,52 @@ export function SettingsModal({
                 localStorage.setItem('pointage_report_email', e.target.value);
               }}
             />
+          </div>
+        </div>
+
+        {/* Device Hardware & Samsung A54 Special Treatment */}
+        <div className="card mb-3" style={{ background: 'var(--bg-surface)' }}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <IconSparkles size={16} style={{ color: 'var(--accent)' }} />
+              <div className="font-bold text-sm">Optimisation Matérielle</div>
+            </div>
+            {isA54Active && (
+              <span className="badge badge-accent text-xs" style={{ fontSize: '0.7rem', padding: '2px 8px', fontWeight: 800 }}>
+                VIP A54
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-muted mb-2">
+            {profile.label}
+          </div>
+          <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid var(--border-subtle, rgba(255,255,255,0.06))' }}>
+            <div className="text-xs font-semibold">Mode Samsung Galaxy A54 (120Hz & 8GB)</div>
+            <button
+              type="button"
+              className={`btn btn-xs ${isA54Active ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => {
+                const next = !isA54Active;
+                setIsA54Active(next);
+                setForcedA54Mode(next);
+                setProfile(detectDeviceProfile());
+              }}
+              style={{ fontWeight: 700 }}
+            >
+              {isA54Active ? 'Actif' : 'Standard'}
+            </button>
+          </div>
+          <div className="mt-3">
+            <button
+              type="button"
+              className="btn btn-xs btn-secondary btn-full flex items-center justify-center gap-2"
+              onClick={async () => {
+                await clearPwaCacheAndReload();
+              }}
+              title="Vide le cache local du Service Worker et recharge la dernière version déployée"
+            >
+              <IconUndo size={13} /> Vider le cache & Recharger l'app
+            </button>
           </div>
         </div>
 
