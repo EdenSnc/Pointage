@@ -465,7 +465,7 @@ function ApiKeyModal({
           </div>
 
           <div className="mb-4">
-            <span className="text-xs text-muted font-bold block mb-1">MODÈLE</span>
+            <span className="text-xs text-muted font-bold block mb-1">Modèle</span>
             <div className="seg-control">
               {activeProvider.models.map((m) => (
                 <button
@@ -483,10 +483,10 @@ function ApiKeyModal({
 
           <div className="confirm-actions">
             <button type="button" className="btn btn-secondary" onClick={onClose}>
-              ANNULER
+              Annuler
             </button>
             <button type="submit" className="btn btn-success">
-              ENREGISTRER
+              Enregistrer
             </button>
           </div>
         </form>
@@ -706,7 +706,7 @@ function QRSyncModal({
       <div className="modal-content" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-3">
           <div className="modal-title flex items-center gap-2" style={{ margin: 0 }}>
-            <IconLayers size={18} style={{ color: 'var(--accent)' }} /> FUSION HORS-LIGNE
+            <IconLayers size={18} style={{ color: 'var(--accent)' }} /> Fusion hors-ligne
           </div>
           <button type="button" className="btn btn-xs btn-secondary btn-icon" onClick={onClose}>
             <IconX size={14} />
@@ -720,14 +720,14 @@ function QRSyncModal({
             className={`seg-btn ${tab === 'export' ? 'active' : ''}`}
             onClick={() => { setTab('export'); setIsCameraScanning(false); }}
           >
-            ÉMETTRE QR
+            Émettre QR
           </button>
           <button
             type="button"
             className={`seg-btn ${tab === 'import' ? 'active' : ''}`}
             onClick={() => setTab('import')}
           >
-            RECEVOIR / FUSIONNER
+            Recevoir / Fusionner
           </button>
         </div>
 
@@ -854,14 +854,14 @@ function QRSyncModal({
                     className={`seg-btn ${mergeMode === 'add' ? 'active' : ''}`}
                     onClick={() => setMergeMode('add')}
                   >
-                    + ADDITIONNER (Conseillé)
+                    + Additionner (Conseillé)
                   </button>
                   <button
                     type="button"
                     className={`seg-btn ${mergeMode === 'replace' ? 'active' : ''}`}
                     onClick={() => setMergeMode('replace')}
                   >
-                    ⟳ REMPLACER
+                    ⟳ Remplacer
                   </button>
                 </div>
 
@@ -1148,10 +1148,10 @@ function HomeScreen({
             {billFilter === 'active' && (
               <div className="flex gap-2 justify-center mt-4">
                 <button className="btn btn-primary" onClick={() => nav('/import')}>
-                  <IconImport size={18} /> IMPORTER DES BL
+                  <IconImport size={18} /> Importer des BL
                 </button>
                 <button className="btn btn-secondary" onClick={() => setShowManualBillModal(true)}>
-                  <IconPlus size={16} /> NOUVEAU BL
+                  <IconPlus size={16} /> Nouveau BL
                 </button>
               </div>
             )}
@@ -1165,7 +1165,7 @@ function HomeScreen({
                   onClick={() => setShowManualBillModal(true)}
                   title="Créer un nouveau bon"
                 >
-                  <IconPlus size={14} /> NOUVEAU BL
+                  <IconPlus size={14} /> Nouveau BL
                 </button>
               </div>
             )}
@@ -1204,10 +1204,10 @@ function HomeScreen({
 
       <div className="bottom-bar">
         <button className="btn btn-primary" style={{ flex: 2 }} onClick={() => nav('/scan')}>
-          <IconScan size={18} /> SCANNER
+          <IconScan size={18} /> Scanner
         </button>
         <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => nav('/import')}>
-          <IconImport size={18} /> IMPORT
+          <IconImport size={18} /> Importer
         </button>
         <button className="btn btn-secondary btn-icon" onClick={() => nav('/backup')} title="Export & Secours (Fichier)">
           <IconShare size={18} />
@@ -1332,7 +1332,7 @@ function ManualBillModal({
         }}
       >
         <div className="flex justify-between items-center mb-3">
-          <div className="modal-title" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>NOUVEAU BON</div>
+          <div className="modal-title" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>Nouveau bon</div>
           <button
             type="button"
             className="header-icon-btn"
@@ -1345,7 +1345,7 @@ function ManualBillModal({
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>
-            <label className="text-xs text-muted font-bold block mb-1">CLIENT</label>
+            <label className="text-xs text-muted font-bold block mb-1">Client</label>
             <input
               className="input"
               type="text"
@@ -1359,7 +1359,7 @@ function ManualBillModal({
           </div>
 
           <div>
-            <label className="text-xs text-muted font-bold block mb-1">WILAYA DE DESTINATION (58 WILAYAS)</label>
+            <label className="text-xs text-muted font-bold block mb-1">Wilaya de destination (58 wilayas)</label>
             <select
               className="input"
               value={selectedWilaya}
@@ -1376,7 +1376,7 @@ function ManualBillModal({
           </div>
 
           <div>
-            <label className="text-xs text-muted font-bold block mb-1">N° DE BON (OPTIONNEL)</label>
+            <label className="text-xs text-muted font-bold block mb-1">N° de bon (optionnel)</label>
             <input
               className="input"
               type="text"
@@ -1394,14 +1394,14 @@ function ManualBillModal({
               style={{ borderRadius: '16px', height: 42, padding: '0 18px' }}
               onClick={onClose}
             >
-              ANNULER
+              Annuler
             </button>
             <button
               type="submit"
               className="btn btn-primary flex items-center gap-1.5"
               style={{ borderRadius: '16px', height: 42, padding: '0 20px', fontWeight: 700 }}
             >
-              <IconCheck size={16} /> CRÉER
+              <IconCheck size={16} /> Créer
             </button>
           </div>
         </form>
@@ -1716,7 +1716,7 @@ function BillCard({
           <div className="flex flex-col items-end gap-1">
             {bill.status === 'completed' ? (
               <span className="badge" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>
-                ARCHIVÉ
+                Archivé
               </span>
             ) : (
               <span className="badge badge-active">{lines.length} lg</span>
@@ -2018,7 +2018,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
     <>
       <header className="app-header">
         <button className="back-btn" onClick={() => nav(-1)} aria-label="Retour"><IconArrowLeft size={18} /></button>
-        <h1>NUMÉRISATION</h1>
+        <h1>Numérisation</h1>
       </header>
 
       <div className="app-content">
@@ -2049,28 +2049,21 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
           onChange={handleFileChange}
         />
 
-        {/* Primary 100% Offline Excel / CSV Card */}
-        <div
-          className="card mb-3"
-          style={{
-            borderColor: 'var(--accent)',
-            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(22, 23, 27, 0.98) 100%)',
-          }}
-        >
-          <div className="flex justify-between items-center mb-2">
-            <div className="card-client flex items-center gap-2" style={{ color: 'var(--accent-light)' }}>
-              <IconFileSpreadsheet size={20} /> Fichier Excel / CSV
+        {/* 100% Offline Excel / CSV Import Card */}
+        <div className="card" style={{ borderColor: 'rgba(16, 185, 129, 0.4)', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(22, 23, 27, 0.95) 100%)' }}>
+          <div className="flex justify-between items-center mb-1">
+            <div className="card-client flex items-center gap-2">
+              <IconFileSpreadsheet size={20} style={{ color: 'var(--accent)' }} /> Fichier Excel / CSV
             </div>
             <span
               className="badge"
               style={{
-                background: 'var(--accent-glow)',
+                background: 'rgba(16, 185, 129, 0.2)',
                 color: 'var(--accent)',
-                fontWeight: 800,
                 fontSize: '0.68rem',
               }}
             >
-              ⚡ 100% SANS INTERNET
+              ⚡ 100% sans internet
             </span>
           </div>
           <p className="text-xs text-muted mb-3" style={{ lineHeight: 1.45 }}>
@@ -2082,7 +2075,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
             style={{ minHeight: 48, fontSize: '0.88rem', fontWeight: 700 }}
             onClick={() => excelFileInputRef.current?.click()}
           >
-            <IconFileSpreadsheet size={18} /> CHARGER FICHIER EXCEL / CSV
+            <IconFileSpreadsheet size={18} /> Charger fichier Excel / CSV
           </button>
         </div>
 
@@ -2133,7 +2126,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                 className="btn btn-primary"
                 disabled={!tempApiKey.trim()}
               >
-                VALIDER
+                Valider
               </button>
             </form>
             <div className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -2264,7 +2257,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                     </span>
                   ) : (
                     <span className="flex items-center justify-center gap-2">
-                      NUMÉRISER ({stagedPhotos.length})
+                      Numériser ({stagedPhotos.length})
                     </span>
                   )}
                 </button>
@@ -2284,7 +2277,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                     </span>
                   ) : (
                     <span className="flex items-center justify-center gap-2">
-                      <IconCamera size={20} /> PRENDRE UNE PHOTO
+                      <IconCamera size={20} /> Prendre une photo
                     </span>
                   )}
                 </button>
@@ -2334,7 +2327,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                 onClick={handleParseManual}
                 disabled={!raw.trim()}
               >
-                ANALYSER
+                Analyser
               </button>
             </div>
           )}
@@ -2353,7 +2346,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
         {preview?.payload && (
           <div className="mt-2">
             <div className="card">
-              <div className="section-title" style={{ marginTop: 0 }}>RÉSULTAT</div>
+              <div className="section-title" style={{ marginTop: 0 }}>Résultat</div>
               <p className="font-bold text-lg mb-2">
                 {preview.payload.bills?.length || 0} bon(s) •{' '}
                 {preview.payload.bills?.reduce((s, b) => s + (b.lines?.length || 0), 0)} articles
@@ -2386,7 +2379,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
                 onClick={handleImport}
                 disabled={importing || issues.some((i) => i.severity === 'error')}
               >
-                {importing ? 'Enregistrement...' : 'IMPORTER'}
+                {importing ? 'Enregistrement...' : 'Importer'}
               </button>
             </div>
           </div>
@@ -2404,7 +2397,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
               </div>
 
               <div className="mb-3">
-                <span className="text-xs text-muted font-bold block mb-1">CLÉ D’API</span>
+                <span className="text-xs text-muted font-bold block mb-1">Clé d’API</span>
                 <input
                   className="input"
                   type="password"
@@ -2417,7 +2410,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
               </div>
 
               <div className="mb-4">
-                <span className="text-xs text-muted font-bold block mb-1">MODÈLE IA</span>
+                <span className="text-xs text-muted font-bold block mb-1">Modèle IA</span>
                 <div className="seg-control">
                   {activeProvider.models.map((m) => (
                     <button
@@ -2434,10 +2427,10 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
 
               <div className="confirm-actions">
                 <button className="btn btn-secondary" onClick={() => setShowKeyModal(false)}>
-                  ANNULER
+                  Annuler
                 </button>
                 <button className="btn btn-success" onClick={handleSaveKey}>
-                  ENREGISTRER
+                  Enregistrer
                 </button>
               </div>
             </div>
@@ -2591,7 +2584,7 @@ function BatchContainerModal({
 
         {/* Section 2: Mode de Quantité */}
         <div className="mb-3 pt-2" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
-          <div className="text-xs font-bold text-muted mb-2">2. QUANTITÉ À VALIDER :</div>
+          <div className="text-xs font-bold text-muted mb-2">2. Quantité à valider :</div>
           <div className="flex flex-col gap-2">
             <label className="flex items-start gap-2 cursor-pointer text-sm">
               <input
@@ -2635,7 +2628,7 @@ function BatchContainerModal({
               ? 'Enregistrement...'
               : targetContainerId === 'unselected'
               ? 'Choisissez un colis ci-dessus'
-              : `VALIDER DANS ${targetLabel.toUpperCase()}`}
+              : `Valider dans ${targetLabel}`}
           </span>
         </button>
       </div>
@@ -2709,7 +2702,7 @@ function TransferStageModal({
         <div className="flex justify-between items-center mb-3">
           <div className="modal-title flex items-center gap-2" style={{ margin: 0 }}>
             <IconTransfer size={18} style={{ color: 'var(--accent)' }} />
-            <span>TRANSFÉRER L'ÉTAPE</span>
+            <span>Transférer l'étape</span>
           </div>
           <button className="btn btn-ghost btn-xs btn-icon" onClick={onClose} aria-label="Fermer">
             <IconX size={18} />
@@ -2739,7 +2732,7 @@ function TransferStageModal({
 
         {/* Source Stage */}
         <div className="mb-3">
-          <label className="text-xs font-bold text-muted block mb-1">DÉPLACER DEPUIS (SOURCE) :</label>
+          <label className="text-xs font-bold text-muted block mb-1">Déplacer depuis (source) :</label>
           <div className="flex gap-2">
             {(['chargement', 'preparation', 'pointage'] as Stage[]).map((s) => (
               <button
@@ -2761,7 +2754,7 @@ function TransferStageModal({
 
         {/* Destination Stage */}
         <div className="mb-4">
-          <label className="text-xs font-bold text-muted block mb-1">VERS L'ÉTAPE (DESTINATION) :</label>
+          <label className="text-xs font-bold text-muted block mb-1">Vers l'étape (destination) :</label>
           <div className="flex gap-2">
             {(['preparation', 'chargement', 'pointage'] as Stage[]).map((s) => (
               <button
@@ -3370,7 +3363,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               <div className="flex items-center gap-1.5 flex-wrap">
                 <IconTruck size={17} style={{ color: 'var(--accent)', flexShrink: 0 }} />
                 <span className="font-bold text-xs" style={{ color: 'var(--text-primary)' }}>
-                  EXPÉDITION & VOYAGES CHAUFFEUR
+                  Expédition & voyages chauffeur
                 </span>
                 {bill.shippingStatus === 'fully_shipped' ? (
                   <span
@@ -3383,7 +3376,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                       color: 'var(--accent)',
                     }}
                   >
-                    ✓ SOLDÉ
+                    ✓ Soldé
                   </span>
                 ) : bill.shippingStatus === 'partially_shipped' ? (
                   <span
@@ -3396,7 +3389,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                       color: 'var(--warning)',
                     }}
                   >
-                    ⏳ PARTIEL
+                    ⏳ Partiel
                   </span>
                 ) : null}
               </div>
@@ -3416,25 +3409,22 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               </button>
             </div>
 
+            {/* List of dispatched trips */}
             {trips && trips.length > 0 ? (
-              <div className="flex flex-col gap-1.5 mt-1">
+              <div className="flex flex-col gap-2 mt-2">
                 {trips.map((t) => {
                   const isCancelled = t.status === 'cancelled';
                   const dateStr = t.dispatchedAt
-                    ? new Date(t.dispatchedAt).toLocaleTimeString('fr-FR', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
+                    ? new Date(t.dispatchedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
                     : '';
                   return (
                     <div
                       key={t.id}
-                      className="flex items-center justify-between p-2 rounded text-xs"
+                      className="flex items-center justify-between p-2"
                       style={{
-                        background: isCancelled ? 'rgba(239, 68, 68, 0.08)' : 'var(--bg-input)',
-                        border: isCancelled
-                          ? '1px dashed rgba(239, 68, 68, 0.3)'
-                          : '1px solid var(--glass-border-subtle)',
+                        background: isCancelled ? 'rgba(255, 255, 255, 0.02)' : 'var(--bg-surface)',
+                        borderRadius: 12,
+                        border: isCancelled ? '1px dashed rgba(239, 68, 68, 0.3)' : '1px solid var(--border)',
                         opacity: isCancelled ? 0.6 : 1,
                       }}
                     >
@@ -3442,7 +3432,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                         <div className="font-bold flex items-center gap-1.5">
                           <span>Voyage N° {t.tripNumber}</span>
                           {t.isLastTrip && <span className="text-muted">(Solde)</span>}
-                          {isCancelled && <span className="text-error font-bold">[ANNULÉ]</span>}
+                          {isCancelled && <span className="text-error font-bold">[Annulé]</span>}
                         </div>
                         <div className="text-muted" style={{ fontSize: '0.7rem' }}>
                           {t.totalUnits} pièces • {t.totalContainers} colis
@@ -3799,20 +3789,20 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                     <div className="flex gap-1 flex-wrap">
                       {line.status !== 'active' && (
                         <span className={`badge badge-${line.status === 'out_of_stock' ? 'out-of-stock' : line.status === 'cancelled' ? 'cancelled' : line.status === 'not_found' ? 'not-found' : 'removed'} flex items-center gap-1`}>
-                          {line.status === 'out_of_stock' ? <><IconBan size={11} /> RUPTURE</> :
-                           line.status === 'cancelled' ? <><IconBan size={11} /> ANNULÉ</> :
-                           line.status === 'not_found' ? <><IconSearch size={11} /> INTROUVABLE</> : <><IconX size={11} /> SUPPRIMÉ</>}
+                          {line.status === 'out_of_stock' ? <><IconBan size={11} /> Rupture</> :
+                           line.status === 'cancelled' ? <><IconBan size={11} /> Annulé</> :
+                           line.status === 'not_found' ? <><IconSearch size={11} /> Introuvable</> : <><IconX size={11} /> Supprimé</>}
                         </span>
                       )}
-                      {disc.isModified && <span className="badge badge-modified flex items-center gap-1"><IconPencil size={11} /> MODIFIÉ</span>}
+                      {disc.isModified && <span className="badge badge-modified flex items-center gap-1"><IconPencil size={11} /> Modifié</span>}
                       {line.status === 'active' && disc.isExact && stageTotal > 0 && (
-                        <span className="badge badge-exact flex items-center gap-1"><IconCheck size={11} /> EXACT</span>
+                        <span className="badge badge-exact flex items-center gap-1"><IconCheck size={11} /> Exact</span>
                       )}
                       {line.status === 'active' && disc.isShort && (
-                        <span className="badge badge-short flex items-center gap-1"><IconWarning size={11} /> {showQuantities ? `${disc.remaining} MANQ` : 'MANQUANT'}</span>
+                        <span className="badge badge-short flex items-center gap-1"><IconWarning size={11} /> {showQuantities ? `${disc.remaining} Manq` : 'Manquant'}</span>
                       )}
                       {line.status === 'active' && disc.isOver && (
-                        <span className="badge badge-over">{showQuantities ? `${disc.over} EXCÉD` : 'EXCÉDENT'}</span>
+                        <span className="badge badge-over">{showQuantities ? `${disc.over} Excéd` : 'Excédent'}</span>
                       )}
                     </div>
                   </div>
@@ -4107,7 +4097,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
             <div className="flex justify-between items-center mb-2">
               <div className="font-bold text-sm text-danger flex items-center gap-1">
-                <IconWarning size={16} /> ARTICLE INTROUVABLE
+                <IconWarning size={16} /> Article introuvable
               </div>
               <button className="btn btn-xs btn-ghost btn-icon" onClick={() => setUnknownBarcodeModal(null)}>
                 <IconX size={16} />
@@ -4594,7 +4584,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
       }
     }
     await updateLineStatus(lineId, newStatus);
-    showToast(`Statut → ${newStatus === 'cancelled' ? 'ANNULÉ' : newStatus === 'not_found' ? 'INTROUVABLE' : 'ACTIF'}`, setToast);
+    showToast(`Statut → ${newStatus === 'cancelled' ? 'Annulé' : newStatus === 'not_found' ? 'Introuvable' : 'Actif'}`, setToast);
   };
 
   return (
@@ -4608,7 +4598,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               N°{line.no}
             </span>
             {line.page != null && (
-              <span className="text-sm font-bold text-muted">PAGE {line.page}</span>
+              <span className="badge" style={{ background: 'var(--bg-surface)' }}>
+                P{line.page}
+              </span>
             )}
             <span
               className={`badge ${disc.isExact && stageTotal > 0 ? 'badge-exact' : disc.isOver ? 'badge-over' : disc.isShort && stageTotal > 0 ? 'badge-short' : ''}`}
@@ -4721,7 +4713,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
           {disc.isModified && (
             <div className="mt-2">
-              <span className="badge badge-modified">MODIFIÉ</span>
+              <span className="badge badge-modified">Modifié</span>
               <span className="text-xs text-muted" style={{ marginLeft: 8 }}>
                 Original: {line.originalOrderedQty}
               </span>
@@ -4730,10 +4722,10 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           {line.status !== 'active' && (
             <div className="mt-2">
               <span className={`badge badge-${line.status === 'out_of_stock' ? 'out-of-stock' : line.status === 'cancelled' ? 'cancelled' : 'not-found'}`}>
-                {line.status === 'out_of_stock' ? 'RUPTURE DÉFINITIVE' :
-                 line.status === 'cancelled' ? 'ANNULÉ' :
-                 line.status === 'not_found' ? 'INTROUVABLE' :
-                 'SUPPRIMÉ PAR RÉVISION'}
+                {line.status === 'out_of_stock' ? 'Rupture définitive' :
+                 line.status === 'cancelled' ? 'Annulé' :
+                 line.status === 'not_found' ? 'Introuvable' :
+                 'Supprimé par révision'}
               </span>
             </div>
           )}
@@ -4743,7 +4735,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
         <div className="card">
           <div className="flex justify-between items-center">
             <div>
-              <div className="text-xs text-muted">ATTENDU</div>
+              <div className="text-xs text-muted">Attendu</div>
               <div className="qty-big qty-expected">{showQuantities ? line.orderedQty : '•••'}</div>
             </div>
             <div className="flex items-center gap-2">
@@ -4761,7 +4753,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 setEditingQty(true);
                 setEditQtyVal(String(line.orderedQty));
               }}>
-                <IconPencil size={13} /> MODIFIER
+                <IconPencil size={13} /> Modifier
               </button>
             </div>
           </div>
@@ -4770,15 +4762,15 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
 
           <div className="flex gap-3 flex-wrap">
             <div>
-              <div className="text-xs text-muted">PRÉPARÉ</div>
+              <div className="text-xs text-muted">Préparé</div>
               <div className="font-bold text-lg">{stageTotals.preparation}</div>
             </div>
             <div>
-              <div className="text-xs text-muted">CHARGÉ</div>
+              <div className="text-xs text-muted">Chargé</div>
               <div className="font-bold text-lg">{stageTotals.chargement}</div>
             </div>
             <div>
-              <div className="text-xs text-muted">POINTÉ</div>
+              <div className="text-xs text-muted">Pointé</div>
               <div className="font-bold text-lg">{stageTotals.pointage}</div>
             </div>
           </div>
@@ -5872,15 +5864,15 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             <div>
               <div className="text-sm mb-2" style={{ color: 'var(--warning)' }}>
                 Statut actuel : <strong>{
-                  line.status === 'out_of_stock' ? 'RUPTURE DE STOCK' :
-                  line.status === 'not_found' ? 'INTROUVABLE EN RAYON' :
-                  line.status === 'cancelled' ? 'ANNULÉ PAR CLIENT' : line.status
+                  line.status === 'out_of_stock' ? 'Rupture de stock' :
+                  line.status === 'not_found' ? 'Introuvable en rayon' :
+                  line.status === 'cancelled' ? 'Annulé par client' : line.status
                 }</strong>
               </div>
 
               {line.substitutionNote && (
                 <div className="mb-2 p-2 text-xs" style={{ background: 'rgba(255, 255, 255, 0.04)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border-bright)' }}>
-                  <div className="font-bold text-accent mb-0.5">SUBSTITUTION ASSOCIÉE :</div>
+                  <div className="font-bold text-accent mb-0.5">Substitution associée :</div>
                   <div>{line.substitutionNote}</div>
                 </div>
               )}
@@ -5891,7 +5883,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   className="btn btn-sm btn-primary flex items-center justify-center gap-1 flex-1"
                   onClick={() => handleStatusChange('active')}
                 >
-                  <IconUndo size={15} /> RÉACTIVER L'ARTICLE
+                  <IconUndo size={15} /> Réactiver l'article
                 </button>
                 <button
                   type="button"
@@ -6051,7 +6043,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
         {editingQty && (
           <div className="modal-backdrop" onClick={() => setEditingQty(false)}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-title">MODIFIER QUANTITÉ ATTENDUE</div>
+              <div className="modal-title">Modifier la quantité attendue</div>
               <div className="text-sm text-muted mb-2">
                 Original: {line.originalOrderedQty} • Actuel: {line.orderedQty}
               </div>
@@ -6063,12 +6055,12 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 onChange={(e) => setEditQtyVal(e.target.value)}
                 autoFocus
               />
-              <div className="section-title">RAISON</div>
+              <div className="section-title">Raison</div>
               <div className="flex gap-2 flex-wrap">
                 {([
-                  ['official_change', 'OFFICIEL'],
-                  ['bill_correction', 'CORRECTION BL'],
-                  ['other', 'AUTRE'],
+                  ['official_change', 'Officiel'],
+                  ['bill_correction', 'Correction BL'],
+                  ['other', 'Autre'],
                 ] as [ChangeReason, string][]).map(([val, label]) => (
                   <button
                     key={val}
@@ -6081,10 +6073,10 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               </div>
               <div className="confirm-actions">
                 <button className="btn btn-secondary" onClick={() => setEditingQty(false)}>
-                  ANNULER
+                  Annuler
                 </button>
                 <button className="btn btn-success" onClick={handleSaveQty}>
-                  ENREGISTRER
+                  Enregistrer
                 </button>
               </div>
             </div>
@@ -6096,10 +6088,10 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           <div className="modal-backdrop" onClick={() => setEditingField(null)}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
               <div className="modal-title">
-                MODIFIER {editingField === 'designation' ? 'DÉSIGNATION' :
-                  editingField === 'reference' ? 'RÉFÉRENCE' :
+                Modifier {editingField === 'designation' ? 'désignation' :
+                  editingField === 'reference' ? 'référence' :
                   editingField === 'ean' ? 'EAN' :
-                  editingField === 'no' ? 'N°' : 'PAGE'}
+                  editingField === 'no' ? 'N°' : 'page'}
               </div>
               <div className="text-sm text-muted mb-2">
                 Original: {editingField === 'designation' ? line.originalDesignation :
@@ -6118,7 +6110,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               />
               <div className="confirm-actions">
                 <button className="btn btn-secondary" onClick={() => setEditingField(null)}>
-                  ANNULER
+                  Annuler
                 </button>
                 <button className="btn btn-success" onClick={async () => {
                   const field = editingField;
@@ -6214,8 +6206,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           >
             <IconCheck size={20} />
             {isSubmitting
-              ? 'ENREGISTRÉ !'
-              : `AJOUTER ${batchQty > 0 ? batchQty : ''} ${stage === 'preparation' ? 'PRÉPARÉ' : stage === 'chargement' ? 'CHARGÉ' : 'POINTÉ'} & RETOURNER`}
+              ? 'Enregistré !'
+              : `Ajouter ${batchQty > 0 ? batchQty : ''} ${stage === 'preparation' ? 'préparé' : stage === 'chargement' ? 'chargé' : 'pointé'} & retourner`}
           </button>
 
           {nextLine && (
@@ -7160,25 +7152,25 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
     if (stageProblems.length === 0) {
       text += `*Aucun écart signalé :* Toutes les lignes préparées sont conformes.\n\n`;
     } else {
-      text += `*ANOMALIES & ÉCARTS DÉTECTÉS (${stageProblems.length}) :*\n\n`;
+      text += `*Anomalies & écarts détectés (${stageProblems.length}) :*\n\n`;
       stageProblems.forEach((p, idx) => {
         const evts = eventsByLine.get(p.id!) || [];
         const prepQty = sumStageEvents(evts, 'preparation');
         text += `${idx + 1}. *N°${p.no}* - ${p.designation}\n`;
         if (p.reference) text += `   Réf: ${p.reference}\n`;
         if (p.status === 'out_of_stock') {
-          text += `   [RUPTURE DÉFINITIVE EN ENTREPÔT] (Attendu: ${p.orderedQty})\n`;
+          text += `   [Rupture définitive en entrepôt] (Attendu: ${p.orderedQty})\n`;
         } else if (p.status === 'not_found') {
-          text += `   [ARTICLE INTROUVABLE] (Attendu: ${p.orderedQty})\n`;
+          text += `   [Article introuvable] (Attendu: ${p.orderedQty})\n`;
         } else if (p.status === 'cancelled') {
-          text += `   [ARTICLE ANNULÉ]\n`;
+          text += `   [Article annulé]\n`;
         } else if (prepQty < p.orderedQty) {
-          text += `   [MANQUANT] : Préparé ${prepQty} / ${p.orderedQty} (Reliquat: -${p.orderedQty - prepQty})\n`;
+          text += `   [Manquant] : Préparé ${prepQty} / ${p.orderedQty} (Reliquat: -${p.orderedQty - prepQty})\n`;
         } else if (prepQty > p.orderedQty) {
-          text += `   [EXCÉDENT] : Préparé ${prepQty} / ${p.orderedQty} (+${prepQty - p.orderedQty})\n`;
+          text += `   [Excédent] : Préparé ${prepQty} / ${p.orderedQty} (+${prepQty - p.orderedQty})\n`;
         }
         if (p.orderedQty !== p.originalOrderedQty) {
-          text += `   [MODIFIÉ] : Initialement ${p.originalOrderedQty}, ramené à ${p.orderedQty}\n`;
+          text += `   [Modifié] : Initialement ${p.originalOrderedQty}, ramené à ${p.orderedQty}\n`;
         }
 
         if (stageScope === 'pointage') {
@@ -7837,12 +7829,12 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
                               <span>Voyage N° {t.tripNumber}</span>
                               {t.isLastTrip && (
                                 <span className="badge badge-success text-[10px]">
-                                  SOLDE / DERNIER
+                                  Solde / Dernier
                                 </span>
                               )}
                               {isCancelled && (
                                 <span className="badge badge-danger text-[10px]">
-                                  ANNULÉ
+                                  Annulé
                                 </span>
                               )}
                             </div>
@@ -7954,10 +7946,10 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
                 {line.page != null && <span className="text-xs text-muted">P{line.page}</span>}
                 {line.status !== 'active' && (
                   <span className={`badge badge-${line.status === 'out_of_stock' ? 'out-of-stock' : line.status === 'cancelled' ? 'cancelled' : 'not-found'}`}>
-                    {line.status === 'out_of_stock' ? 'RUPTURE' : line.status === 'cancelled' ? 'ANNULÉ' : 'INTROUVABLE'}
+                    {line.status === 'out_of_stock' ? 'Rupture' : line.status === 'cancelled' ? 'Annulé' : 'Introuvable'}
                   </span>
                 )}
-                {isModified && <span className="badge badge-modified">MODIFIÉ</span>}
+                {isModified && <span className="badge badge-modified">Modifié</span>}
               </div>
               <div className="text-sm mt-1">{line.reference && `REF: ${line.reference} • `}{line.designation}</div>
 
