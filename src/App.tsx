@@ -164,6 +164,10 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { SettingsModal } from './SettingsModal';
 import { FastScanQuantityCard } from './FastScanQuantityCard';
 import { ConformityDonutChart } from './ConformityDonutChart';
+import { ConcentricStageRings } from './ConcentricStageRings';
+import { WarehouseProcessFlow } from './WarehouseProcessFlow';
+import { TruckLoadingDiagram } from './TruckLoadingDiagram';
+import { StageDistributionBar } from './StageDistributionBar';
 import { decomposeTimestamp, detectWilaya, ALGERIAN_WILAYAS } from './wilayas';
 import {
   playSuccessChime,
@@ -1596,11 +1600,11 @@ function BillCard({
   const point = calcBillProgress(lines, eventsByLine, 'pointage');
 
   return (
-    <div className="card" onClick={onClick}>
-      <div className="card-header">
-        <div>
-          <div className="card-client">{bill.client}</div>
-          <div className="card-bill-number flex items-center gap-1.5 flex-wrap">
+    <div className="card" onClick={onClick} style={{ cursor: 'pointer', padding: '18px 20px' }}>
+      <div className="card-header" style={{ alignItems: 'flex-start', gap: 14 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="card-client" style={{ fontSize: '1.08rem', fontWeight: 800 }}>{bill.client}</div>
+          <div className="card-bill-number flex items-center gap-1.5 flex-wrap mt-1">
             <span>{bill.billNumber}</span>
             {bill.documentType && (
               <span
@@ -1699,45 +1703,60 @@ function BillCard({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {bill.status === 'completed' ? (
-            <span className="badge" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>
-              ARCHIVÉ
-            </span>
-          ) : (
-            <span className="badge badge-active">{lines.length} lignes</span>
-          )}
-          {onArchive && bill.status === 'active' && (
-            <button
-              className="btn btn-xs btn-ghost btn-icon"
-              title="Clôturer et archiver ce bon"
-              style={{ padding: 4 }}
-              onClick={(e) => {
-                e.stopPropagation();
-                onArchive();
-              }}
-            >
-              <IconCheck size={16} style={{ color: 'var(--accent)' }} />
-            </button>
-          )}
-          {onRestore && bill.status === 'completed' && (
-            <button
-              className="btn btn-xs btn-ghost btn-icon"
-              title="Restaurer dans les bons actifs"
-              style={{ padding: 4 }}
-              onClick={(e) => {
-                e.stopPropagation();
-                onRestore();
-              }}
-            >
-              <IconUndo size={16} />
-            </button>
-          )}
+
+        {/* Glanceable Apple Watch 3-Stage Activity Rings & Status */}
+        <div className="flex items-center gap-2.5 flex-shrink-0">
+          <ConcentricStageRings
+            prep={prep}
+            load={load}
+            point={point}
+            size="sm"
+            showCenterText={true}
+          />
+          <div className="flex flex-col items-end gap-1">
+            {bill.status === 'completed' ? (
+              <span className="badge" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>
+                ARCHIVÉ
+              </span>
+            ) : (
+              <span className="badge badge-active">{lines.length} lg</span>
+            )}
+            {onArchive && bill.status === 'active' && (
+              <button
+                className="btn btn-xs btn-ghost btn-icon"
+                title="Clôturer et archiver ce bon"
+                style={{ padding: 4 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onArchive();
+                }}
+              >
+                <IconCheck size={16} style={{ color: 'var(--accent)' }} />
+              </button>
+            )}
+            {onRestore && bill.status === 'completed' && (
+              <button
+                className="btn btn-xs btn-ghost btn-icon"
+                title="Restaurer dans les bons actifs"
+                style={{ padding: 4 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRestore();
+                }}
+              >
+                <IconUndo size={16} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
-      <ProgressRow label="Préparation" progress={prep} />
-      <ProgressRow label="Chargement" progress={load} />
-      <ProgressRow label="Pointage" progress={point} />
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+        <ProgressRow label="Préparation" progress={prep} color="#10b981" />
+        <ProgressRow label="Chargement" progress={load} color="#3b82f6" />
+        <ProgressRow label="Pointage" progress={point} color="#a855f7" />
+      </div>
+
       {(bill.preparedBy || bill.loadedBy || bill.checkedBy || bill.tripCount) && (
         <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-glass text-[11px] text-muted flex-wrap">
           <IconUser size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
@@ -1752,17 +1771,50 @@ function BillCard({
 }
 
 
-function ProgressRow({ label, progress }: { label: string; progress: { done: number; total: number; percent: number } }) {
+function ProgressRow({
+  label,
+  progress,
+  color = 'var(--accent)',
+}: {
+  label: string;
+  progress: { done: number; total: number; percent: number };
+  color?: string;
+}) {
   return (
-    <div className="progress-row">
-      <span className="progress-label">{label}</span>
-      <div className="progress-bar">
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.74rem' }}>
+      <span style={{ width: 76, color: 'var(--text-secondary)', fontWeight: 600, flexShrink: 0 }}>
+        {label}
+      </span>
+      <div
+        style={{
+          flex: 1,
+          height: 6,
+          borderRadius: 9999,
+          background: 'var(--bg-surface-elevated)',
+          overflow: 'hidden',
+          position: 'relative',
+        }}
+      >
         <div
-          className={`progress-fill ${progress.percent === 100 ? 'complete' : ''}`}
-          style={{ width: `${progress.percent}%` }}
+          style={{
+            width: `${progress.percent}%`,
+            height: '100%',
+            borderRadius: 9999,
+            background: color,
+            transition: 'width 0.4s ease',
+          }}
         />
       </div>
-      <span className="progress-pct">
+      <span
+        style={{
+          fontSize: '0.7rem',
+          fontWeight: 700,
+          color: progress.percent === 100 ? 'var(--accent)' : 'var(--text-muted)',
+          width: 50,
+          textAlign: 'right',
+          flexShrink: 0,
+        }}
+      >
         {progress.done}/{progress.total}
       </span>
     </div>
@@ -2787,6 +2839,44 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
     return res;
   }, [events]);
 
+  const billEventsByLine = React.useMemo(() => {
+    const map = new Map<number, CountEvent[]>();
+    for (const e of events || []) {
+      const arr = map.get(e.orderLineId) || [];
+      arr.push(e);
+      map.set(e.orderLineId, arr);
+    }
+    return map;
+  }, [events]);
+
+  const prepMetric = React.useMemo(() => calcBillProgress(lines || [], billEventsByLine, 'preparation'), [lines, billEventsByLine]);
+  const loadMetric = React.useMemo(() => calcBillProgress(lines || [], billEventsByLine, 'chargement'), [lines, billEventsByLine]);
+  const pointMetric = React.useMemo(() => calcBillProgress(lines || [], billEventsByLine, 'pointage'), [lines, billEventsByLine]);
+
+  const truckDiagramMetrics = React.useMemo(() => {
+    const totalOrderedPieces = (lines || []).reduce((acc, l) => acc + (l.orderedQty || 0), 0);
+    const validTrips = (trips || []).filter((t) => t.status !== 'cancelled');
+    const totalDispatchedPieces = validTrips.reduce((acc, t) => acc + (t.totalUnits || 0), 0);
+    const totalDispatchedContainers = validTrips.reduce((acc, t) => acc + (t.totalContainers || 0), 0);
+    const totalContainersCount = (containers || []).length;
+
+    const loadedPieces = billStageUnitTotals.chargement;
+    const isFullyShipped = bill?.shippingStatus === 'fully_shipped';
+
+    const dockRemainingPieces = Math.max(0, totalOrderedPieces - (isFullyShipped ? totalOrderedPieces : totalDispatchedPieces));
+    const dockRemainingContainers = Math.max(0, totalContainersCount - (isFullyShipped ? totalContainersCount : totalDispatchedContainers));
+
+    return {
+      tripNumber: validTrips.length + (isFullyShipped ? 0 : 1),
+      totalTrips: Math.max(1, validTrips.length + (isFullyShipped ? 0 : 1)),
+      loadedContainersCount: totalContainersCount,
+      loadedUnitsCount: loadedPieces,
+      dockRemainingContainersCount: dockRemainingContainers,
+      dockRemainingUnitsCount: dockRemainingPieces,
+      isFullyShipped,
+    };
+  }, [lines, trips, containers, billStageUnitTotals.chargement, bill?.shippingStatus]);
+
   const handleStageChange = (s: Stage) => {
     setStage(s);
     sessionStorage.setItem(`pointage_stage_${billId}`, s);
@@ -3166,23 +3256,21 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
       </header>
 
       <div className="app-content">
-        {/* Stage tabs */}
-        <div className="stage-tabs">
-          {(['preparation', 'chargement', 'pointage'] as Stage[]).map((s) => (
-            <button
-              key={s}
-              className={`stage-tab ${stage === s ? 'active' : ''}`}
-              onClick={() => handleStageChange(s)}
-            >
-              {s === 'preparation' ? 'Préparation' : s === 'chargement' ? 'Chargement' : 'Pointage'}
-            </button>
-          ))}
-        </div>
+        {/* Visual Interactive Process Flow Pipeline (Apple Glass & Less-is-More) */}
+        <WarehouseProcessFlow
+          currentStage={stage}
+          onSelectStage={handleStageChange}
+          metrics={{
+            preparation: prepMetric,
+            chargement: loadMetric,
+            pointage: pointMetric,
+          }}
+        />
 
         {/* Stage Operator Attribution Pill */}
         <div
           className="card p-2 mb-2 flex items-center justify-between"
-          style={{ background: 'var(--bg-surface)', border: '1px solid var(--glass-border-subtle)' }}
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--glass-border-subtle)', borderRadius: 20 }}
         >
           <div className="flex items-center gap-2">
             <IconUser size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
@@ -3192,10 +3280,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               </span>{' '}
               <strong style={{ color: 'var(--text-primary)' }}>
                 {stage === 'preparation'
-                  ? bill.preparedBy || 'Non assigné'
+                  ? bill?.preparedBy || 'Non assigné'
                   : stage === 'chargement'
-                  ? bill.loadedBy || 'Non assigné'
-                  : bill.checkedBy || 'Non assigné'}
+                  ? bill?.loadedBy || 'Non assigné'
+                  : bill?.checkedBy || 'Non assigné'}
               </strong>
             </div>
           </div>
@@ -3206,11 +3294,16 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             onClick={() => setShowStageSignOffModal(true)}
           >
             <IconCheck size={12} />
-            {(stage === 'preparation' ? bill.preparedBy : stage === 'chargement' ? bill.loadedBy : bill.checkedBy)
+            {(stage === 'preparation' ? bill?.preparedBy : stage === 'chargement' ? bill?.loadedBy : bill?.checkedBy)
               ? 'Changer'
               : 'Signer'}
           </button>
         </div>
+
+        {/* Visual Truck Loading & Dock Staging Diagram */}
+        {(stage === 'chargement' || (trips && trips.length > 0)) && (
+          <TruckLoadingDiagram {...truckDiagramMetrics} />
+        )}
 
         {/* Rotations Chauffeur / Expédition en Plusieurs Voyages */}
         {(stage === 'chargement' || (trips && trips.length > 0)) && (
@@ -3219,6 +3312,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             style={{
               background: trips && trips.length > 0 ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-surface)',
               border: trips && trips.length > 0 ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid var(--glass-border-subtle)',
+              borderRadius: 20,
             }}
           >
             <div className="flex justify-between items-center mb-1.5">
@@ -7170,10 +7264,19 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           }}
         />
 
+        {/* Visual Segmented Distribution Capsule (Apple Health Style) */}
+        <StageDistributionBar
+          total={lines.length}
+          conforme={conformeCount}
+          shortCount={shortCount}
+          overCount={overCount}
+          problemCount={problemStatusCount}
+        />
+
         {/* Operator Signatures Card */}
         <div
           className="card p-3 mb-3 flex items-center justify-between"
-          style={{ background: 'var(--bg-surface)', border: '1px solid var(--glass-border-subtle)' }}
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--glass-border-subtle)', borderRadius: 20 }}
         >
           <div className="flex items-center gap-2.5 min-w-0">
             <IconUser size={20} style={{ color: 'var(--accent)', flexShrink: 0 }} />
