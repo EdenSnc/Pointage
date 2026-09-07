@@ -20,6 +20,7 @@ import {
   renameOperator,
   setActiveOperator as persistActiveOperator,
 } from './operators';
+import { hapticTap, playSuccessChime } from './audio';
 
 interface OperatorModalProps {
   isOpen: boolean;
@@ -91,6 +92,9 @@ export function OperatorModal({
       return;
     }
 
+    hapticTap('medium');
+    playSuccessChime();
+
     const updated = addOperator(clean);
     persistActiveOperator(clean);
     onSelectOperator(clean);
@@ -102,6 +106,7 @@ export function OperatorModal({
 
   // --- Rename Operator ---
   const handleStartEdit = (op: string) => {
+    hapticTap('light');
     setDeletingOp(null);
     setEditingOp(op);
     setEditingValue(op);
@@ -121,6 +126,9 @@ export function OperatorModal({
       return;
     }
 
+    hapticTap('medium');
+    playSuccessChime();
+
     const wasActive = activeOperator.toLowerCase() === oldName.toLowerCase();
     const newActive = wasActive ? clean : activeOperator;
 
@@ -138,6 +146,7 @@ export function OperatorModal({
 
   // --- Delete Operator ---
   const handleStartDelete = (op: string) => {
+    hapticTap('light');
     setEditingOp(null);
     setDeletingOp(op);
     setErrorMsg(null);
@@ -148,6 +157,8 @@ export function OperatorModal({
       setErrorMsg('Au moins un opérateur doit rester dans la liste.');
       return;
     }
+
+    hapticTap('medium');
 
     const updated = removeOperator(op);
     const wasActive = activeOperator.toLowerCase() === op.toLowerCase();
@@ -170,20 +181,20 @@ export function OperatorModal({
         className="modal-content card"
         onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: 400,
+          maxWidth: 410,
           width: '92%',
-          padding: '24px',
-          borderRadius: 'var(--radius-card)',
+          padding: '26px 22px 20px',
+          borderRadius: '28px',
           boxShadow: 'var(--glass-shadow-lg)',
         }}
       >
         {/* Header with Title and Close Button */}
-        <div className="flex justify-between items-center mb-3">
-          <div className="flex items-center gap-2.5 font-bold text-base" style={{ color: 'var(--text-primary)' }}>
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center gap-3 font-bold text-base" style={{ color: 'var(--text-primary)' }}>
             <div
               style={{
-                width: 34,
-                height: 34,
+                width: 38,
+                height: 38,
                 borderRadius: '50%',
                 background: 'var(--accent-glow)',
                 border: '1.5px solid var(--accent)',
@@ -194,10 +205,10 @@ export function OperatorModal({
                 flexShrink: 0,
               }}
             >
-              <IconUser size={18} />
+              <IconUser size={20} />
             </div>
             <div>
-              <div style={{ lineHeight: 1.1, fontSize: '1rem', fontWeight: 800 }}>Équipe & Opérateur</div>
+              <div style={{ lineHeight: 1.1, fontSize: '1.05rem', fontWeight: 800 }}>Équipe & Opérateur</div>
               <div className="text-xs text-muted" style={{ fontWeight: 500, marginTop: 2 }}>
                 Qui tient ce terminal actuellement ?
               </div>
@@ -206,11 +217,11 @@ export function OperatorModal({
           <button
             type="button"
             className="header-icon-btn"
-            style={{ width: 34, height: 34 }}
+            style={{ width: 36, height: 36 }}
             onClick={onClose}
             aria-label="Fermer"
           >
-            <IconX size={16} />
+            <IconX size={17} />
           </button>
         </div>
 
@@ -222,6 +233,7 @@ export function OperatorModal({
               background: 'var(--danger-bg)',
               border: '1px solid var(--danger-border)',
               color: 'var(--danger)',
+              borderRadius: '16px',
             }}
           >
             <IconAlertTriangle size={15} style={{ flexShrink: 0 }} />
@@ -236,10 +248,17 @@ export function OperatorModal({
           </div>
         )}
 
-        {/* Operator Cards List */}
+        {/* Operator Cards List — Distinct Floating Islands with 12px gap and 24px bottom space */}
         <div
-          className="flex flex-col gap-2.5 mb-4"
-          style={{ maxHeight: '320px', overflowY: 'auto', paddingRight: 2 }}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+            marginBottom: 24,
+            maxHeight: 330,
+            overflowY: 'auto',
+            padding: '2px 4px 6px',
+          }}
         >
           {localOperators.map((op) => {
             const isActive = op.toLowerCase() === activeOperator.toLowerCase();
@@ -251,10 +270,15 @@ export function OperatorModal({
               return (
                 <div
                   key={op}
-                  className="flex items-center justify-between p-3 rounded-xl"
                   style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 14px',
+                    borderRadius: '20px',
                     background: 'var(--danger-bg)',
                     border: '1px solid var(--danger-border)',
+                    minHeight: 52,
                   }}
                 >
                   <div className="text-xs font-bold" style={{ color: 'var(--danger)' }}>
@@ -264,7 +288,7 @@ export function OperatorModal({
                     <button
                       type="button"
                       className="btn btn-danger btn-xs"
-                      style={{ padding: '6px 12px', fontWeight: 700 }}
+                      style={{ padding: '6px 12px', fontWeight: 700, borderRadius: '12px' }}
                       onClick={() => handleConfirmDelete(op)}
                     >
                       Oui, supprimer
@@ -272,7 +296,7 @@ export function OperatorModal({
                     <button
                       type="button"
                       className="btn btn-secondary btn-xs"
-                      style={{ padding: '6px 10px' }}
+                      style={{ padding: '6px 10px', borderRadius: '12px' }}
                       onClick={() => setDeletingOp(null)}
                     >
                       Annuler
@@ -287,20 +311,26 @@ export function OperatorModal({
               return (
                 <div
                   key={op}
-                  className="flex items-center gap-2 p-2 rounded-xl"
                   style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 10px',
+                    borderRadius: '20px',
                     background: 'var(--bg-surface-elevated)',
                     border: '1.5px solid var(--accent)',
+                    minHeight: 52,
                   }}
                 >
                   <input
                     type="text"
                     className="input flex-1"
                     style={{
-                      height: 38,
-                      fontSize: '0.9rem',
+                      height: 40,
+                      fontSize: '0.92rem',
                       fontWeight: 700,
                       padding: '0 12px',
+                      borderRadius: '14px',
                     }}
                     value={editingValue}
                     autoFocus
@@ -314,7 +344,7 @@ export function OperatorModal({
                   <button
                     type="button"
                     className="btn btn-primary btn-sm flex items-center justify-center"
-                    style={{ width: 38, height: 38, padding: 0 }}
+                    style={{ width: 40, height: 40, padding: 0, borderRadius: '14px' }}
                     onClick={() => handleSaveEdit(op)}
                     title="Enregistrer"
                   >
@@ -323,7 +353,7 @@ export function OperatorModal({
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm flex items-center justify-center"
-                    style={{ width: 38, height: 38, padding: 0 }}
+                    style={{ width: 40, height: 40, padding: 0, borderRadius: '14px' }}
                     onClick={() => setEditingOp(null)}
                     title="Annuler"
                   >
@@ -333,18 +363,26 @@ export function OperatorModal({
               );
             }
 
-            // Standard Operator Row
+            // Standard Operator Row (Rounded Card with Soft Shadow)
             return (
               <div
                 key={op}
-                className="flex items-center justify-between p-2.5 rounded-xl cursor-pointer"
                 style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 14px',
+                  borderRadius: '20px',
                   background: isActive ? 'var(--accent-glow)' : 'var(--bg-surface)',
                   border: isActive ? '1.5px solid var(--accent)' : '1px solid var(--glass-border-subtle)',
-                  transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
-                  minHeight: 48,
+                  transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+                  minHeight: 52,
+                  boxShadow: isActive ? '0 4px 14px -2px rgba(16, 185, 129, 0.25)' : '0 2px 6px rgba(0, 0, 0, 0.03)',
+                  cursor: 'pointer',
                 }}
                 onClick={() => {
+                  hapticTap('medium');
+                  playSuccessChime();
                   onSelectOperator(op);
                   persistActiveOperator(op);
                   onClose();
@@ -354,15 +392,15 @@ export function OperatorModal({
                 <div className="flex items-center gap-3 min-w-0">
                   <div
                     style={{
-                      width: 32,
-                      height: 32,
+                      width: 36,
+                      height: 36,
                       borderRadius: '50%',
-                      background: isActive ? 'var(--accent)' : 'rgba(255, 255, 255, 0.08)',
+                      background: isActive ? 'var(--accent)' : 'rgba(255, 255, 255, 0.1)',
                       color: isActive ? '#ffffff' : 'var(--text-secondary)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: '0.85rem',
+                      fontSize: '0.9rem',
                       fontWeight: 800,
                       flexShrink: 0,
                     }}
@@ -387,7 +425,7 @@ export function OperatorModal({
                   {isActive && (
                     <span
                       className="badge badge-exact flex items-center gap-1 mr-1"
-                      style={{ padding: '2px 8px', fontSize: '0.72rem', fontWeight: 800 }}
+                      style={{ padding: '3px 9px', fontSize: '0.72rem', fontWeight: 800, borderRadius: '9999px' }}
                     >
                       <IconCheck size={11} /> Actif
                     </span>
@@ -424,20 +462,43 @@ export function OperatorModal({
           })}
         </div>
 
-        {/* Add New Operator Form */}
-        <form onSubmit={handleAdd} className="flex gap-2 mb-4">
+        {/* Add New Operator Form — Separated by generous whitespace */}
+        <form
+          onSubmit={handleAdd}
+          style={{
+            display: 'flex',
+            gap: 10,
+            marginBottom: 22,
+          }}
+        >
           <input
             type="text"
             className="input"
             placeholder="Nouveau prénom (ex: Yacine)..."
             value={newOpName}
             onChange={(e) => setNewOpName(e.target.value)}
-            style={{ fontSize: '0.86rem', height: 42 }}
+            style={{
+              fontSize: '0.88rem',
+              height: 46,
+              borderRadius: '18px',
+              padding: '0 16px',
+              flex: 1,
+            }}
           />
           <button
             type="submit"
-            className="btn btn-secondary flex items-center justify-center gap-1"
-            style={{ height: 42, padding: '0 16px', fontWeight: 700, flexShrink: 0 }}
+            className="btn btn-secondary"
+            style={{
+              height: 46,
+              padding: '0 18px',
+              fontWeight: 700,
+              borderRadius: '18px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              flexShrink: 0,
+            }}
             disabled={!newOpName.trim()}
           >
             <IconPlus size={16} /> Ajouter
@@ -446,13 +507,14 @@ export function OperatorModal({
 
         {/* Footer */}
         <div className="flex justify-between items-center text-xs text-muted pt-3 border-t border-glass">
-          <span className="flex items-center gap-1 font-medium">
-            <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)' }} />
+          <span className="flex items-center gap-1.5 font-medium">
+            <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 8px var(--accent)' }} />
             100% Hors-Ligne
           </span>
           <button
             type="button"
             className="btn btn-ghost btn-xs text-secondary font-semibold"
+            style={{ borderRadius: '12px', padding: '6px 12px' }}
             onClick={onClose}
           >
             Fermer
