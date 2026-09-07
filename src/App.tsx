@@ -1798,7 +1798,7 @@ function BillCard({
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="card-client" style={{ fontSize: '1.08rem', fontWeight: 800 }}>{bill.client}</div>
           <div className="card-bill-number flex items-center gap-1.5 flex-wrap mt-1">
-            <span>{bill.billNumber}</span>
+            <span>{bill.billNumber === 'NOTE-MANUSCRITE' ? 'Note manuscrite (Sans N°)' : bill.billNumber}</span>
             {bill.documentType && (
               <span
                 style={{
@@ -1911,7 +1911,7 @@ function BillCard({
                 Archivé
               </span>
             ) : (
-              <span className="badge badge-active">{lines.length} lg</span>
+              <span className="badge badge-active">{lines.length} {lines.length > 1 ? 'articles' : 'article'}</span>
             )}
             {onArchive && bill.status === 'active' && (
               <button
@@ -2242,39 +2242,9 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
           onChange={handleFileChange}
         />
 
-        {/* 100% Offline Excel / CSV Import Card */}
-        <div className="card" style={{ borderColor: 'rgba(16, 185, 129, 0.4)', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(22, 23, 27, 0.95) 100%)' }}>
-          <div className="flex justify-between items-center mb-1">
-            <div className="card-client flex items-center gap-2">
-              <IconFileSpreadsheet size={20} style={{ color: 'var(--accent)' }} /> Fichier Excel / CSV
-            </div>
-            <span
-              className="badge"
-              style={{
-                background: 'rgba(16, 185, 129, 0.2)',
-                color: 'var(--accent)',
-                fontSize: '0.68rem',
-              }}
-            >
-              100% sans internet
-            </span>
-          </div>
-          <p className="text-xs text-muted mb-3" style={{ lineHeight: 1.45 }}>
-            Importez directement vos bons (.xlsx, .xls, .csv). Détection automatique des colonnes sans aucune connexion réseau ni clé API.
-          </p>
-          <button
-            type="button"
-            className="btn btn-primary btn-full flex items-center justify-center gap-2"
-            style={{ minHeight: 48, fontSize: '0.88rem', fontWeight: 700 }}
-            onClick={() => excelFileInputRef.current?.click()}
-          >
-            <IconFileSpreadsheet size={18} /> Charger fichier Excel / CSV
-          </button>
-        </div>
-
-        {/* If no API key is entered yet, show photo setup card */}
+        {/* PRIMARY HERO: Numérisation Photo (IA Gemini) */}
         {!apiKey ? (
-          <div className="card" style={{ borderColor: 'var(--glass-border-bright)', background: 'rgba(255, 255, 255, 0.03)' }}>
+          <div className="card" style={{ borderColor: 'var(--glass-border-bright)', background: 'var(--bg-card)' }}>
             <div className="flex justify-between items-center mb-1">
               <div className="card-client flex items-center gap-2">
                 <IconCamera size={20} style={{ color: 'var(--accent)' }} /> Numérisation Photo (IA Gemini)
@@ -2289,7 +2259,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
               )}
             </div>
             <p className="text-xs text-muted mb-3" style={{ lineHeight: 1.4 }}>
-              Pour numériser des bons papier par photo, collez votre clé Google Gemini (l'import Excel ci-dessus fonctionne sans clé) :
+              Numérisez instantanément vos bons papier par photo. Entrez votre clé Google Gemini pour démarrer :
             </p>
             <form
               className="flex gap-2"
@@ -2328,7 +2298,7 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         ) : (
           /* Gemini Vision Instant Photo Scanner */
-          <div className="card">
+          <div className="card" style={{ background: 'var(--bg-card)', border: '1px solid var(--glass-border-subtle)' }}>
             <div className="flex justify-between items-center mb-3">
               <div className="card-client flex items-center gap-2">
                 <IconCamera size={20} style={{ color: 'var(--accent)' }} /> Numérisation Photo IA
@@ -2493,6 +2463,37 @@ function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
             )}
           </div>
         )}
+
+        {/* SECONDARY: Fichier Excel / CSV (Clean Apple Glass, 100% Readable) */}
+        <div className="card" style={{ background: 'var(--bg-card)', border: '1px solid var(--glass-border-subtle)', borderRadius: 20 }}>
+          <div className="flex justify-between items-center mb-1">
+            <div className="card-client flex items-center gap-2">
+              <IconFileSpreadsheet size={18} style={{ color: 'var(--accent)' }} /> Fichier Excel / CSV
+            </div>
+            <span
+              className="badge"
+              style={{
+                background: 'var(--accent-dim)',
+                color: 'var(--accent)',
+                fontSize: '0.68rem',
+                fontWeight: 700,
+              }}
+            >
+              Hors-ligne
+            </span>
+          </div>
+          <p className="text-xs text-muted mb-3" style={{ lineHeight: 1.45 }}>
+            Import direct de bons au format .xlsx, .xls ou .csv (détection automatique des colonnes sans clé API).
+          </p>
+          <button
+            type="button"
+            className="btn btn-secondary btn-full flex items-center justify-center gap-2"
+            style={{ minHeight: 44, fontSize: '0.84rem', fontWeight: 600, borderRadius: 14 }}
+            onClick={() => excelFileInputRef.current?.click()}
+          >
+            <IconFileSpreadsheet size={16} /> Charger fichier Excel / CSV
+          </button>
+        </div>
 
         {/* Secondary Accordion: Manual JSON */}
         <div className="card">
@@ -3010,8 +3011,6 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedLineIds, setSelectedLineIds] = useState<Set<number>>(new Set());
   const [showBatchModal, setShowBatchModal] = useState(false);
-  const [showBatchTransferModal, setShowBatchTransferModal] = useState(false);
-  const [showWholeBillTransferModal, setShowWholeBillTransferModal] = useState(false);
   const [showTripDispatchModal, setShowTripDispatchModal] = useState(false);
   const [showOverviewDiagrams, setShowOverviewDiagrams] = useState(() => {
     return localStorage.getItem('pointage_show_overview_diagrams') !== 'false';
@@ -3451,15 +3450,6 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <button
             type="button"
             className="header-icon-btn"
-            onClick={() => setShowWholeBillTransferModal(true)}
-            title="Transférer les étapes du bon"
-            aria-label="Transférer les étapes du bon"
-          >
-            <IconTransfer size={18} />
-          </button>
-          <button
-            type="button"
-            className="header-icon-btn"
             onClick={() => nav(`/bill/${billId}/summary?stage=${stage}`)}
             title="Récapitulatif"
             aria-label="Récapitulatif"
@@ -3687,57 +3677,6 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             )}
           </div>
         )}
-
-        {/* Smart Bill-Wide Stage Mistake Recovery Banner */}
-        {billStageUnitTotals[stage] === 0 && (() => {
-          const otherStage: Stage | null =
-            stage === 'preparation' && billStageUnitTotals.chargement > 0
-              ? 'chargement'
-              : stage === 'chargement' && billStageUnitTotals.preparation > 0
-              ? 'preparation'
-              : null;
-          if (!otherStage) return null;
-          const otherUnits = billStageUnitTotals[otherStage];
-          const otherStageName = otherStage === 'preparation' ? 'Préparation' : 'Chargement';
-          const currentStageName = stage === 'preparation' ? 'Préparation' : 'Chargement';
-          return (
-            <div
-              className="card mb-2 flex justify-between items-center"
-              style={{
-                background: 'rgba(245, 158, 11, 0.12)',
-                border: '1px solid rgba(245, 158, 11, 0.35)',
-                padding: '10px 14px',
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <IconTransfer size={18} style={{ color: 'var(--warning)', flexShrink: 0 }} />
-                <div>
-                  <div className="font-bold text-xs" style={{ color: 'var(--warning)' }}>
-                    {otherUnits} pièces comptées en {otherStageName}
-                  </div>
-                  <div className="text-xs text-muted">
-                    Vous êtes en {currentStageName}. Vouliez-vous enregistrer ce bon en {currentStageName} ?
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="btn btn-xs btn-primary flex items-center gap-1"
-                style={{ fontWeight: 700, whiteSpace: 'nowrap' }}
-                onClick={async () => {
-                  if (window.confirm(`Basculer TOUS les comptages de "${otherStageName}" vers "${currentStageName}" pour ce bon (${otherUnits} pièces) ?`)) {
-                    const res = await transferBatchStageCounts(billId, null, otherStage, stage);
-                    playSuccessChime();
-                    hapticTap('medium');
-                    showToast(`${res.unitsCount} pièces transférées vers ${currentStageName} (${res.linesCount} articles)`, setToast);
-                  }
-                }}
-              >
-                ⇄ Tout basculer ici
-              </button>
-            </div>
-          );
-        })()}
 
         {/* Search mode */}
         <div className="seg-control mb-2">
@@ -4268,39 +4207,6 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           showToast(`${processedCount} articles (${unitsAdded} unités) rangés dans ${label}`, setToast);
           setSelectedLineIds(new Set());
           setIsSelectionMode(false);
-        }}
-      />
-
-      {/* Batch stage transfer modal for selected items */}
-      <TransferStageModal
-        isOpen={showBatchTransferModal}
-        onClose={() => setShowBatchTransferModal(false)}
-        billId={billId}
-        lineIds={Array.from(selectedLineIds)}
-        initialFromStage={stage === 'preparation' && billStageUnitTotals.chargement > 0 ? 'chargement' : stage}
-        initialToStage={stage === 'preparation' ? 'chargement' : 'preparation'}
-        onSuccess={(units, linesCount, from, to) => {
-          playSuccessChime();
-          hapticTap('medium');
-          const STAGE_NAMES = { preparation: 'Préparation', chargement: 'Chargement', pointage: 'Pointage' };
-          showToast(`${units} pièces basculées de ${STAGE_NAMES[from]} vers ${STAGE_NAMES[to]} (${linesCount} articles)`, setToast);
-          setSelectedLineIds(new Set());
-          setIsSelectionMode(false);
-        }}
-      />
-
-      {/* Whole bill stage transfer modal */}
-      <TransferStageModal
-        isOpen={showWholeBillTransferModal}
-        onClose={() => setShowWholeBillTransferModal(false)}
-        billId={billId}
-        initialFromStage={stage === 'preparation' && billStageUnitTotals.chargement > 0 ? 'chargement' : stage}
-        initialToStage={stage === 'preparation' ? 'chargement' : 'preparation'}
-        onSuccess={(units, linesCount, from, to) => {
-          playSuccessChime();
-          hapticTap('medium');
-          const STAGE_NAMES = { preparation: 'Préparation', chargement: 'Chargement', pointage: 'Pointage' };
-          showToast(`${units} pièces de tout le bon basculées vers ${STAGE_NAMES[to]} (${linesCount} articles)`, setToast);
         }}
       />
 
@@ -7289,6 +7195,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   const [editingPrices, setEditingPrices] = useState<Record<number, string>>({});
   const [priceSearchQuery, setPriceSearchQuery] = useState('');
   const [exportDocFormat, setExportDocFormat] = useState<DocumentExportType>('auto');
+  const [showExportOptions, setShowExportOptions] = useState(false);
 
   const [activeOperator, setActiveOperatorState] = useState(() => getActiveOperator());
   const [operators, setOperators] = useState(() => loadOperatorsRoster());
@@ -7582,48 +7489,41 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           }}
         />
 
-        {/* Visual Segmented Distribution Capsule (Apple Health Style) */}
-        <StageDistributionBar
-          total={lines.length}
-          conforme={conformeCount}
-          shortCount={shortCount}
-          overCount={overCount}
-          problemCount={problemStatusCount}
-        />
-
-        {/* Operator Signatures Card */}
+        {/* Operator Signatures Row (Compact Apple Glass) */}
         <div
-          className="card p-3 mb-3 flex items-center justify-between"
-          style={{ background: 'var(--bg-surface)', border: '1px solid var(--glass-border-subtle)', borderRadius: 20 }}
+          className="card p-2.5 mb-3 flex items-center justify-between"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--glass-border-subtle)', borderRadius: 16 }}
         >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <IconUser size={20} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-            <div className="text-xs min-w-0">
-              <div className="font-bold mb-0.5">Responsables du bon</div>
-              <div className="text-muted flex items-center gap-2 flex-wrap text-[11px]">
-                <span>Prép : <strong style={{ color: 'var(--text-primary)' }}>{bill.preparedBy || 'Non assigné'}</strong></span>
-                <span>•</span>
-                <span>Charge : <strong style={{ color: 'var(--text-primary)' }}>{bill.loadedBy || 'Non assigné'}</strong></span>
-                <span>•</span>
-                <span>Point : <strong style={{ color: 'var(--text-primary)' }}>{bill.checkedBy || 'Non assigné'}</strong></span>
-              </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <IconUser size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+            <div className="text-xs truncate">
+              <span className="text-muted">Équipe : </span>
+              <strong>
+                {bill.preparedBy || bill.loadedBy || bill.checkedBy
+                  ? [
+                      bill.preparedBy ? `Prép: ${bill.preparedBy}` : '',
+                      bill.loadedBy ? `Charge: ${bill.loadedBy}` : '',
+                      bill.checkedBy ? `Point: ${bill.checkedBy}` : '',
+                    ].filter(Boolean).join(' • ')
+                  : 'Non assignée'}
+              </strong>
             </div>
           </div>
           <button
             type="button"
             className="btn btn-secondary btn-xs flex items-center gap-1 flex-shrink-0"
-            style={{ fontSize: '0.72rem', padding: '4px 8px' }}
+            style={{ fontSize: '0.72rem', padding: '3px 10px', borderRadius: 9999 }}
             onClick={() => setShowStageSignOffModal(true)}
           >
             <IconCheck size={12} /> Signer
           </button>
         </div>
 
-        {/* Transmission & Export Hub (Apple Pill Buttons) */}
-        <div className="transmission-card">
-          <div className="transmission-header">
-            <span className="transmission-title">
-              <IconFileSpreadsheet size={15} style={{ color: 'var(--accent)' }} /> Transmettre & Exporter
+        {/* Transmission & Export Hub (Streamlined, Zero Visual Clutter) */}
+        <div className="transmission-card mb-3" style={{ padding: '14px 16px', borderRadius: 20 }}>
+          <div className="transmission-header mb-2.5">
+            <span className="transmission-title text-sm font-bold flex items-center gap-1.5">
+              <IconFileSpreadsheet size={16} style={{ color: 'var(--accent)' }} /> Exporter & Partager
             </span>
             <button
               type="button"
@@ -7639,76 +7539,8 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
             </button>
           </div>
 
-          {/* Document Replica Format Selector */}
-          <div className="mb-3">
-            <div className="text-xs font-semibold text-muted mb-1.5 flex items-center justify-between">
-              <span>Format du document :</span>
-              <span
-                style={{
-                  fontSize: '0.68rem',
-                  fontWeight: 700,
-                  padding: '2px 8px',
-                  background: 'var(--accent-dim)',
-                  color: 'var(--accent)',
-                  borderRadius: '9999px',
-                  letterSpacing: '0.02em',
-                }}
-              >
-                {resolvedDocType === 'invoice'
-                  ? 'Facture SAJ'
-                  : resolvedDocType === 'bl_official'
-                  ? 'BL Officiel (EAN)'
-                  : resolvedDocType === 'bl_workshop'
-                  ? 'Bordereau Atelier'
-                  : 'Bon Commande'}
-              </span>
-            </div>
-            <div className="seg-control-fit" style={{ fontSize: '0.74rem' }}>
-              <button
-                type="button"
-                className={`seg-btn ${exportDocFormat === 'auto' ? 'active' : ''}`}
-                onClick={() => setExportDocFormat('auto')}
-                title="Détection automatique selon le bon"
-              >
-                Auto
-              </button>
-              <button
-                type="button"
-                className={`seg-btn ${exportDocFormat === 'invoice' ? 'active' : ''}`}
-                onClick={() => setExportDocFormat('invoice')}
-                title="Facture Commerciale (SAJ / ShowOr)"
-              >
-                Facture
-              </button>
-              <button
-                type="button"
-                className={`seg-btn ${exportDocFormat === 'bl_official' ? 'active' : ''}`}
-                onClick={() => setExportDocFormat('bl_official')}
-                title="Bon de Livraison Officiel avec EAN (SBM)"
-              >
-                BL Officiel
-              </button>
-              <button
-                type="button"
-                className={`seg-btn ${exportDocFormat === 'bl_workshop' ? 'active' : ''}`}
-                onClick={() => setExportDocFormat('bl_workshop')}
-                title="Bordereau Préparation Atelier (LOT / Packages)"
-              >
-                Atelier
-              </button>
-              <button
-                type="button"
-                className={`seg-btn ${exportDocFormat === 'bon_commande' ? 'active' : ''}`}
-                onClick={() => setExportDocFormat('bon_commande')}
-                title="Bon de Commande Standard (BC)"
-              >
-                BC
-              </button>
-            </div>
-          </div>
-
-          {/* Primary Action Buttons (Side by Side) */}
-          <div className="transmission-primary-grid">
+          {/* Primary Action Buttons (Prominent Side by Side) */}
+          <div className="transmission-primary-grid mb-1">
             <button
               type="button"
               className="btn-pill-primary"
@@ -7728,45 +7560,122 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
             </button>
           </div>
 
-          {/* Secondary Quick Actions */}
-          <div className="secondary-actions-row">
-            <button
-              type="button"
-              className="btn-pill-glass"
-              onClick={() => setShowPriceModal(true)}
-              title="Consulter ou renseigner les prix unitaires"
-            >
-              <IconTable size={14} /> Prix
-            </button>
+          {/* Collapsible Secondary Options */}
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs w-full mt-2 flex items-center justify-center gap-1.5"
+            style={{ fontSize: '0.72rem', color: 'var(--text-muted)', padding: '4px' }}
+            onClick={() => setShowExportOptions(!showExportOptions)}
+          >
+            <IconSettings size={12} />
+            <span>{showExportOptions ? 'Masquer les options' : 'Format du document & autres options'}</span>
+          </button>
 
-            <button
-              type="button"
-              className="btn-pill-glass"
-              onClick={handleSendFinalEmail}
-              title="Envoyer par email"
-            >
-              <IconMail size={14} /> Email
-            </button>
+          {showExportOptions && (
+            <div className="mt-3 pt-3 flex flex-col gap-3" style={{ borderTop: '1px solid var(--glass-border-subtle)' }}>
+              {/* Document Replica Format Selector */}
+              <div>
+                <div className="text-xs font-semibold text-muted mb-1.5 flex items-center justify-between">
+                  <span>Modèle de document :</span>
+                  <span
+                    style={{
+                      fontSize: '0.68rem',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      background: 'var(--accent-dim)',
+                      color: 'var(--accent)',
+                      borderRadius: '9999px',
+                    }}
+                  >
+                    {resolvedDocType === 'invoice'
+                      ? 'Facture SAJ'
+                      : resolvedDocType === 'bl_official'
+                      ? 'BL Officiel'
+                      : resolvedDocType === 'bl_workshop'
+                      ? 'Bordereau Atelier'
+                      : 'Bon Commande'}
+                  </span>
+                </div>
+                <div className="seg-control-fit" style={{ fontSize: '0.72rem' }}>
+                  <button
+                    type="button"
+                    className={`seg-btn ${exportDocFormat === 'auto' ? 'active' : ''}`}
+                    onClick={() => setExportDocFormat('auto')}
+                  >
+                    Auto
+                  </button>
+                  <button
+                    type="button"
+                    className={`seg-btn ${exportDocFormat === 'invoice' ? 'active' : ''}`}
+                    onClick={() => setExportDocFormat('invoice')}
+                  >
+                    Facture
+                  </button>
+                  <button
+                    type="button"
+                    className={`seg-btn ${exportDocFormat === 'bl_official' ? 'active' : ''}`}
+                    onClick={() => setExportDocFormat('bl_official')}
+                  >
+                    BL Officiel
+                  </button>
+                  <button
+                    type="button"
+                    className={`seg-btn ${exportDocFormat === 'bl_workshop' ? 'active' : ''}`}
+                    onClick={() => setExportDocFormat('bl_workshop')}
+                  >
+                    Atelier
+                  </button>
+                  <button
+                    type="button"
+                    className={`seg-btn ${exportDocFormat === 'bon_commande' ? 'active' : ''}`}
+                    onClick={() => setExportDocFormat('bon_commande')}
+                  >
+                    BC
+                  </button>
+                </div>
+              </div>
 
-            <button
-              type="button"
-              className="btn-pill-glass"
-              onClick={handleCopyReport}
-              title="Copier le texte du rapport"
-            >
-              <IconClipboard size={14} /> Copier
-            </button>
-          </div>
+              {/* Secondary Actions */}
+              <div className="secondary-actions-row">
+                <button
+                  type="button"
+                  className="btn-pill-glass"
+                  onClick={() => setShowPriceModal(true)}
+                  title="Consulter ou renseigner les prix unitaires"
+                >
+                  <IconTable size={14} /> Prix
+                </button>
 
-          <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-secondary mt-3 pt-2" style={{ borderTop: 'var(--glass-border-subtle)' }}>
-            <input
-              type="checkbox"
-              checked={exportOnlyPresent}
-              onChange={(e) => setExportOnlyPresent(e.target.checked)}
-              style={{ borderRadius: 6, accentColor: 'var(--accent)' }}
-            />
-            <span>Exclure les articles non reçus (Qté = 0)</span>
-          </label>
+                <button
+                  type="button"
+                  className="btn-pill-glass"
+                  onClick={handleSendFinalEmail}
+                  title="Envoyer par email"
+                >
+                  <IconMail size={14} /> Email
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-pill-glass"
+                  onClick={handleCopyReport}
+                  title="Copier le texte du rapport"
+                >
+                  <IconClipboard size={14} /> Copier
+                </button>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-secondary">
+                <input
+                  type="checkbox"
+                  checked={exportOnlyPresent}
+                  onChange={(e) => setExportOnlyPresent(e.target.checked)}
+                  style={{ borderRadius: 6, accentColor: 'var(--accent)' }}
+                />
+                <span>Exclure les articles non reçus (Qté = 0)</span>
+              </label>
+            </div>
+          )}
         </div>
 
         {extras.length > 0 && (

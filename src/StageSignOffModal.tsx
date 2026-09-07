@@ -72,7 +72,7 @@ export function StageSignOffModal({
       <div
         className="modal-content card"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 380, width: '92%' }}
+        style={{ maxWidth: 400, width: '92%', borderRadius: '24px', padding: '22px 20px', boxShadow: 'var(--glass-shadow-lg)' }}
       >
         <div className="flex justify-between items-center mb-2">
           <div className="flex items-center gap-2 font-bold text-base" style={{ color: 'var(--accent-light)' }}>
@@ -93,43 +93,46 @@ export function StageSignOffModal({
           Qui a effectué cette phase sur le bon <strong>{bill.billNumber}</strong> ({bill.client}) ?
         </p>
 
-        {/* Tactile operator selection grid */}
-        <div className="grid grid-cols-2 gap-2 mb-4">
+        {/* Tactile operator selection grid (Balanced 2-Column Apple Glass) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', width: '100%', marginBottom: '16px' }}>
           {operators.map((op) => {
             const isSelected = op.toLowerCase() === selectedOp.toLowerCase();
             return (
               <button
                 key={op}
                 type="button"
-                className="btn text-left flex items-center justify-between p-2.5 rounded-lg cursor-pointer"
+                className="btn text-left flex items-center justify-between p-3 cursor-pointer"
                 style={{
+                  width: '100%',
+                  borderRadius: '16px',
                   background: isSelected ? 'var(--accent-glow)' : 'var(--bg-surface)',
                   border: isSelected ? '1.5px solid var(--accent)' : '1px solid var(--glass-border-subtle)',
                   color: isSelected ? 'var(--accent-light)' : 'var(--text-primary)',
-                  height: 48,
+                  minHeight: 52,
                 }}
                 onClick={() => setSelectedOp(op)}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <div
                     style={{
-                      width: 24,
-                      height: 24,
+                      width: 28,
+                      height: 28,
                       borderRadius: '50%',
                       background: isSelected ? 'var(--accent)' : 'var(--bg-card-active)',
                       color: isSelected ? '#fff' : 'var(--text-secondary)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: '0.72rem',
+                      fontSize: '0.78rem',
                       fontWeight: 800,
+                      flexShrink: 0,
                     }}
                   >
                     {op.charAt(0).toUpperCase()}
                   </div>
-                  <span className="font-bold text-sm">{op}</span>
+                  <span className="font-bold text-sm truncate">{op}</span>
                 </div>
-                {isSelected && <IconCheck size={16} style={{ color: 'var(--accent)' }} />}
+                {isSelected && <IconCheck size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />}
               </button>
             );
           })}
@@ -138,8 +141,9 @@ export function StageSignOffModal({
         {/* Batch toggle if multiple bills exist for this client */}
         {otherBillsCount > 0 && (
           <div
-            className="p-2.5 rounded-lg mb-4 flex items-center justify-between cursor-pointer"
+            className="p-3 mb-4 flex items-center justify-between cursor-pointer"
             style={{
+              borderRadius: '16px',
               background: applyToBatch ? 'rgba(56, 189, 248, 0.1)' : 'var(--bg-surface)',
               border: applyToBatch ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid var(--glass-border-subtle)',
             }}

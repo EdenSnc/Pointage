@@ -2777,10 +2777,9 @@ button,
 }
 
 /* Samsung Infinity-O Punch Hole & One UI Gesture Navigation Bar Protection */
-[data-device*="samsung"],
-[data-device="samsung-a54"] {
-  padding-top: max(env(safe-area-inset-top, 0px), 8px);
-  padding-bottom: max(env(safe-area-inset-bottom, 0px), 14px);
+[data-device*="samsung"] .bottom-nav-bar,
+[data-device="samsung-a54"] .bottom-nav-bar {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
 }
 
 /* 8GB RAM High-Capacity Performance: Hardware GPU Compositing */
@@ -2790,6 +2789,21 @@ button,
 [data-device="samsung-a54"] .bill-card {
   will-change: transform, opacity;
   contain: paint layout;
+}
+
+/* Responsive CSS Grid Utilities */
+.grid {
+  display: grid;
+}
+.grid-cols-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.gap-2 {
+  gap: 8px;
+}
+.gap-3 {
+  gap: 12px;
 }
 
 
