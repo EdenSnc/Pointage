@@ -171,6 +171,7 @@ export interface OrderLine {
   reallocatedToBillId?: number | null;
   reallocationNote?: string | null;
   shortageResolvedAsPartial?: boolean | null;
+  imageUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -238,6 +239,7 @@ export interface ProductProfile {
   outerPackSize: number | null;
   innerPackSize: number | null;
   warehouseZone: WarehouseZone | null;
+  imageUrl?: string | null;
   updatedAt: string;
 }
 

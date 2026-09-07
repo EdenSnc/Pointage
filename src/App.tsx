@@ -2827,6 +2827,17 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const [showBatchTransferModal, setShowBatchTransferModal] = useState(false);
   const [showWholeBillTransferModal, setShowWholeBillTransferModal] = useState(false);
   const [showTripDispatchModal, setShowTripDispatchModal] = useState(false);
+  const [showOverviewDiagrams, setShowOverviewDiagrams] = useState(() => {
+    return localStorage.getItem('pointage_show_overview_diagrams') !== 'false';
+  });
+
+  const toggleOverviewDiagrams = () => {
+    setShowOverviewDiagrams((prev) => {
+      const next = !prev;
+      localStorage.setItem('pointage_show_overview_diagrams', String(next));
+      return next;
+    });
+  };
 
   // Active units per stage across this entire bill
   const billStageUnitTotals = React.useMemo(() => {
@@ -3256,16 +3267,61 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
       </header>
 
       <div className="app-content">
-        {/* Visual Interactive Process Flow Pipeline (Apple Glass & Less-is-More) */}
-        <WarehouseProcessFlow
-          currentStage={stage}
-          onSelectStage={handleStageChange}
-          metrics={{
-            preparation: prepMetric,
-            chargement: loadMetric,
-            pointage: pointMetric,
+        {/* Collapsible Overview Header Pill */}
+        <div
+          className="flex items-center justify-between px-3 py-1.5 mb-2.5 rounded-full cursor-pointer"
+          style={{
+            background: 'var(--bg-card)',
+            border: 'var(--glass-border-subtle)',
+            boxShadow: 'var(--glass-shadow)',
           }}
-        />
+          onClick={toggleOverviewDiagrams}
+        >
+          <div className="flex items-center gap-2 text-xs">
+            <span style={{ fontWeight: 800, color: 'var(--accent)' }}>
+              {stage === 'preparation' ? '📦 Prépa' : stage === 'chargement' ? '🚚 Chargement' : '📋 Pointage'}
+            </span>
+            <span style={{ color: 'var(--text-muted)' }}>•</span>
+            <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+              {stage === 'preparation' ? prepMetric.percent : stage === 'chargement' ? loadMetric.percent : pointMetric.percent}%
+            </span>
+            {trips && trips.length > 0 && (
+              <>
+                <span style={{ color: 'var(--text-muted)' }}>•</span>
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  {trips.filter((t) => t.status !== 'cancelled').length} voyage{trips.filter((t) => t.status !== 'cancelled').length > 1 ? 's' : ''}
+                </span>
+              </>
+            )}
+          </div>
+          <button
+            type="button"
+            className="btn btn-xs btn-ghost flex items-center gap-1 text-[11px]"
+            style={{ padding: '2px 8px', borderRadius: '9999px', color: 'var(--text-secondary)' }}
+          >
+            <span>{showOverviewDiagrams ? '▲ Masquer' : '▼ Aperçu'}</span>
+          </button>
+        </div>
+
+        {showOverviewDiagrams && (
+          <>
+            {/* Visual Interactive Process Flow Pipeline (Apple Glass & Less-is-More) */}
+            <WarehouseProcessFlow
+              currentStage={stage}
+              onSelectStage={handleStageChange}
+              metrics={{
+                preparation: prepMetric,
+                chargement: loadMetric,
+                pointage: pointMetric,
+              }}
+            />
+
+            {/* Visual Truck Loading & Dock Staging Diagram */}
+            {(stage === 'chargement' || (trips && trips.length > 0)) && (
+              <TruckLoadingDiagram {...truckDiagramMetrics} />
+            )}
+          </>
+        )}
 
         {/* Stage Operator Attribution Pill */}
         <div
@@ -3299,11 +3355,6 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               : 'Signer'}
           </button>
         </div>
-
-        {/* Visual Truck Loading & Dock Staging Diagram */}
-        {(stage === 'chargement' || (trips && trips.length > 0)) && (
-          <TruckLoadingDiagram {...truckDiagramMetrics} />
-        )}
 
         {/* Rotations Chauffeur / Expédition en Plusieurs Voyages */}
         {(stage === 'chargement' || (trips && trips.length > 0)) && (
@@ -4316,9 +4367,30 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     }
   }, [line?.id, profile?.id]);
 
+  const stageTotal = sumStageEvents(events || [], stage);
+
+  useEffect(() => {
+    let isCurrent = true;
+    if (billId && line && stageTotal < line.orderedQty && !line.shortageResolvedAsPartial) {
+      findCrossBillPreparedStock(billId, line)
+        .then((opts) => {
+          if (isCurrent) {
+            setCrossBillOptions(opts);
+          }
+        })
+        .catch((err) => {
+          console.error('Error finding cross-bill stock:', err);
+        });
+    } else {
+      setCrossBillOptions([]);
+    }
+    return () => {
+      isCurrent = false;
+    };
+  }, [billId, line?.id, line?.orderedQty, line?.reference, line?.ean, line?.designation, line?.shortageResolvedAsPartial, stageTotal]);
+
   if (!line || !bill) return <div className="app-content"><div className="spinner" /></div>;
 
-  const stageTotal = sumStageEvents(events, stage);
   const disc = calcDiscrepancy(line, stageTotal);
   const batchQty = useDirectEntry
     ? (parseInt(directTotal) || 0)
@@ -4341,26 +4413,6 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     else if (stage === 'pointage' && stageTotals.chargement > 0) mismatchedStage = 'chargement';
     else if (stage === 'pointage' && stageTotals.preparation > 0) mismatchedStage = 'preparation';
   }
-
-  useEffect(() => {
-    let isCurrent = true;
-    if (billId && line && stageTotal < line.orderedQty && !line.shortageResolvedAsPartial) {
-      findCrossBillPreparedStock(billId, line)
-        .then((opts) => {
-          if (isCurrent) {
-            setCrossBillOptions(opts);
-          }
-        })
-        .catch((err) => {
-          console.error('Error finding cross-bill stock:', err);
-        });
-    } else {
-      setCrossBillOptions([]);
-    }
-    return () => {
-      isCurrent = false;
-    };
-  }, [billId, line?.id, line?.orderedQty, line?.reference, line?.ean, line?.designation, line?.shortageResolvedAsPartial, stageTotal]);
 
 
   const handleAddCount = async (targetNextLineId?: number) => {
@@ -4595,22 +4647,66 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
       <div className="app-content">
         {/* Product card */}
         <div className="card">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="line-no" style={{ fontSize: '1.2rem' }}>N°{line.no}</span>
-              {line.page != null && <span className="line-page" style={{ marginLeft: 8 }}>PAGE {line.page}</span>}
-              <div className="font-bold text-lg mt-1">{line.designation}</div>
-              <div className="text-sm text-secondary mt-1">
-                {line.reference ? `REF: ${line.reference}` : 'Sans réf.'}
-                {line.ean ? ` • EAN: ${line.ean}` : ''}
-              </div>
-              {line.packagesRaw && (
-                <div className="text-xs text-muted mt-1">Colisage document: {line.packagesRaw}</div>
+          <div className="flex items-start gap-3">
+            {/* Dedicated Product / Carton Photo Spot (Ready for DB) */}
+            <div
+              style={{
+                width: 72,
+                height: 72,
+                borderRadius: 18,
+                background: 'var(--bg-surface-elevated)',
+                border: '1px solid var(--glass-border-bright)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                overflow: 'hidden',
+                position: 'relative',
+              }}
+              title={line.imageUrl || profile?.imageUrl ? line.designation : 'Emplacement photo carton / produit (Prêt pour base de données)'}
+            >
+              {(line.imageUrl || profile?.imageUrl) ? (
+                <img
+                  src={line.imageUrl || profile?.imageUrl || ''}
+                  alt={line.designation}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: 4, textAlign: 'center' }}>
+                  <IconBox size={22} style={{ color: 'var(--accent)', opacity: 0.85 }} />
+                  <span style={{ fontSize: '0.56rem', fontWeight: 700, color: 'var(--text-muted)', lineHeight: 1.1 }}>
+                    Photo Carton
+                  </span>
+                </div>
               )}
             </div>
-            <button className="btn btn-xs btn-ghost flex items-center gap-1" onClick={() => { setEditingField('designation'); setEditFieldVal(line.designation); }}>
-              <IconPencil size={11} /> Modifier
-            </button>
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="flex justify-between items-start">
+                <div style={{ minWidth: 0 }}>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="line-no" style={{ fontSize: '1.2rem' }}>N°{line.no}</span>
+                    {line.page != null && <span className="line-page">PAGE {line.page}</span>}
+                  </div>
+                  <div className="font-bold text-lg mt-1 break-words">{line.designation}</div>
+                  <div className="text-sm text-secondary mt-1">
+                    {line.reference ? `REF: ${line.reference}` : 'Sans réf.'}
+                    {line.ean ? ` • EAN: ${line.ean}` : ''}
+                  </div>
+                  {line.packagesRaw && (
+                    <div className="text-xs text-muted mt-1">Colisage document: {line.packagesRaw}</div>
+                  )}
+                </div>
+                <button
+                  className="btn btn-xs btn-ghost flex items-center gap-1 flex-shrink-0"
+                  style={{ alignSelf: 'flex-start', padding: '3px 8px', borderRadius: '9999px' }}
+                  onClick={() => { setEditingField('designation'); setEditFieldVal(line.designation); }}
+                >
+                  <IconPencil size={11} /> Modifier
+                </button>
+              </div>
+            </div>
           </div>
           <div className="flex gap-2 mt-2">
             <button className="btn btn-xs btn-ghost flex items-center gap-1" onClick={() => { setEditingField('reference'); setEditFieldVal(line.reference || ''); }}>
