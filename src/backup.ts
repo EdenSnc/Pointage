@@ -19,6 +19,7 @@ export interface BackupData {
   identifierSuggestions: unknown[];
   productProfiles: unknown[];
   auditEvents: unknown[];
+  shipmentTrips?: unknown[];
 }
 
 export async function exportBackup(): Promise<BackupData> {
@@ -35,6 +36,7 @@ export async function exportBackup(): Promise<BackupData> {
     identifierSuggestions: await db.identifierSuggestions.toArray(),
     productProfiles: await db.productProfiles.toArray(),
     auditEvents: await db.auditEvents.toArray(),
+    shipmentTrips: await db.shipmentTrips.toArray(),
   };
   return data;
 }
@@ -61,6 +63,7 @@ export async function importBackup(data: BackupData): Promise<void> {
     if (data.identifierSuggestions?.length) await db.identifierSuggestions.bulkAdd(data.identifierSuggestions as never[]);
     if (data.productProfiles?.length) await db.productProfiles.bulkAdd(data.productProfiles as never[]);
     if (data.auditEvents?.length) await db.auditEvents.bulkAdd(data.auditEvents as never[]);
+    if (data.shipmentTrips?.length) await db.shipmentTrips.bulkAdd(data.shipmentTrips as never[]);
   });
 }
 

@@ -202,6 +202,22 @@ export function useEntityLines(client: string | undefined) {
   );
 }
 
+// ---------- Shipment Trips (Rotations Chauffeur) ----------
+export function useBillTrips(billId: number | undefined) {
+  return useLiveQuery(
+    () =>
+      billId !== undefined
+        ? db.shipmentTrips.where('billId').equals(billId).sortBy('tripNumber')
+        : [],
+    [billId],
+    []
+  );
+}
+
+export function useAllTrips() {
+  return useLiveQuery(() => db.shipmentTrips.toArray(), [], []);
+}
+
 // ---------- Extras ----------
 export function useBillExtras(billId: number | undefined) {
   return useLiveQuery(

@@ -42,6 +42,7 @@ import {
   addIdentifierSuggestion,
   saveProductProfile,
   searchLines,
+  useBillTrips,
 } from './hooks';
 import { useHardwareScanner } from './useHardwareScanner';
 import {
@@ -123,6 +124,7 @@ import {
   IconUser,
   IconArrowLeftRight,
   IconAlertTriangle,
+  IconTruck,
 } from './icons';
 
 import {
@@ -141,6 +143,11 @@ import {
 import { OperatorModal } from './OperatorModal';
 import { StageSignOffModal } from './StageSignOffModal';
 import { CrossBillReallocationModal } from './CrossBillReallocationModal';
+import { TripDispatchModal } from './TripDispatchModal';
+import {
+  downloadTripExitWorkbook,
+  formatTripWhatsAppMessage,
+} from './shipmentTrips';
 
 import {
   buildFinalBillRows,
@@ -1557,6 +1564,32 @@ function BillCard({
                 BC:{bill.bcNumber}
               </span>
             )}
+            {bill.shippingStatus && (
+              <span
+                style={{
+                  fontSize: '0.62rem',
+                  fontWeight: 700,
+                  padding: '1px 5px',
+                  borderRadius: 4,
+                  background:
+                    bill.shippingStatus === 'fully_shipped'
+                      ? 'rgba(16, 185, 129, 0.15)'
+                      : 'rgba(245, 158, 11, 0.15)',
+                  color:
+                    bill.shippingStatus === 'fully_shipped'
+                      ? 'var(--accent)'
+                      : 'var(--warning)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                }}
+              >
+                <IconTruck size={10} />
+                {bill.shippingStatus === 'fully_shipped'
+                  ? `Soldé (${bill.tripCount || 1}v)`
+                  : `Voyage ${bill.tripCount || 1} en cours`}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -1598,12 +1631,13 @@ function BillCard({
       <ProgressRow label="Préparation" progress={prep} />
       <ProgressRow label="Chargement" progress={load} />
       <ProgressRow label="Pointage" progress={point} />
-      {(bill.preparedBy || bill.loadedBy || bill.checkedBy) && (
+      {(bill.preparedBy || bill.loadedBy || bill.checkedBy || bill.tripCount) && (
         <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-glass text-[11px] text-muted flex-wrap">
           <IconUser size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
           {bill.preparedBy && <span>📦 Prép : <strong style={{ color: 'var(--text-primary)' }}>{bill.preparedBy}</strong></span>}
           {bill.loadedBy && <span>🚚 Charge : <strong style={{ color: 'var(--text-primary)' }}>{bill.loadedBy}</strong></span>}
           {bill.checkedBy && <span>📋 Point : <strong style={{ color: 'var(--text-primary)' }}>{bill.checkedBy}</strong></span>}
+          {bill.tripCount && <span>🚛 <strong style={{ color: 'var(--text-primary)' }}>{bill.tripCount} {bill.tripCount > 1 ? 'voyages' : 'voyage'}</strong></span>}
         </div>
       )}
     </div>
@@ -2617,6 +2651,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const events = useBillEvents(billId);
   const overrides = useBillOverrides(billId);
   const containers = useBillContainers(billId);
+  const trips = useBillTrips(billId);
   const entityBills = useEntityBills(bill?.client);
   const entityLines = useEntityLines(bill?.client);
   const entityEvents = useEntityEvents(bill?.client);
@@ -2632,6 +2667,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [showBatchTransferModal, setShowBatchTransferModal] = useState(false);
   const [showWholeBillTransferModal, setShowWholeBillTransferModal] = useState(false);
+  const [showTripDispatchModal, setShowTripDispatchModal] = useState(false);
 
   // Active units per stage across this entire bill
   const billStageUnitTotals = React.useMemo(() => {
@@ -3062,6 +3098,137 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               : 'Signer'}
           </button>
         </div>
+
+        {/* Rotations Chauffeur / Expédition en Plusieurs Voyages */}
+        {(stage === 'chargement' || (trips && trips.length > 0)) && (
+          <div
+            className="card p-2.5 mb-2"
+            style={{
+              background: trips && trips.length > 0 ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-surface)',
+              border: trips && trips.length > 0 ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid var(--glass-border-subtle)',
+            }}
+          >
+            <div className="flex justify-between items-center mb-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <IconTruck size={17} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                <span className="font-bold text-xs" style={{ color: 'var(--text-primary)' }}>
+                  EXPÉDITION & VOYAGES CHAUFFEUR
+                </span>
+                {bill.shippingStatus === 'fully_shipped' ? (
+                  <span
+                    style={{
+                      fontSize: '0.62rem',
+                      fontWeight: 700,
+                      padding: '1px 5px',
+                      borderRadius: 4,
+                      background: 'rgba(16, 185, 129, 0.2)',
+                      color: 'var(--accent)',
+                    }}
+                  >
+                    ✓ SOLDÉ
+                  </span>
+                ) : bill.shippingStatus === 'partially_shipped' ? (
+                  <span
+                    style={{
+                      fontSize: '0.62rem',
+                      fontWeight: 700,
+                      padding: '1px 5px',
+                      borderRadius: 4,
+                      background: 'rgba(245, 158, 11, 0.2)',
+                      color: 'var(--warning)',
+                    }}
+                  >
+                    ⏳ PARTIEL
+                  </span>
+                ) : null}
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-xs btn-primary flex items-center gap-1"
+                style={{ fontSize: '0.72rem', padding: '3px 8px', fontWeight: 700 }}
+                onClick={() => setShowTripDispatchModal(true)}
+              >
+                <IconTruck size={13} />
+                <span>
+                  {trips && trips.length > 0
+                    ? `+ Voyage ${trips.filter((t) => t.status !== 'cancelled').length + 1}`
+                    : 'Nouveau Voyage'}
+                </span>
+              </button>
+            </div>
+
+            {trips && trips.length > 0 ? (
+              <div className="flex flex-col gap-1.5 mt-1">
+                {trips.map((t) => {
+                  const isCancelled = t.status === 'cancelled';
+                  const dateStr = t.dispatchedAt
+                    ? new Date(t.dispatchedAt).toLocaleTimeString('fr-FR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : '';
+                  return (
+                    <div
+                      key={t.id}
+                      className="flex items-center justify-between p-2 rounded text-xs"
+                      style={{
+                        background: isCancelled ? 'rgba(239, 68, 68, 0.08)' : 'var(--bg-input)',
+                        border: isCancelled
+                          ? '1px dashed rgba(239, 68, 68, 0.3)'
+                          : '1px solid var(--glass-border-subtle)',
+                        opacity: isCancelled ? 0.6 : 1,
+                      }}
+                    >
+                      <div>
+                        <div className="font-bold flex items-center gap-1.5">
+                          <span>Voyage N° {t.tripNumber}</span>
+                          {t.isLastTrip && <span className="text-muted">(Solde)</span>}
+                          {isCancelled && <span className="text-error font-bold">[ANNULÉ]</span>}
+                        </div>
+                        <div className="text-muted" style={{ fontSize: '0.7rem' }}>
+                          {t.totalUnits} pièces • {t.totalContainers} colis
+                          {t.driverName ? ` • Chauf: ${t.driverName}` : ''}
+                          {dateStr ? ` (${dateStr})` : ''}
+                        </div>
+                      </div>
+
+                      {!isCancelled && (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-xs"
+                            style={{ fontSize: '0.68rem', padding: '2px 6px' }}
+                            title="Télécharger le Bon de Sortie Excel"
+                            onClick={() => downloadTripExitWorkbook(t, bill, lines, containers)}
+                          >
+                            📄 Bon Sortie
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-xs"
+                            style={{ fontSize: '0.68rem', padding: '2px 6px' }}
+                            title="Partager par WhatsApp"
+                            onClick={() => {
+                              const msg = formatTripWhatsAppMessage(t, bill, lines, containers);
+                              window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+                            }}
+                          >
+                            📱 WhatsApp
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-xs text-muted" style={{ fontSize: '0.75rem' }}>
+                Expédition en plusieurs camions ou rotations ? Cliquez sur <strong>Nouveau Voyage</strong> pour sceller chaque départ de fourgon et éditer son bon de sortie officiel.
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Smart Bill-Wide Stage Mistake Recovery Banner */}
         {billStageUnitTotals[stage] === 0 && (() => {
@@ -3762,6 +3929,24 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           );
         }}
       />
+
+      {showTripDispatchModal && (
+        <TripDispatchModal
+          bill={bill}
+          lines={lines}
+          containers={containers}
+          events={events}
+          activeOperator={activeOperator}
+          onClose={() => setShowTripDispatchModal(false)}
+          onDispatched={(trip) => {
+            setShowTripDispatchModal(false);
+            showToast(
+              `🚚 Voyage N°${trip.tripNumber} validé (${trip.totalUnits} pcs, ${trip.totalContainers} colis)`,
+              setToast
+            );
+          }}
+        />
+      )}
     </>
   );
 }
@@ -6551,6 +6736,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   const extras = useBillExtras(billId);
   const audit = useBillAudit(billId);
   const containers = useBillContainers(billId);
+  const trips = useBillTrips(billId);
   const entityBills = useEntityBills(bill?.client);
   const entityLines = useEntityLines(bill?.client);
   const entityEvents = useLiveQuery(
@@ -6581,7 +6767,8 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
     sessionStorage.setItem('pointage_stage_' + billId, s);
   };
 
-  const [summaryTab, setSummaryTab] = useState<'problems' | 'all' | 'cartons' | 'audit'>('problems');
+  const [summaryTab, setSummaryTab] = useState<'problems' | 'all' | 'cartons' | 'voyages' | 'audit'>('problems');
+  const [showTripDispatchModal, setShowTripDispatchModal] = useState(false);
   const [showQRSync, setShowQRSync] = useState(false);
   const [qrSyncInitialTab, setQrSyncInitialTab] = useState<'export' | 'import'>('export');
   const [exportOnlyPresent, setExportOnlyPresent] = useState(false);
@@ -7100,6 +7287,13 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           </button>
           <button
             type="button"
+            className={`seg-btn ${summaryTab === 'voyages' ? 'active' : ''}`}
+            onClick={() => setSummaryTab('voyages')}
+          >
+            Voyages ({trips ? trips.filter((t) => t.status !== 'cancelled').length : 0})
+          </button>
+          <button
+            type="button"
             className={`seg-btn ${summaryTab === 'audit' ? 'active' : ''}`}
             onClick={() => setSummaryTab('audit')}
           >
@@ -7259,6 +7453,169 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
             </div>
           );
         })()}
+
+        {/* Multi-Trip / Rotations Chauffeur Tab View */}
+        {summaryTab === 'voyages' && (
+          <div className="flex flex-col gap-3 mb-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <div className="font-bold text-sm flex items-center gap-1.5">
+                  <IconTruck size={17} style={{ color: 'var(--accent)' }} />
+                  <span>Historique des Voyages & Rotations</span>
+                </div>
+                <div className="text-xs text-muted">
+                  Bons de sortie et suivi des chargements partiels du camion
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-xs btn-primary flex items-center gap-1"
+                style={{ fontWeight: 700 }}
+                onClick={() => setShowTripDispatchModal(true)}
+              >
+                <IconTruck size={13} />
+                <span>+ Nouveau Voyage</span>
+              </button>
+            </div>
+
+            {!trips || trips.length === 0 ? (
+              <div className="card p-4 text-center">
+                <IconTruck size={32} style={{ color: 'var(--text-muted)', margin: '0 auto 8px' }} />
+                <div className="font-bold text-sm mb-1">Aucun voyage enregistré</div>
+                <div className="text-xs text-muted mb-3 max-w-sm mx-auto">
+                  Si la commande est trop volumineuse pour un seul véhicule, cliquez ci-dessous pour valider le départ du premier fourgon et imprimer son bon de sortie.
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary mx-auto flex items-center gap-1.5"
+                  onClick={() => setShowTripDispatchModal(true)}
+                >
+                  <IconTruck size={15} /> Préparer le Voyage N° 1
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                {trips.map((t) => {
+                  const isCancelled = t.status === 'cancelled';
+                  const dateStr = t.dispatchedAt
+                    ? new Date(t.dispatchedAt).toLocaleString('fr-FR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : '';
+                  return (
+                    <div
+                      key={t.id}
+                      className="card p-3"
+                      style={{
+                        background: isCancelled ? 'rgba(239, 68, 68, 0.05)' : 'var(--bg-surface)',
+                        border: isCancelled
+                          ? '1px dashed rgba(239, 68, 68, 0.3)'
+                          : '1px solid var(--glass-border-subtle)',
+                        opacity: isCancelled ? 0.7 : 1,
+                      }}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2">
+                          <div
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 8,
+                              background: isCancelled
+                                ? 'rgba(239, 68, 68, 0.15)'
+                                : 'rgba(16, 185, 129, 0.15)',
+                              color: isCancelled ? 'var(--danger)' : 'var(--accent)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <IconTruck size={18} />
+                          </div>
+                          <div>
+                            <div className="font-bold text-sm flex items-center gap-2">
+                              <span>Voyage N° {t.tripNumber}</span>
+                              {t.isLastTrip && (
+                                <span className="badge badge-success text-[10px]">
+                                  SOLDE / DERNIER
+                                </span>
+                              )}
+                              {isCancelled && (
+                                <span className="badge badge-danger text-[10px]">
+                                  ANNULÉ
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted">
+                              {dateStr} {t.operatorName ? `• Quai: ${t.operatorName}` : ''}
+                            </div>
+                          </div>
+                        </div>
+
+                        {!isCancelled && (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-xs flex items-center gap-1"
+                              style={{ fontSize: '0.72rem', padding: '3px 8px' }}
+                              onClick={() => downloadTripExitWorkbook(t, bill, lines, containers)}
+                              title="Télécharger le Bon de Sortie Excel officiel"
+                            >
+                              <IconFileSpreadsheet size={12} /> Excel
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-xs flex items-center gap-1"
+                              style={{ fontSize: '0.72rem', padding: '3px 8px' }}
+                              onClick={() => {
+                                const msg = formatTripWhatsAppMessage(t, bill, lines, containers);
+                                window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+                              }}
+                              title="Partager par WhatsApp"
+                            >
+                              <IconSend size={12} /> WhatsApp
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div
+                        className="grid grid-cols-2 gap-2 text-xs p-2 rounded mb-2"
+                        style={{ background: 'var(--bg-input)' }}
+                      >
+                        <div>
+                          <span className="text-muted">Chauffeur : </span>
+                          <strong>{t.driverName || 'Non spécifié'}</strong>
+                        </div>
+                        <div>
+                          <span className="text-muted">Véhicule : </span>
+                          <strong>{t.truckPlate || 'Standard'}</strong>
+                        </div>
+                        <div>
+                          <span className="text-muted">Marchandise : </span>
+                          <strong>{t.totalUnits} pièces</strong>
+                        </div>
+                        <div>
+                          <span className="text-muted">Conditionnement : </span>
+                          <strong>{t.totalContainers} colis</strong>
+                        </div>
+                      </div>
+
+                      {t.notes && (
+                        <div className="text-xs text-muted italic mb-1">
+                          « {t.notes} »
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Calm Apple Glass Zero State for 0 Problems */}
         {summaryTab === 'problems' && problemLines.length === 0 && (
@@ -7594,6 +7951,25 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           }
         }}
       />
+
+      {showTripDispatchModal && (
+        <TripDispatchModal
+          bill={bill}
+          lines={lines}
+          containers={containers}
+          events={events}
+          activeOperator={activeOperator}
+          onClose={() => setShowTripDispatchModal(false)}
+          onDispatched={(trip) => {
+            setShowTripDispatchModal(false);
+            if (setToast) {
+              setToast(
+                `🚚 Voyage N°${trip.tripNumber} validé (${trip.totalUnits} pcs, ${trip.totalContainers} colis)`
+              );
+            }
+          }}
+        />
+      )}
     </>
   );
 }
@@ -7618,6 +7994,9 @@ function formatAuditType(type: string): string {
     cross_bill_reallocation: 'Dépannage inter-bons',
     shortage_partial_delivery: 'Clôture stock restant',
     stage_operator_assigned: 'Attribution responsable',
+    trip_dispatched: 'Voyage expédié',
+    trip_created: 'Voyage créé',
+    trip_cancelled: 'Voyage annulé',
   };
   return map[type] || type;
 }

@@ -43,10 +43,15 @@ export type AuditEventType =
   | 'cross_bill_reallocation'
   | 'shortage_partial_delivery'
   | 'stage_operator_assigned'
+  | 'trip_created'
+  | 'trip_dispatched'
+  | 'trip_cancelled'
   | 'status_changed';
 
 export type SessionStatus = 'active' | 'completed';
 export type BillStatus = 'active' | 'completed';
+export type ShippingStatus = 'not_shipped' | 'partially_shipped' | 'fully_shipped';
+export type TripStatus = 'loading' | 'dispatched' | 'completed' | 'cancelled';
 
 // --- Entities ---
 
@@ -58,6 +63,30 @@ export interface WorkSession {
   updatedAt: string;
 }
 
+export interface ShipmentTrip {
+  id?: number;
+  billId: number;
+  billIds?: number[];
+  client: string;
+  tripNumber: number;
+  status: TripStatus;
+  driverName?: string | null;
+  truckPlate?: string | null;
+  operatorName?: string | null;
+  containerIds: number[];
+  lineQuantities: {
+    orderLineId: number;
+    quantity: number;
+  }[];
+  totalUnits: number;
+  totalContainers: number;
+  isLastTrip?: boolean;
+  notes?: string | null;
+  dispatchedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Bill {
   id?: number;
   sessionId: number;
@@ -65,6 +94,8 @@ export interface Bill {
   client: string;
   date?: string;
   status: BillStatus;
+  shippingStatus?: ShippingStatus | null;
+  tripCount?: number | null;
   paymentMode?: string | null;
   agentName?: string | null;
   clientAddress?: string | null;

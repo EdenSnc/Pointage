@@ -14,6 +14,7 @@ import type {
   IdentifierSuggestion,
   ProductProfile,
   AuditEvent,
+  ShipmentTrip,
 } from './types';
 
 export class PointageDB extends Dexie {
@@ -27,6 +28,7 @@ export class PointageDB extends Dexie {
   identifierSuggestions!: Table<IdentifierSuggestion, number>;
   productProfiles!: Table<ProductProfile, number>;
   auditEvents!: Table<AuditEvent, number>;
+  shipmentTrips!: Table<ShipmentTrip, number>;
 
   constructor() {
     super('pointage-surface-db');
@@ -43,6 +45,10 @@ export class PointageDB extends Dexie {
       identifierSuggestions: '++id, scannedValue',
       productProfiles: '++id, reference',
       auditEvents: '++id, billId, orderLineId, type, timestamp',
+    });
+
+    this.version(2).stores({
+      shipmentTrips: '++id, billId, tripNumber, status, dispatchedAt',
     });
   }
 }
