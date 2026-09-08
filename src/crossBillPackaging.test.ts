@@ -308,7 +308,7 @@ describe('Shared Packaging Boxes / Cartons Across Bills for Same Seller', () => 
       [601, ['SAC A', 'CHOUALA', 'SAC']],
       [602, ['SAC A', 'CHOUALA', 'SAC']],
       [603, ['CARTON A', 'CARTON']],
-      [604, ['HORS COLIS', 'VRAC']],
+      [604, ['HORS COLIS', 'VRAC', 'FRAQ']],
     ]);
 
     // 1. Search for "SAC A" -> returns lines 601 and 602
@@ -325,10 +325,14 @@ describe('Shared Packaging Boxes / Cartons Across Bills for Same Seller', () => 
     expect(cartonMatches).toHaveLength(1);
     expect(cartonMatches[0].id).toBe(603);
 
-    // 4. Search for "vrac" / "hors colis" -> returns line 604
+    // 4. Search for "vrac" / "fraq" / "hors colis" -> returns line 604
     const vracMatches = searchLines(linesToSearch, 'vrac', 'smart', 1, undefined, containerMap);
     expect(vracMatches).toHaveLength(1);
     expect(vracMatches[0].id).toBe(604);
+
+    const fraqMatches = searchLines(linesToSearch, 'fraq', 'smart', 1, undefined, containerMap);
+    expect(fraqMatches).toHaveLength(1);
+    expect(fraqMatches[0].id).toBe(604);
 
     const horsColisMatches = searchLines(linesToSearch, 'hors colis', 'smart', 1, undefined, containerMap);
     expect(horsColisMatches).toHaveLength(1);

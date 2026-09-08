@@ -909,15 +909,16 @@ export function searchLines(
         const containers = lineContainerMap.get(l.id!) || [];
         for (const cLabel of containers) {
           const cLow = cLabel.toLowerCase();
-          if (cLow === q) {
-            // Exact container match (e.g. "sac a", "carton 1") -> high priority 2.5
+          const isFraqQuery = (q === 'fraq' || q === 'vrac') && (cLow.includes('fraq') || cLow.includes('vrac'));
+          if (cLow === q || isFraqQuery) {
+            // Exact container match (e.g. "sac a", "carton 1", "fraq") -> high priority 2.5
             score = score > 0 ? Math.min(score, 2.5) : 2.5;
             break;
           } else if (
             cLow.includes(q) ||
             (q.length >= 3 && q.includes(cLow))
           ) {
-            // Partial container match (e.g. "sac", "chouala", "carton", "vrac") -> priority 5.5
+            // Partial container match (e.g. "sac", "chouala", "carton", "fraq") -> priority 5.5
             score = score > 0 ? Math.min(score, 5.5) : 5.5;
             break;
           }

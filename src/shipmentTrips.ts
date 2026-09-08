@@ -140,6 +140,7 @@ export async function createAndDispatchTrip(params: {
   includeLoose?: boolean;
   isLastTrip?: boolean;
   notes?: string | null;
+  groupedBillIds?: number[];
 }): Promise<ShipmentTrip> {
   const existing = await getBillTrips(params.billId);
   const maxTripNum = existing.reduce((max, t) => Math.max(max, t.tripNumber), 0);
@@ -191,7 +192,7 @@ export async function createAndDispatchTrip(params: {
 
   let tripId: number = 0;
 
-  await db.transaction('rw', [db.shipmentTrips, db.bills, db.auditEvents], async () => {
+  await db.transaction('rw', [db.shipmentTrips, db.bills, db.auditEvents, db.orderLines, db.countEvents], async () => {
     tripId = await db.shipmentTrips.add(trip);
 
     // Update bill shipping status
@@ -215,6 +216,61 @@ export async function createAndDispatchTrip(params: {
       timestamp: now,
     };
     await db.auditEvents.add(audit);
+
+    // Group additional bills in this same vehicle departure
+    if (params.groupedBillIds && params.groupedBillIds.length > 0) {
+      for (const gBillId of params.groupedBillIds) {
+        if (gBillId === params.billId) continue;
+        const gBill = await db.bills.get(gBillId);
+        if (!gBill) continue;
+
+        const gExisting = await db.shipmentTrips.where('billId').equals(gBillId).toArray();
+        const gTripNum = gExisting.reduce((m, t) => Math.max(m, t.tripNumber), 0) + 1;
+
+        const gLines = await db.orderLines.where('billId').equals(gBillId).toArray();
+        const gEvents = await db.countEvents.where('billId').equals(gBillId).toArray();
+        const gUnits = gEvents
+          .filter((e) => !e.undone && e.quantity > 0 && e.stage === 'chargement')
+          .reduce((s, e) => s + e.quantity, 0) || gLines.reduce((s, l) => s + l.orderedQty, 0);
+
+        const gTrip: ShipmentTrip = {
+          billId: gBillId,
+          client: gBill.client,
+          tripNumber: gTripNum,
+          status: 'dispatched',
+          driverName: params.driverName?.trim() || null,
+          truckPlate: params.truckPlate?.trim() || null,
+          operatorName: params.operatorName?.trim() || null,
+          containerIds: [],
+          lineQuantities: [],
+          totalUnits: gUnits,
+          totalContainers: 0,
+          isLastTrip: true,
+          notes: `Groupé dans même véhicule (${params.truckPlate || 'Fourgon'}) avec BL ${params.client}`,
+          dispatchedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await db.shipmentTrips.add(gTrip);
+        await db.bills.update(gBillId, {
+          shippingStatus: 'partially_shipped',
+          tripCount: gTripNum,
+          updatedAt: now,
+        });
+
+        await db.auditEvents.add({
+          billId: gBillId,
+          orderLineId: null,
+          stage: 'chargement',
+          type: 'trip_dispatched',
+          oldValue: null,
+          newValue: `Voyage groupé N°${gTripNum} expédié dans véhicule ${params.truckPlate || 'Fourgon'}`,
+          reason: `Groupé avec commande de ${params.client} (Chauffeur: ${params.driverName || 'Chauffeur'})`,
+          timestamp: now,
+        });
+      }
+    }
   });
 
   return { ...trip, id: tripId };

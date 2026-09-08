@@ -18,33 +18,32 @@ export interface WarehouseZoneOption {
 }
 
 export const WAREHOUSE_ZONES: WarehouseZoneOption[] = [
-  // --- Chambre Principale (Spatial Compass Grid) ---
-  // Entrance is to the South-West of the Main Chamber.
-  // Sequence sweeps from SW entrance across South, Middle, and North rows.
+  // --- Chambre Principale (Spatial Compass Grid: NW to SE sweep) ---
+  // User sequence: Chambre (NW → SE)
   {
-    code: 'CH_SW',
-    label: 'Chambre Principale • Sud-Ouest (Entrée)',
-    shortLabel: 'CH • Sud-Ouest',
+    code: 'CH_NW',
+    label: 'Chambre Principale • Nord-Ouest',
+    shortLabel: 'CH • Nord-Ouest',
     category: 'chambre',
-    compassRow: 3,
+    compassRow: 1,
     compassCol: 1,
     order: 10,
   },
   {
-    code: 'CH_S',
-    label: 'Chambre Principale • Sud',
-    shortLabel: 'CH • Sud',
+    code: 'CH_N',
+    label: 'Chambre Principale • Nord',
+    shortLabel: 'CH • Nord',
     category: 'chambre',
-    compassRow: 3,
+    compassRow: 1,
     compassCol: 2,
     order: 20,
   },
   {
-    code: 'CH_SE',
-    label: 'Chambre Principale • Sud-Est',
-    shortLabel: 'CH • Sud-Est',
+    code: 'CH_NE',
+    label: 'Chambre Principale • Nord-Est',
+    shortLabel: 'CH • Nord-Est',
     category: 'chambre',
-    compassRow: 3,
+    compassRow: 1,
     compassCol: 3,
     order: 30,
   },
@@ -76,52 +75,42 @@ export const WAREHOUSE_ZONES: WarehouseZoneOption[] = [
     order: 60,
   },
   {
-    code: 'CH_NW',
-    label: 'Chambre Principale • Nord-Ouest (Accès Salle 4)',
-    shortLabel: 'CH • Nord-Ouest',
+    code: 'CH_SW',
+    label: 'Chambre Principale • Sud-Ouest (Entrée)',
+    shortLabel: 'CH • Sud-Ouest',
     category: 'chambre',
-    compassRow: 1,
+    compassRow: 3,
     compassCol: 1,
     order: 70,
   },
   {
-    code: 'CH_N',
-    label: 'Chambre Principale • Nord',
-    shortLabel: 'CH • Nord',
+    code: 'CH_S',
+    label: 'Chambre Principale • Sud',
+    shortLabel: 'CH • Sud',
     category: 'chambre',
-    compassRow: 1,
+    compassRow: 3,
     compassCol: 2,
     order: 80,
   },
   {
-    code: 'CH_NE',
-    label: 'Chambre Principale • Nord-Est',
-    shortLabel: 'CH • Nord-Est',
+    code: 'CH_SE',
+    label: 'Chambre Principale • Sud-Est',
+    shortLabel: 'CH • Sud-Est',
     category: 'chambre',
-    compassRow: 1,
+    compassRow: 3,
     compassCol: 3,
     order: 90,
   },
 
-  // --- Couloir (Hallway South to North, Salles 1 to 4) ---
-  // Hallway is to the left of the main chamber with multiple connecting openings.
-  // Salle 1 is southmost (by entrance), Salle 4 is northmost.
-  // When coming out of North Chamber, picker sweeps Salle 4 down to Salle 1 (direct exit to SW dock).
+  // --- Couloir (Hallway: Salles 1–3 then Salle 4 Sud → Nord) ---
+  // Salles 1 to 3
   {
-    code: 'CO_R4',
-    label: 'Couloir • Salle 4 (Nord / Fond)',
-    shortLabel: 'Couloir • Salle 4',
+    code: 'CO_R1',
+    label: 'Couloir • Salle 1 (Sud / Entrée)',
+    shortLabel: 'Couloir • Salle 1',
     category: 'couloir',
-    roomNumber: 4,
+    roomNumber: 1,
     order: 100,
-  },
-  {
-    code: 'CO_R3',
-    label: 'Couloir • Salle 3',
-    shortLabel: 'Couloir • Salle 3',
-    category: 'couloir',
-    roomNumber: 3,
-    order: 110,
   },
   {
     code: 'CO_R2',
@@ -129,14 +118,23 @@ export const WAREHOUSE_ZONES: WarehouseZoneOption[] = [
     shortLabel: 'Couloir • Salle 2',
     category: 'couloir',
     roomNumber: 2,
-    order: 120,
+    order: 110,
   },
   {
-    code: 'CO_R1',
-    label: 'Couloir • Salle 1 (Sud / Entrée)',
-    shortLabel: 'Couloir • Salle 1',
+    code: 'CO_R3',
+    label: 'Couloir • Salle 3',
+    shortLabel: 'Couloir • Salle 3',
     category: 'couloir',
-    roomNumber: 1,
+    roomNumber: 3,
+    order: 120,
+  },
+  // Salle 4 (Sud → Nord)
+  {
+    code: 'CO_R4',
+    label: 'Couloir • Salle 4 (Nord)',
+    shortLabel: 'Couloir • Salle 4',
+    category: 'couloir',
+    roomNumber: 4,
     order: 130,
   },
 ];
@@ -157,16 +155,37 @@ const LEGACY_ZONE_MAP: Record<string, string> = {
   CO_R4_N: 'CO_R4',
 };
 
+export function parseZoneCodes(code: string | null | undefined): string[] {
+  if (!code) return [];
+  const parts = code.split(/[,+]/).map((s) => s.trim()).filter(Boolean);
+  const result: string[] = [];
+  for (const p of parts) {
+    const norm = normalizeZoneCode(p);
+    if (norm && !result.includes(norm)) {
+      result.push(norm);
+    }
+  }
+  return result.slice(0, 2);
+}
+
 export function normalizeZoneCode(code: string | null | undefined): string | null {
   if (!code) return null;
   const trimmed = code.trim();
   if (!trimmed) return null;
+  if (trimmed.includes(',') || trimmed.includes('+')) {
+    const parsed = parseZoneCodes(trimmed);
+    return parsed.length > 0 ? parsed.join(', ') : null;
+  }
   return LEGACY_ZONE_MAP[trimmed] || trimmed;
 }
 
 export function getZoneInfo(code: string | null | undefined): WarehouseZoneOption | null {
   const norm = normalizeZoneCode(code);
   if (!norm) return null;
+  if (norm.includes(',')) {
+    const primary = norm.split(',')[0].trim();
+    return getZoneInfo(primary);
+  }
   const found = WAREHOUSE_ZONES.find((z) => z.code === norm);
   if (found) return found;
 
@@ -181,13 +200,29 @@ export function getZoneInfo(code: string | null | undefined): WarehouseZoneOptio
 }
 
 export function getZoneLabel(code: string | null | undefined): string {
-  const info = getZoneInfo(code);
-  return info ? info.label : '';
+  const codes = parseZoneCodes(code);
+  if (codes.length === 0) return '';
+  if (codes.length === 1) {
+    const info = getZoneInfo(codes[0]);
+    return info ? info.label : codes[0];
+  }
+  return codes
+    .map((c) => {
+      const info = getZoneInfo(c);
+      return info ? info.shortLabel : c;
+    })
+    .join(' + ');
 }
 
 export function getZoneShortLabel(code: string | null | undefined): string {
-  const info = getZoneInfo(code);
-  return info ? info.shortLabel : '';
+  const codes = parseZoneCodes(code);
+  if (codes.length === 0) return '';
+  return codes
+    .map((c) => {
+      const info = getZoneInfo(c);
+      return info ? info.shortLabel : c;
+    })
+    .join(' + ');
 }
 
 /**
@@ -263,8 +298,11 @@ export function sortLinesByWarehouseZone(
     const zoneA = a.warehouseZone || (a.reference && profilesMap ? profilesMap.get(a.reference)?.warehouseZone : null);
     const zoneB = b.warehouseZone || (b.reference && profilesMap ? profilesMap.get(b.reference)?.warehouseZone : null);
 
-    const infoA = getZoneInfo(zoneA);
-    const infoB = getZoneInfo(zoneB);
+    const primaryA = parseZoneCodes(zoneA)[0];
+    const primaryB = parseZoneCodes(zoneB)[0];
+
+    const infoA = getZoneInfo(primaryA);
+    const infoB = getZoneInfo(primaryB);
 
     const orderA = infoA ? infoA.order : 999;
     const orderB = infoB ? infoB.order : 999;
@@ -282,5 +320,5 @@ export function sortLinesByWarehouseZone(
  * Returns human-readable description of physical picking circuit
  */
 export function getWarehouseCircuitDescription(): string {
-  return 'Chambre (Entrée SW ➔ NE) ⟶ Couloir (Salles 4 ➔ 1)';
+  return 'Chambre (NW ➔ SE) ⟶ Couloir (Salles 1–3) ⟶ Salle 4 (Sud ➔ Nord)';
 }

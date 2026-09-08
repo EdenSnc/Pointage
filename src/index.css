@@ -2016,19 +2016,21 @@ select,
   bottom: 95px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(24, 32, 50, 0.92);
+  background: var(--bg-card);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  border: var(--glass-border-bright);
-  border-radius: var(--radius-pill);
-  padding: 10px 22px;
-  font-size: 0.88rem;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  padding: 9px 18px;
+  font-size: 0.84rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
   z-index: 1100;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
   animation: toastIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  white-space: nowrap;
+  max-width: calc(100vw - 32px);
+  width: max-content;
+  box-sizing: border-box;
 }
 
 @keyframes toastIn {

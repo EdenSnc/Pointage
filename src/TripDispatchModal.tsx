@@ -12,6 +12,7 @@ interface TripDispatchModalProps {
   activeOperator?: string | null;
   onClose: () => void;
   onDispatched: (trip: ShipmentTrip) => void;
+  allActiveBills?: Bill[];
 }
 
 const COMMON_DRIVERS = ['Mourad', 'Nassim', 'Karim', 'Chauffeur Client'];
@@ -25,7 +26,9 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
   activeOperator,
   onClose,
   onDispatched,
+  allActiveBills,
 }) => {
+  const [groupedBillIds, setGroupedBillIds] = useState<number[]>([]);
   // Compute dock stock & existing trips
   const [dockStatus, setDockStatus] = useState(() => {
     // Initial synchronous estimate
@@ -181,6 +184,7 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
         lineQuantities: tripLineQuantities,
         isLastTrip,
         notes,
+        groupedBillIds,
       });
 
       playSuccessChime();
@@ -350,7 +354,7 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
               <div className="flex items-center gap-2">
                 <IconBox size={16} style={{ color: 'var(--accent)' }} />
                 <div>
-                  <div className="font-bold text-accent">Expédition directe en vrac</div>
+                  <div className="font-bold text-accent">Expédition directe en Fraq</div>
                   <div className="text-muted text-[11px]">Tous les articles chargés sont inclus ({tripUnits} pcs).</div>
                 </div>
               </div>
@@ -434,7 +438,7 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
                 >
                   {includeLoose && <IconCheck size={12} />}
                 </div>
-                <span className="text-xs font-bold">Articles en Vrac / Hors Colis</span>
+                <span className="text-xs font-bold">Articles Hors Colis (Fraq)</span>
               </div>
               <span className="text-xs text-muted">{looseUnits} pièces</span>
             </button>
@@ -534,24 +538,108 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
               placeholder="Ex: Livrer dépôt 2 d'abord..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              style={{ fontSize: '0.75rem' }}
+              style={{ fontSize: '0.75rem', borderRadius: 12 }}
             />
           </div>
         </div>
 
+        {/* Multi-Commande / Multi-Acheteur: Group other active orders into this same vehicle trip */}
+        {(() => {
+          const candidateBills = (allActiveBills || []).filter(
+            (b) => b.id !== bill.id && b.status !== 'completed'
+          );
+          if (candidateBills.length === 0) return null;
+
+          return (
+            <div
+              className="mb-3 p-2.5"
+              style={{
+                borderRadius: 16,
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold text-muted uppercase tracking-wider">
+                  Charger d'autres commandes dans ce voyage :
+                </span>
+                {groupedBillIds.length > 0 && (
+                  <span className="badge badge-exact font-bold text-[10px]" style={{ borderRadius: 9999 }}>
+                    +{groupedBillIds.length} groupée{groupedBillIds.length > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] text-muted mb-2">
+                Même véhicule / rotation pour le même acheteur ou des acheteurs différents.
+              </div>
+
+              <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1">
+                {candidateBills.map((b) => {
+                  const isChecked = groupedBillIds.includes(b.id!);
+                  const isSameBuyer = b.client.trim().toLowerCase() === bill.client.trim().toLowerCase();
+
+                  return (
+                    <label
+                      key={b.id}
+                      className="flex items-center justify-between p-2 cursor-pointer transition-all"
+                      style={{
+                        borderRadius: 12,
+                        background: isChecked ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-card)',
+                        border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
+                      }}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const cid = b.id!;
+                            if (e.target.checked) {
+                              setGroupedBillIds((prev) => [...prev, cid]);
+                            } else {
+                              setGroupedBillIds((prev) => prev.filter((id) => id !== cid));
+                            }
+                          }}
+                          style={{ width: 16, height: 16, borderRadius: 4, accentColor: 'var(--accent)' }}
+                        />
+                        <div className="truncate">
+                          <div className="font-bold text-xs flex items-center gap-1.5">
+                            <span>BL {b.billNumber}</span>
+                            {isSameBuyer ? (
+                              <span
+                                className="badge text-[9px] font-bold"
+                                style={{ borderRadius: 9999, background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}
+                              >
+                                Même acheteur
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="text-[10px] text-muted truncate">{b.client}</div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-muted font-mono">{b.totalLines || 0} art.</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Is Last Trip Checkbox */}
         <label
-          className="flex items-center gap-2 p-2 mb-4 rounded cursor-pointer transition-colors"
+          className="flex items-center gap-2 p-2 mb-4 cursor-pointer transition-colors"
           style={{
+            borderRadius: 14,
             background: isLastTrip ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-input)',
-            border: isLastTrip ? '1px solid var(--accent)' : '1px solid var(--glass-border-subtle)',
+            border: isLastTrip ? '1px solid var(--accent)' : '1px solid var(--border)',
           }}
         >
           <input
             type="checkbox"
             checked={isLastTrip}
             onChange={(e) => setIsLastTrip(e.target.checked)}
-            style={{ width: 16, height: 16, accentColor: 'var(--accent)' }}
+            style={{ width: 16, height: 16, borderRadius: 4, accentColor: 'var(--accent)' }}
           />
           <span className="text-xs font-bold">
             Ce voyage solde l'expédition (Dernier voyage du bon)

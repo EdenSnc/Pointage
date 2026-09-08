@@ -758,10 +758,10 @@ describe('Warehouse Zones Taxonomy & Utilities', () => {
   it('sorts lines according to continuous non-backtracking warehouse picking circuit', () => {
     const lines: OrderLine[] = [
       makeLine({ id: 1, no: '1', warehouseZone: null }), // Unassigned (order 999)
-      makeLine({ id: 2, no: '2', warehouseZone: 'CO_R1' as any }), // Couloir Salle 1 Sud (order 130)
-      makeLine({ id: 3, no: '3', warehouseZone: 'CH_SW' as any }), // Chambre SW Entrée (order 10)
-      makeLine({ id: 4, no: '4', warehouseZone: 'CH_NE' as any }), // Chambre NE (order 90)
-      makeLine({ id: 5, no: '5', warehouseZone: 'CO_R4' as any }), // Couloir Salle 4 Nord (order 100)
+      makeLine({ id: 2, no: '2', warehouseZone: 'CO_R1' as any }), // Couloir Salle 1 (order 100)
+      makeLine({ id: 3, no: '3', warehouseZone: 'CH_SW' as any }), // Chambre SW (order 70)
+      makeLine({ id: 4, no: '4', warehouseZone: 'CH_NE' as any }), // Chambre NE (order 30)
+      makeLine({ id: 5, no: '5', warehouseZone: 'CO_R4' as any }), // Couloir Salle 4 Nord (order 130)
       makeLine({ id: 6, no: '6', warehouseZone: 'CH_CTR' as any }), // Chambre Centre (order 50)
       makeLine({ id: 7, no: '7', warehouseZone: 'Rack Custom' as any }), // Custom (order 900)
     ];
@@ -769,9 +769,9 @@ describe('Warehouse Zones Taxonomy & Utilities', () => {
     const sorted = sortLinesByWarehouseZone(lines);
     const sortedIds = sorted.map((l) => l.id);
 
-    // Expected sequence:
-    // CH_SW (10) -> CH_CTR (50) -> CH_NE (90) -> CO_R4 (100) -> CO_R1 (130) -> Rack Custom (900) -> Unassigned (999)
-    expect(sortedIds).toEqual([3, 6, 4, 5, 2, 7, 1]);
+    // Expected sequence: Chambre (NW -> SE) -> Couloir (Salles 1-3) -> Salle 4 (Sud -> Nord) -> Custom -> Non assignés:
+    // CH_NE (30) -> CH_CTR (50) -> CH_SW (70) -> CO_R1 (100) -> CO_R4 (130) -> Rack Custom (900) -> Unassigned (999)
+    expect(sortedIds).toEqual([4, 6, 3, 2, 5, 7, 1]);
   });
 
   it('inherits zone from product profile map when line zone is null', () => {
@@ -786,13 +786,15 @@ describe('Warehouse Zones Taxonomy & Utilities', () => {
     ]);
 
     const sorted = sortLinesByWarehouseZone(lines, profilesMap);
-    // CH_SW (order 10) comes before CO_R4 (order 100)
+    // CH_SW (order 70) comes before CO_R4 (order 130)
     expect(sorted[0].id).toBe(2);
     expect(sorted[1].id).toBe(1);
   });
 
   it('provides a human-readable description of the physical picking circuit', () => {
-    expect(getWarehouseCircuitDescription()).toBe('Chambre (Entrée SW ➔ NE) ⟶ Couloir (Salles 4 ➔ 1)');
+    expect(getWarehouseCircuitDescription()).toBe(
+      'Chambre (NW ➔ SE) ⟶ Couloir (Salles 1–3) ⟶ Salle 4 (Sud ➔ Nord)'
+    );
   });
 });
 

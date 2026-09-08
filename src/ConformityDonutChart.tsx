@@ -261,7 +261,7 @@ export function ConformityDonutChart({
       </div>
 
       {/* Visual Line Breakdown Legend */}
-      {(conformeCount > 0 || overCount > 0 || shortCount > 0 || problemCount > 0) && (
+      {totalLines > 0 && (
         <div className="donut-legend">
           {conformeCount > 0 && (
             <span className="donut-legend-item">
@@ -285,6 +285,12 @@ export function ConformityDonutChart({
             <span className="donut-legend-item">
               <span className="donut-legend-dot" style={{ background: '#ef4444' }} />
               {problemCount} anomalie{problemCount > 1 ? 's' : ''}
+            </span>
+          )}
+          {Math.max(0, totalLines - (conformeCount + overCount + shortCount + problemCount)) > 0 && (
+            <span className="donut-legend-item">
+              <span className="donut-legend-dot" style={{ background: 'var(--text-muted)' }} />
+              {Math.max(0, totalLines - (conformeCount + overCount + shortCount + problemCount))} à pointer
             </span>
           )}
         </div>

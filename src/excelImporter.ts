@@ -276,14 +276,56 @@ export function parseExcelImport(
         }
 
         if (!designation) continue;
-        const normDesig = designation.toLowerCase();
-        if (
-          normDesig.startsWith('total') ||
-          normDesig.startsWith('sous-total') ||
-          normDesig.startsWith('net a payer') ||
-          normDesig.startsWith('arrondi') ||
-          normDesig.startsWith('montant h.t')
-        ) {
+        const normDesig = designation
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim();
+
+        const isFooterKeyword = [
+          'total',
+          'sous-total',
+          'soustotal',
+          'net a payer',
+          'net commercial',
+          'arrondi',
+          'montant h.t',
+          'montant ttc',
+          'total ht',
+          'total ttc',
+          'tva',
+          'timbre',
+          'acompte',
+          'solde',
+          'banque',
+          'rib',
+          'iban',
+          'swift',
+          'mode de reglement',
+          'mode de paiement',
+          'reglement',
+          'virement',
+          'cheque',
+          'especes',
+          'arrete le present',
+          'arretee la presente',
+          'arrete la presente',
+          'la somme de',
+          'signature',
+          'cachet',
+          'nom du chauffeur',
+          'visa',
+          'bon pour accord',
+          'observation',
+          'observations',
+          'conditions de',
+          'registre de commerce',
+          'capital social',
+          'page 1',
+          'page 2',
+        ].some((k) => normDesig.startsWith(k) || normDesig.includes(` ${k} `) || normDesig.includes(`${k}:`));
+
+        if (isFooterKeyword) {
           continue;
         }
 
@@ -305,6 +347,11 @@ export function parseExcelImport(
               break;
             }
           }
+        }
+
+        // If no quantity found and no reference/EAN, this is almost certainly a text remark/footer row
+        if (quantity <= 0 && !rawRef && !rawEan) {
+          continue;
         }
 
         if (quantity <= 0) quantity = 1;

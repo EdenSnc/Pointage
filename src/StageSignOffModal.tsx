@@ -5,7 +5,8 @@
 // ============================================================
 
 import { useState } from 'react';
-import { IconUser, IconCheck, IconX, IconLayers } from './icons';
+import { IconUser, IconCheck, IconX, IconLayers, IconSearch } from './icons';
+import { db } from './db';
 
 import type { Bill, Stage } from './types';
 import { assignBillStageOperator, assignBatchBillsStageOperator } from './operators';
@@ -18,7 +19,7 @@ interface StageSignOffModalProps {
   operators: string[];
   activeOperator: string;
   relatedBills?: Bill[]; // Other bills belonging to the same client/day if batch
-  onSigned: (operatorName: string, batchApplied: boolean) => void;
+  onSigned: (operatorName: string, batchApplied: boolean, autoNotFoundCount?: number) => void;
 }
 
 export function StageSignOffModal({
@@ -51,13 +52,52 @@ export function StageSignOffModal({
     setIsSubmitting(true);
 
     try {
+      let autoNotFoundCount = 0;
+
+      // When validating during preparation, mark anything not marked as rupture (out_of_stock) as introuvable (not_found)
+      if (stage === 'preparation') {
+        const targetIds = applyToBatch && otherBillsCount > 0
+          ? [bill.id, ...relatedBills.filter((b) => b.id !== bill.id).map((b) => b.id!)]
+          : [bill.id];
+
+        for (const bId of targetIds) {
+          const lines = await db.orderLines.where('billId').equals(bId).toArray();
+          for (const line of lines) {
+            if (line.status === 'active') {
+              const evts = await db.countEvents.where('orderLineId').equals(line.id!).toArray();
+              const prepTotal = evts
+                .filter((e) => !e.undone && e.stage === 'preparation')
+                .reduce((s, e) => s + e.quantity, 0);
+
+              if (prepTotal === 0) {
+                await db.orderLines.update(line.id!, {
+                  status: 'not_found',
+                  updatedAt: new Date().toISOString(),
+                });
+                await db.auditEvents.add({
+                  billId: bId,
+                  orderLineId: line.id!,
+                  stage: 'preparation',
+                  type: 'status_changed',
+                  oldValue: 'active',
+                  newValue: 'not_found',
+                  reason: `Marqué introuvable automatiquement lors de la validation préparation par ${selectedOp}`,
+                  timestamp: new Date().toISOString(),
+                });
+                autoNotFoundCount++;
+              }
+            }
+          }
+        }
+      }
+
       if (applyToBatch && otherBillsCount > 0) {
         const allIds = [bill.id, ...relatedBills.filter((b) => b.id !== bill.id).map((b) => b.id!)];
         await assignBatchBillsStageOperator(allIds, stage, selectedOp);
-        onSigned(selectedOp, true);
+        onSigned(selectedOp, true, autoNotFoundCount);
       } else {
         await assignBillStageOperator(bill.id, stage, selectedOp);
-        onSigned(selectedOp, false);
+        onSigned(selectedOp, false, autoNotFoundCount);
       }
       onClose();
     } catch (err) {
@@ -92,6 +132,26 @@ export function StageSignOffModal({
         <p className="text-xs text-muted mb-3" style={{ lineHeight: 1.4 }}>
           Qui a effectué cette phase sur le bon <strong>{bill.billNumber}</strong> ({bill.client}) ?
         </p>
+
+        {stage === 'preparation' && (
+          <div
+            className="p-3 mb-3 flex items-start gap-2 text-xs"
+            style={{
+              borderRadius: '16px',
+              background: 'rgba(245, 158, 11, 0.1)',
+              border: '1px solid rgba(245, 158, 11, 0.25)',
+              color: 'var(--warning)',
+            }}
+          >
+            <IconSearch size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <div className="font-bold">Validation Préparation</div>
+              <div className="text-[11px] opacity-90 mt-0.5">
+                Les articles non pointés (hors rupture) seront automatiquement marqués <strong>« Introuvable »</strong>.
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tactile operator selection grid (Balanced 2-Column Apple Glass) */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', width: '100%', marginBottom: '16px' }}>

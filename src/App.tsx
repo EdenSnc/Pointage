@@ -129,6 +129,8 @@ import {
   IconArchive,
   IconCompass,
   IconMapPin,
+  IconSparkles,
+  IconClock,
 } from './icons';
 
 import {
@@ -331,12 +333,15 @@ export default function App() {
         </Routes>
       </ErrorBoundary>
       {toast && (
-        <div className="toast flex items-center justify-between gap-3" style={{ minWidth: 260 }}>
-          <span>{typeof toast === 'string' ? toast : toast.message}</span>
+        <div className="toast flex items-center justify-between gap-3" style={{ maxWidth: 'calc(100vw - 32px)', boxSizing: 'border-box' }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flex: 1 }}>
+            {typeof toast === 'string' ? toast : toast.message}
+          </span>
           {typeof toast !== 'string' && toast.onUndo && (
             <button
               type="button"
               className="toast-undo-btn"
+              style={{ flexShrink: 0 }}
               onClick={async () => {
                 const action = toast.onUndo;
                 setToast('');
@@ -1103,6 +1108,11 @@ function HomeScreen({
               placeholder="Rechercher un article, réf, code-barres ou N° BL..."
               value={homeSearch}
               onChange={(e) => setHomeSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.currentTarget.blur();
+                }
+              }}
             />
             {homeSearch ? (
               <button
@@ -2687,7 +2697,7 @@ function BatchContainerModal({
         mode: qtyMode,
       });
 
-      let label = 'Hors Colis (Vrac)';
+      let label = 'Hors Colis (Fraq)';
       if (containerId !== null) {
         const found = containers.find((c) => c.id === containerId);
         label = found ? found.label : `Colis #${containerId}`;
@@ -2706,7 +2716,7 @@ function BatchContainerModal({
       : null;
   const targetLabel =
     targetContainerId === null
-      ? 'Hors Colis (Vrac)'
+      ? 'Hors Colis (Fraq)'
       : selectedContainerObj
       ? selectedContainerObj.label
       : '';
@@ -2725,7 +2735,7 @@ function BatchContainerModal({
         </div>
 
         <p className="text-xs text-muted mb-3">
-          Affecter ces {selectedLines.length} article{selectedLines.length > 1 ? 's' : ''} à un sac (Chouala), un carton ou en vrac.
+          Affecter ces {selectedLines.length} article{selectedLines.length > 1 ? 's' : ''} à un sac (Chouala), un carton ou en fraq.
         </p>
 
         {/* Section 1: Destination Colis */}
@@ -2741,7 +2751,7 @@ function BatchContainerModal({
               <span className="flex items-center gap-1">
                 {targetContainerId === null && <IconCheck size={12} />}
                 <IconTag size={12} />
-                <span>Hors Colis (Vrac)</span>
+                <span>Hors Colis (Fraq)</span>
               </span>
             </button>
 
@@ -2995,6 +3005,19 @@ function TransferStageModal({
   );
 }
 
+function formatValidationTime(isoString: string | null | undefined): string {
+  if (!isoString) return '';
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return '';
+    const hours = String(d.getHours()).padStart(2, '0');
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    return `${hours}:${mins}`;
+  } catch {
+    return '';
+  }
+}
+
 // ============================================================
 // BILL SCREEN
 // ============================================================
@@ -3012,7 +3035,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const entityLines = useEntityLines(bill?.client);
   const entityEvents = useEntityEvents(bill?.client);
   const entityContainers = useEntityContainers(bill?.client);
-
+  const allActiveBills = useLiveQuery(() => db.bills.filter((b) => b.status !== 'completed').toArray());
   const productProfiles = useLiveQuery(() => db.productProfiles.toArray());
   const profileMap = React.useMemo(() => {
     const map = new Map<string, ProductProfile>();
@@ -3023,9 +3046,23 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   }, [productProfiles]);
 
   const [zoneModalLine, setZoneModalLine] = useState<OrderLine | null>(null);
-  const [sortByZone, setSortByZone] = useState<boolean>(() => {
-    return localStorage.getItem('pointage_sort_by_zone') === 'true';
+  type LineSortMode = 'bl' | 'circuit' | 'recent' | 'family';
+  const [sortMode, setSortMode] = useState<LineSortMode>(() => {
+    const saved = localStorage.getItem('pointage_sort_mode');
+    if (saved === 'bl' || saved === 'circuit' || saved === 'recent' || saved === 'family') {
+      return saved as LineSortMode;
+    }
+    return localStorage.getItem('pointage_sort_by_zone') === 'true' ? 'circuit' : 'bl';
   });
+
+  const handleSetSortMode = (m: LineSortMode) => {
+    setSortMode(m);
+    localStorage.setItem('pointage_sort_mode', m);
+    localStorage.setItem('pointage_sort_by_zone', String(m === 'circuit'));
+  };
+
+  type FilterStatus = 'all' | 'todo' | 'done' | 'problems';
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
 
   const [searchParams, setSearchParams] = useSearchParams();
   const initialStage = (searchParams.get('stage') || sessionStorage.getItem(`pointage_stage_${billId}`) || 'preparation') as Stage;
@@ -3294,6 +3331,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
 
       if (hasLoose || activeEvts.length === 0) {
         containerNames.add('HORS COLIS');
+        containerNames.add('FRAQ');
         containerNames.add('VRAC');
       }
 
@@ -3301,6 +3339,107 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
     }
     return map;
   }, [activeContainers, activeLinesPool, eventsByLine]);
+
+  // Compute line validation status, latest event timestamp, and stage totals
+  const lineLatestEventMap = React.useMemo(() => {
+    const map = new Map<
+      number,
+      {
+        latestTime: string;
+        stageTotal: number;
+        isValidated: boolean;
+        isExact: boolean;
+        isShort: boolean;
+        isOver: boolean;
+      }
+    >();
+
+    for (const line of activeLinesPool) {
+      if (!line.id) continue;
+      const evts = eventsByLine.get(line.id) || [];
+      const activeEvts = evts.filter((e) => !e.undone);
+      const stageEvts = activeEvts.filter((e) => e.stage === stage);
+      const stageTotal = stageEvts.reduce((sum, e) => sum + e.quantity, 0);
+      const disc = calcDiscrepancy(line, stageTotal);
+
+      // Latest time: current stage first, then any count event
+      let latestTime = '';
+      for (const e of stageEvts) {
+        if (!latestTime || e.createdAt > latestTime) {
+          latestTime = e.createdAt;
+        }
+      }
+      if (!latestTime) {
+        for (const e of activeEvts) {
+          if (!latestTime || e.createdAt > latestTime) {
+            latestTime = e.createdAt;
+          }
+        }
+      }
+
+      const isValidated = line.status !== 'active' || stageTotal > 0;
+
+      map.set(line.id, {
+        latestTime,
+        stageTotal,
+        isValidated,
+        isExact: disc.isExact && stageTotal > 0,
+        isShort: disc.isShort && stageTotal > 0,
+        isOver: disc.isOver,
+      });
+    }
+
+    return map;
+  }, [activeLinesPool, eventsByLine, stage]);
+
+  // Overall most recently validated line in the active pool
+  const lastValidatedLineInfo = React.useMemo(() => {
+    let latestTime = '';
+    let foundLine: OrderLine | null = null;
+    for (const line of activeLinesPool) {
+      if (!line.id) continue;
+      const info = lineLatestEventMap.get(line.id);
+      if (info && info.latestTime && info.latestTime > latestTime) {
+        latestTime = info.latestTime;
+        foundLine = line;
+      }
+    }
+    if (!foundLine || !latestTime) return null;
+    return { line: foundLine, time: latestTime };
+  }, [activeLinesPool, lineLatestEventMap]);
+
+  // Counts for filter status pills (Tous, À faire, Validés, Problèmes)
+  const filterCounts = React.useMemo(() => {
+    let todo = 0;
+    let done = 0;
+    let problems = 0;
+
+    for (const line of activeLinesPool) {
+      if (!line.id) continue;
+      const info = lineLatestEventMap.get(line.id);
+      const stageTotal = info ? info.stageTotal : 0;
+      const isValidated = info ? info.isValidated : false;
+      const disc = calcDiscrepancy(line, stageTotal);
+
+      const isProblem =
+        line.status !== 'active' ||
+        disc.isModified ||
+        disc.isOver ||
+        (stageTotal > 0 && !disc.isExact);
+
+      if (line.status === 'active' && stageTotal === 0) {
+        todo++;
+      }
+      if (isValidated) {
+        done++;
+      }
+      if (isProblem) {
+        problems++;
+      }
+    }
+
+    return { all: activeLinesPool.length, todo, done, problems };
+  }, [activeLinesPool, lineLatestEventMap]);
 
   // Colis stats for the filter pills
   const containerStats = React.useMemo(() => {
@@ -3345,7 +3484,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   // Container pill filter
   if (selectedContainerFilter !== 'all') {
     if (selectedContainerFilter === 'loose') {
-      displayLines = displayLines.filter((l) => lineContainerMap.get(l.id!)?.includes('VRAC'));
+      displayLines = displayLines.filter((l) => {
+        const c = lineContainerMap.get(l.id!) || [];
+        return c.includes('FRAQ') || c.includes('VRAC') || c.includes('HORS COLIS');
+      });
     } else {
       const targetC = activeContainers.find((c) => c.id === selectedContainerFilter);
       if (targetC) {
@@ -3354,8 +3496,30 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
     }
   }
 
+  // Status Filter ('all' | 'todo' | 'done' | 'problems')
+  if (filterStatus === 'todo') {
+    displayLines = displayLines.filter((l) => {
+      const info = lineLatestEventMap.get(l.id!);
+      return l.status === 'active' && (info ? info.stageTotal === 0 : true);
+    });
+  } else if (filterStatus === 'done') {
+    displayLines = displayLines.filter((l) => {
+      const info = lineLatestEventMap.get(l.id!);
+      return info ? info.isValidated : false;
+    });
+  } else if (filterStatus === 'problems' || showProblemsOnly) {
+    displayLines = displayLines.filter((line) => {
+      if (line.status !== 'active') return true;
+      const info = lineLatestEventMap.get(line.id!);
+      const stageTotal = info ? info.stageTotal : sumStageEvents(eventsByLine.get(line.id!) || [], stage);
+      const disc = calcDiscrepancy(line, stageTotal);
+      return disc.isModified || disc.isOver || (stageTotal > 0 && !disc.isExact);
+    });
+  }
+
   // Search
-  if (searchQuery.trim()) {
+  const isSearching = Boolean(searchQuery.trim());
+  if (isSearching) {
     displayLines = searchLines(
       displayLines,
       searchQuery,
@@ -3367,31 +3531,81 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   }
 
   // Sibling matches across other bills of the same client when in 'current' bill scope
+  // Partitioned: unvalidated sibling matches on top, validated below
   const siblingMatches = React.useMemo(() => {
     if (!searchQuery.trim() || searchScope === 'all' || siblingLines.length === 0) return [];
-    return searchLines(siblingLines, searchQuery, searchMode);
-  }, [siblingLines, searchQuery, searchMode, searchScope]);
+    const matches = searchLines(siblingLines, searchQuery, searchMode);
 
-  // Problems only
-  if (showProblemsOnly) {
-    displayLines = displayLines.filter((line) => {
-      if (line.status !== 'active') return true;
-      const evts = eventsByLine.get(line.id!) || [];
-      const stageTotal = sumStageEvents(evts, stage);
-      const disc = calcDiscrepancy(line, stageTotal);
-      return !disc.isExact || disc.isModified;
-    });
-  }
+    const unvalidatedSiblings: OrderLine[] = [];
+    const validatedSiblings: OrderLine[] = [];
 
-  // Sort: warehouse zone picking path OR natural document order (preserves scroll position upon completion)
-  if (sortByZone) {
-    displayLines = sortLinesByWarehouseZone(displayLines, profileMap);
-  } else {
-    displayLines.sort((a, b) => {
+    for (const sib of matches) {
+      if (sib.status !== 'active') {
+        validatedSiblings.push(sib);
+        continue;
+      }
+      const sibEvts = entityEvents?.filter((e) => e.orderLineId === sib.id && !e.undone && e.stage === stage) || [];
+      const sibStageTotal = sibEvts.reduce((sum, e) => sum + e.quantity, 0);
+      if (sibStageTotal === 0) {
+        unvalidatedSiblings.push(sib);
+      } else {
+        validatedSiblings.push(sib);
+      }
+    }
+
+    return [...unvalidatedSiblings, ...validatedSiblings];
+  }, [siblingLines, searchQuery, searchMode, searchScope, entityEvents, stage]);
+
+  // Sorter based on active sortMode ('bl' | 'circuit' | 'recent' | 'family')
+  const applySort = (arr: OrderLine[]): OrderLine[] => {
+    if (sortMode === 'circuit') {
+      return sortLinesByWarehouseZone(arr, profileMap);
+    }
+    if (sortMode === 'recent') {
+      return [...arr].sort((a, b) => {
+        const timeA = lineLatestEventMap.get(a.id!)?.latestTime || '';
+        const timeB = lineLatestEventMap.get(b.id!)?.latestTime || '';
+        if (timeA && timeB) {
+          return timeB.localeCompare(timeA); // Most recent validation timestamp first
+        }
+        if (timeA && !timeB) return -1;
+        if (!timeA && timeB) return 1;
+        return (Number(a.no) || 0) - (Number(b.no) || 0);
+      });
+    }
+    if (sortMode === 'family') {
+      return [...arr].sort((a, b) => {
+        const cmp = (a.designation || '').localeCompare(b.designation || '');
+        if (cmp !== 0) return cmp;
+        return (Number(a.no) || 0) - (Number(b.no) || 0);
+      });
+    }
+    // Default 'bl': natural document order (active first, then by line number)
+    return [...arr].sort((a, b) => {
       if (a.status !== 'active' && b.status === 'active') return 1;
       if (a.status === 'active' && b.status !== 'active') return -1;
-      return (a.no ?? 0) - (b.no ?? 0);
+      return (Number(a.no) || 0) - (Number(b.no) || 0);
     });
+  };
+
+  // When searching: unvalidated on top, validated below
+  if (isSearching) {
+    const unvalidatedList: OrderLine[] = [];
+    const validatedList: OrderLine[] = [];
+
+    for (const l of displayLines) {
+      const info = lineLatestEventMap.get(l.id!);
+      const isValidated = info ? info.isValidated : l.status !== 'active';
+      if (isValidated) {
+        validatedList.push(l);
+      } else {
+        unvalidatedList.push(l);
+      }
+    }
+
+    displayLines = [...applySort(unvalidatedList), ...applySort(validatedList)];
+  } else {
+    displayLines = applySort(displayLines);
   }
 
   if (!bill) {
@@ -3489,8 +3703,11 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
       <div className="app-content">
         {/* Collapsible Overview Header Pill */}
         <div
-          className="flex items-center justify-between px-3 py-1.5 mb-2.5 rounded-full cursor-pointer"
+          className="flex items-center justify-between cursor-pointer"
           style={{
+            padding: '8px 16px',
+            marginBottom: '16px',
+            borderRadius: '9999px',
             background: 'var(--bg-card)',
             border: 'var(--glass-border-subtle)',
             boxShadow: 'var(--glass-shadow)',
@@ -3517,7 +3734,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <button
             type="button"
             className="btn btn-xs btn-ghost flex items-center gap-1 text-[11px]"
-            style={{ padding: '2px 8px', borderRadius: '9999px', color: 'var(--text-secondary)' }}
+            style={{ padding: '3px 10px', borderRadius: '9999px', color: 'var(--text-secondary)' }}
           >
             <span>{showOverviewDiagrams ? '▲ Masquer' : '▼ Aperçu'}</span>
           </button>
@@ -3700,6 +3917,11 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             placeholder={searchMode === 'no' ? 'Entrer N°...' : 'Rechercher (réf, code-barres partiel)...'}
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur();
+              }
+            }}
             type={searchMode === 'no' ? 'number' : 'text'}
             inputMode={searchMode === 'no' ? 'numeric' : 'text'}
           />
@@ -3787,7 +4009,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               >
                 <span className="flex items-center gap-1">
                   <IconTag size={12} />
-                  <span>Hors Colis</span>
+                  <span>Hors Colis (Fraq)</span>
                 </span>
                 <span className="colis-pill-badge">{containerStats.get('loose')?.linesCount || 0}</span>
               </button>
@@ -3795,48 +4017,266 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         )}
 
-        {/* Filters and Visibility Toggle */}
-        <div className="flex justify-between items-center mb-3">
-          <div className="flex gap-2">
-            <button
-              className={`btn btn-sm ${showProblemsOnly ? 'btn-warning' : 'btn-secondary'}`}
-              onClick={() => {
-                hapticTap('light');
-                setShowProblemsOnly(!showProblemsOnly);
+        {/* Dernière Saisie Quick Jump Banner */}
+        {lastValidatedLineInfo && (
+          <div
+            className="flex items-center justify-between cursor-pointer mb-2.5 transition-all"
+            style={{
+              padding: '7px 14px',
+              borderRadius: 9999,
+              background: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              color: 'var(--text-primary)',
+            }}
+            onClick={() => {
+              hapticTap('light');
+              const targetId = lastValidatedLineInfo.line.id;
+              const el = document.getElementById(`line-${targetId}`);
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                setLastUpdatedLineId(targetId!);
+              } else {
+                setFilterStatus('all');
+                setTimeout(() => {
+                  const targetEl = document.getElementById(`line-${targetId}`);
+                  if (targetEl) {
+                    targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setLastUpdatedLineId(targetId!);
+                  }
+                }, 100);
+              }
+            }}
+            title="Cliquer pour aller directement au dernier article validé"
+          >
+            <div className="flex items-center gap-2 truncate text-xs min-w-0">
+              <span
+                style={{
+                  background: 'var(--accent)',
+                  color: '#fff',
+                  fontWeight: 800,
+                  fontSize: '0.66rem',
+                  padding: '2px 8px',
+                  borderRadius: 9999,
+                  letterSpacing: '0.03em',
+                  flexShrink: 0,
+                }}
+              >
+                DERNIÈRE SAISIE
+              </span>
+              <span className="font-bold flex-shrink-0">N°{lastValidatedLineInfo.line.no}</span>
+              <span className="truncate text-muted">• {lastValidatedLineInfo.line.designation}</span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-shrink-0 text-xs pl-2">
+              <IconClock size={13} style={{ color: 'var(--accent)' }} />
+              <span className="font-mono font-bold text-accent">
+                {formatValidationTime(lastValidatedLineInfo.time)}
+              </span>
+              <span style={{ color: 'var(--accent)', fontWeight: 800 }}>→</span>
+            </div>
+          </div>
+        )}
+
+        {/* Status Filter Segmented Pills (Tous, À faire, Validés, Problèmes) */}
+        <div
+          className="flex items-center gap-1.5 mb-2.5 p-1"
+          style={{
+            background: 'var(--bg-surface)',
+            borderRadius: 9999,
+            border: '1px solid var(--glass-border-subtle)',
+            overflowX: 'auto',
+          }}
+        >
+          <button
+            type="button"
+            className={`btn btn-xs flex-1 ${filterStatus === 'all' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ borderRadius: 9999, fontSize: '0.75rem', padding: '5px 10px', whiteSpace: 'nowrap' }}
+            onClick={() => {
+              hapticTap('light');
+              setFilterStatus('all');
+              setShowProblemsOnly(false);
+            }}
+          >
+            <span>Tous</span>
+            <span
+              style={{
+                marginLeft: 4,
+                padding: '1px 6px',
+                borderRadius: 9999,
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                background: filterStatus === 'all' ? 'rgba(255, 255, 255, 0.25)' : 'var(--bg-card)',
               }}
             >
-              <IconWarning size={14} /> Problèmes
-            </button>
-            <button
-              type="button"
-              className={`btn btn-sm ${sortByZone ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
-              onClick={() => {
-                hapticTap('light');
-                setSortByZone((prev) => {
-                  const next = !prev;
-                  localStorage.setItem('pointage_sort_by_zone', String(next));
-                  return next;
-                });
+              {filterCounts.all}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className={`btn btn-xs flex-1 ${filterStatus === 'todo' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ borderRadius: 9999, fontSize: '0.75rem', padding: '5px 10px', whiteSpace: 'nowrap' }}
+            onClick={() => {
+              hapticTap('light');
+              setFilterStatus('todo');
+              setShowProblemsOnly(false);
+            }}
+          >
+            <span>À faire</span>
+            <span
+              style={{
+                marginLeft: 4,
+                padding: '1px 6px',
+                borderRadius: 9999,
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                background: filterStatus === 'todo' ? 'rgba(255, 255, 255, 0.25)' : 'var(--bg-card)',
               }}
-              title="Trier par ordre de parcours entrepôt"
             >
-              <IconCompass size={14} />
-              <span>{sortByZone ? 'Parcours' : 'Ordre BL'}</span>
-            </button>
+              {filterCounts.todo}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className={`btn btn-xs flex-1 ${filterStatus === 'done' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ borderRadius: 9999, fontSize: '0.75rem', padding: '5px 10px', whiteSpace: 'nowrap' }}
+            onClick={() => {
+              hapticTap('light');
+              setFilterStatus('done');
+              setShowProblemsOnly(false);
+            }}
+          >
+            <span className="flex items-center gap-1">
+              <IconCheck size={12} />
+              <span>Validés</span>
+            </span>
+            <span
+              style={{
+                marginLeft: 4,
+                padding: '1px 6px',
+                borderRadius: 9999,
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                background: filterStatus === 'done' ? 'rgba(255, 255, 255, 0.25)' : 'var(--bg-card)',
+              }}
+            >
+              {filterCounts.done}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className={`btn btn-xs flex-1 ${filterStatus === 'problems' ? 'btn-warning' : 'btn-ghost'}`}
+            style={{ borderRadius: 9999, fontSize: '0.75rem', padding: '5px 10px', whiteSpace: 'nowrap' }}
+            onClick={() => {
+              hapticTap('light');
+              setFilterStatus(filterStatus === 'problems' ? 'all' : 'problems');
+              setShowProblemsOnly(filterStatus !== 'problems');
+            }}
+          >
+            <span className="flex items-center gap-1">
+              <IconWarning size={12} />
+              <span>Problèmes</span>
+            </span>
+            {filterCounts.problems > 0 && (
+              <span
+                style={{
+                  marginLeft: 4,
+                  padding: '1px 6px',
+                  borderRadius: 9999,
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  background: filterStatus === 'problems' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                  color: filterStatus === 'problems' ? '#fff' : 'var(--warning)',
+                }}
+              >
+                {filterCounts.problems}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Sort & Controls Toolbar */}
+        <div className="flex justify-between items-center mb-2 flex-wrap gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Sort Selector Segmented Buttons */}
+            <div
+              className="flex items-center p-0.5"
+              style={{
+                background: 'var(--bg-surface)',
+                borderRadius: 9999,
+                border: '1px solid var(--glass-border-subtle)',
+              }}
+            >
+              <button
+                type="button"
+                className={`btn btn-xs ${sortMode === 'bl' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 9px' }}
+                onClick={() => {
+                  hapticTap('light');
+                  handleSetSortMode('bl');
+                }}
+                title="Trier selon l'ordre initial du BL papier"
+              >
+                Ordre BL
+              </button>
+              <button
+                type="button"
+                className={`btn btn-xs ${sortMode === 'circuit' ? 'btn-primary' : 'btn-ghost'} flex items-center gap-1`}
+                style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 9px' }}
+                onClick={() => {
+                  hapticTap('light');
+                  handleSetSortMode('circuit');
+                }}
+                title="Trier par parcours entrepôt (Chambre NW➔SE puis Couloir 1➔4)"
+              >
+                <IconCompass size={12} />
+                <span>Parcours</span>
+              </button>
+              <button
+                type="button"
+                className={`btn btn-xs ${sortMode === 'recent' ? 'btn-primary' : 'btn-ghost'} flex items-center gap-1`}
+                style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 9px' }}
+                onClick={() => {
+                  hapticTap('light');
+                  handleSetSortMode('recent');
+                }}
+                title="Trier par récence de validation (plus récent en premier)"
+              >
+                <IconClock size={12} />
+                <span>Récents</span>
+              </button>
+              <button
+                type="button"
+                className={`btn btn-xs ${sortMode === 'family' ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 9px' }}
+                onClick={() => {
+                  hapticTap('light');
+                  handleSetSortMode('family');
+                }}
+                title="Trier par désignation (A-Z)"
+              >
+                Famille
+              </button>
+            </div>
+
             <button
-              className={`btn btn-sm ${showQuantities ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
+              className={`btn btn-xs ${showQuantities ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
+              style={{ borderRadius: 9999, padding: '4px 10px' }}
               onClick={() => {
                 hapticTap('light');
                 toggleShowQuantities();
               }}
               title={showQuantities ? 'Masquer les quantités' : 'Afficher les quantités'}
             >
-              {showQuantities ? <IconEye size={15} /> : <IconEyeOff size={15} />}
+              {showQuantities ? <IconEye size={13} /> : <IconEyeOff size={13} />}
               <span>{showQuantities ? 'Visibles' : 'Masquées'}</span>
             </button>
+
             <button
               type="button"
-              className={`btn btn-sm ${isSelectionMode ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
+              className={`btn btn-xs ${isSelectionMode ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
+              style={{ borderRadius: 9999, padding: '4px 10px' }}
               onClick={() => {
                 hapticTap('medium');
                 if (isSelectionMode) {
@@ -3848,10 +4288,27 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               }}
               title="Sélection multiple d'articles"
             >
-              <IconCheck size={14} />
+              <IconCheck size={13} />
               <span>{isSelectionMode ? 'Terminer' : 'Sélectionner'}</span>
             </button>
+
+            {stage === 'preparation' && (
+              <button
+                type="button"
+                className="btn btn-xs btn-primary flex items-center gap-1 font-bold"
+                style={{ borderRadius: 9999, padding: '4px 12px' }}
+                onClick={() => {
+                  hapticTap('medium');
+                  setShowStageSignOffModal(true);
+                }}
+                title="Valider et signer la préparation"
+              >
+                <IconCheck size={13} />
+                <span>Valider Prépa</span>
+              </button>
+            )}
           </div>
+
           <span className="text-xs text-muted font-bold" style={{ alignSelf: 'center' }}>
             {searchScope === 'all'
               ? `${displayLines.length} / ${entityLines?.length || displayLines.length} lignes`
@@ -3859,8 +4316,8 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </span>
         </div>
 
-        {/* Picking Circuit Order Banner when sortByZone is active */}
-        {sortByZone && (
+        {/* Picking Circuit Order Banner when sortMode === 'circuit' */}
+        {sortMode === 'circuit' && (
           <div
             className="flex items-center justify-between px-3 py-1.5 mb-2 rounded-xl text-xs font-semibold"
             style={{
@@ -3929,10 +4386,12 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
 
         {/* Lines */}
         {displayLines.map((line) => {
+          const info = lineLatestEventMap.get(line.id!);
           const evts = eventsByLine.get(line.id!) || [];
-          const stageTotal = sumStageEvents(evts, stage);
+          const stageTotal = info ? info.stageTotal : sumStageEvents(evts, stage);
           const disc = calcDiscrepancy(line, stageTotal);
           const isSelected = selectedLineIds.has(line.id!);
+          const isLastValidated = lastValidatedLineInfo?.line.id === line.id;
 
           const handleCardClick = () => {
             if (isSelectionMode) {
@@ -4000,16 +4459,64 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                       {line.status === 'active' && disc.isOver && (
                         <span className="badge badge-over">{showQuantities ? `${disc.over} Excéd` : 'Excédent'}</span>
                       )}
+                      {info?.latestTime && (
+                        <span
+                          className="badge flex items-center gap-1"
+                          style={{
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            background: 'rgba(16, 185, 129, 0.12)',
+                            color: 'var(--accent)',
+                            borderRadius: '9999px',
+                            padding: '2px 7px',
+                          }}
+                          title={`Dernier pointage à ${formatValidationTime(info.latestTime)}`}
+                        >
+                          <IconClock size={11} />
+                          <span>{formatValidationTime(info.latestTime)}</span>
+                        </span>
+                      )}
+                      {isLastValidated && (
+                        <span
+                          className="badge"
+                          style={{
+                            fontSize: '0.65rem',
+                            fontWeight: 800,
+                            background: 'var(--accent)',
+                            color: '#fff',
+                            borderRadius: '9999px',
+                            padding: '2px 7px',
+                            letterSpacing: '0.02em',
+                          }}
+                        >
+                          Dernier validé
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   {line.reference && <div className="line-ref">REF: {line.reference}</div>}
                   <div className="line-designation">{line.designation}</div>
 
-                  {/* Warehouse Location Zone Badge */}
-                  {(() => {
+                  {/* Warehouse Location Zone Badge (Hidden in pointage, read-only in chargement, editable in preparation) */}
+                  {stage !== 'pointage' && (() => {
                     const effectiveZone = line.warehouseZone || (line.reference ? profileMap.get(line.reference)?.warehouseZone : null);
                     const zoneShort = getZoneShortLabel(effectiveZone);
+                    if (stage === 'chargement') {
+                      if (!effectiveZone) return null;
+                      return (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span
+                            className="badge-zone-pill badge-zone-assigned"
+                            style={{ cursor: 'default' }}
+                            title="Emplacement entrepôt (Lecture seule en chargement)"
+                          >
+                            <IconMapPin size={10} />
+                            <span>{zoneShort}</span>
+                          </span>
+                        </div>
+                      );
+                    }
                     return (
                       <div className="flex items-center gap-1.5 mt-1">
                         <button
@@ -4145,6 +4652,9 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             </div>
             {siblingMatches.map((otherLine) => {
               const parentBill = entityBills?.find((b) => b.id === otherLine.billId);
+              const sibEvts = entityEvents?.filter((e) => e.orderLineId === otherLine.id && !e.undone && e.stage === stage) || [];
+              const sibStageTotal = sibEvts.reduce((sum, e) => sum + e.quantity, 0);
+              const isSibValidated = otherLine.status !== 'active' || sibStageTotal > 0;
               return (
                 <div
                   key={otherLine.id}
@@ -4156,7 +4666,18 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                     <span className="badge" style={{ background: 'var(--accent-glow)', color: 'var(--accent)', fontWeight: 800 }}>
                       {parentBill?.billNumber || `BL #${otherLine.billId}`}
                     </span>
-                    <span className="line-no font-bold">N°{otherLine.no}</span>
+                    <div className="flex items-center gap-1.5">
+                      {isSibValidated ? (
+                        <span className="badge badge-exact flex items-center gap-1" style={{ fontSize: '0.68rem', borderRadius: 9999 }}>
+                          <IconCheck size={11} /> Validé ({sibStageTotal})
+                        </span>
+                      ) : (
+                        <span className="badge badge-warning" style={{ fontSize: '0.68rem', borderRadius: 9999 }}>
+                          À faire
+                        </span>
+                      )}
+                      <span className="line-no font-bold">N°{otherLine.no}</span>
+                    </div>
                   </div>
                   <div className="line-designation font-bold text-sm">{otherLine.designation}</div>
                   <div className="flex justify-between items-center text-xs text-muted mt-1">
@@ -4343,11 +4864,12 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         operators={operators}
         activeOperator={activeOperator}
         relatedBills={entityBills || []}
-        onSigned={(opName, batch) => {
+        onSigned={(opName, batch, notFoundCount) => {
+          const extra = notFoundCount && notFoundCount > 0 ? ` (${notFoundCount} non pointés marqués introuvables)` : '';
           showToast(
             batch
-              ? `Toute la commande signée par ${opName}`
-              : `Phase ${stage} signée par ${opName}`,
+              ? `Toute la commande signée par ${opName}${extra}`
+              : `Phase ${stage} signée par ${opName}${extra}`,
             setToast
           );
         }}
@@ -4360,6 +4882,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           containers={containers}
           events={events}
           activeOperator={activeOperator}
+          allActiveBills={allActiveBills || []}
           onClose={() => setShowTripDispatchModal(false)}
           onDispatched={(trip) => {
             setShowTripDispatchModal(false);
@@ -4881,7 +5404,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
         </div>
       </header>
 
-      <div className="app-content">
+      <div className="app-content" style={{ paddingBottom: 160 }}>
         {/* Product card */}
         <div className="card">
           <div className="flex items-start gap-3">
@@ -4975,8 +5498,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             </div>
           )}
 
-          {/* Warehouse Location Zone */}
-          {(() => {
+          {/* Warehouse Location Zone (Hidden in pointage, read-only in chargement, editable in preparation) */}
+          {stage !== 'pointage' && (() => {
             const currentZone = line.warehouseZone || profile?.warehouseZone || null;
             return (
               <div
@@ -4988,7 +5511,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                     style={{
                       width: 28,
                       height: 28,
-                      borderRadius: 8,
+                      borderRadius: 10,
                       background: currentZone ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.05)',
                       display: 'flex',
                       alignItems: 'center',
@@ -5011,15 +5534,24 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                     </div>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-xs btn-secondary flex items-center gap-1 flex-shrink-0"
-                  style={{ borderRadius: 'var(--radius-pill)', padding: '4px 10px' }}
-                  onClick={() => setShowZoneModal(true)}
-                >
-                  <IconCompass size={12} />
-                  <span>{currentZone ? 'Modifier' : 'Définir'}</span>
-                </button>
+                {stage === 'preparation' ? (
+                  <button
+                    type="button"
+                    className="btn btn-xs btn-secondary flex items-center gap-1 flex-shrink-0"
+                    style={{ borderRadius: 9999, padding: '4px 10px' }}
+                    onClick={() => setShowZoneModal(true)}
+                  >
+                    <IconCompass size={12} />
+                    <span>{currentZone ? 'Modifier' : 'Définir'}</span>
+                  </button>
+                ) : (
+                  <span
+                    className="badge badge-secondary text-[10px] font-bold"
+                    style={{ borderRadius: 9999, padding: '2px 8px' }}
+                  >
+                    Lecture seule
+                  </span>
+                )}
               </div>
             );
           })()}
@@ -5450,7 +5982,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                               color: rec.closestAction === 'round_down' ? 'var(--warning)' : 'var(--accent)',
                             }}
                           >
-                            {rec.closestDiff < 0 ? `${rec.closestDiff} vrac retiré` : `+${rec.closestDiff} pcs (+1 colis)`}
+                            {rec.closestDiff < 0 ? `${rec.closestDiff} fraq retiré` : `+${rec.closestDiff} pcs (+1 colis)`}
                           </span>
                         </div>
                         <div className="text-xs text-muted mt-0.5">
@@ -5508,9 +6040,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                         className="btn btn-xs btn-ghost text-muted"
                         style={{ fontSize: '0.7rem' }}
                         onClick={() => handleApplyPackQty(disc.remaining, 0, activePack, true)}
-                        title={`Conserver exactement ${disc.remaining} pièces en vrac`}
+                        title={`Conserver exactement ${disc.remaining} pièces en fraq`}
                       >
-                        Vrac exact ({disc.remaining} pcs)
+                        Fraq exact ({disc.remaining} pcs)
                       </button>
                     </div>
                   </div>
@@ -5974,23 +6506,40 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
 
           {/* Batch preview */}
           {batchQty > 0 && (
-            <div className="mt-3 p-2.5" style={{ background: 'var(--bg-surface)', borderRadius: '14px', border: '1px solid var(--glass-border-subtle)' }}>
-              <div className="flex justify-between items-baseline">
-                <span className="text-sm text-muted font-semibold">CE LOT</span>
-                <span className="font-bold text-lg" style={{ fontFamily: 'var(--font-mono)' }}>+{batchQty}</span>
+            <div
+              className="mt-3"
+              style={{
+                padding: '14px 18px',
+                background: 'var(--bg-surface)',
+                borderRadius: '18px',
+                border: '1px solid var(--border)',
+              }}
+            >
+              <div className="flex justify-between items-baseline mb-2">
+                <span className="text-xs text-muted font-bold tracking-wider uppercase">CE LOT</span>
+                <span className="font-bold text-lg font-mono text-accent">+{batchQty}</span>
               </div>
-              <div className="flex justify-between items-baseline mt-1">
-                <span className="text-sm text-muted font-semibold">APRÈS AJOUT</span>
-                <span className="font-bold text-lg" style={{
-                  fontFamily: 'var(--font-mono)',
-                  color: afterDisc.isExact ? 'var(--success)' :
-                         afterDisc.isOver ? 'var(--over)' : 'var(--text-primary)'
-                }}>
-                  {afterAdding}
+              <div className="flex justify-between items-baseline mb-2.5">
+                <span className="text-xs text-muted font-bold tracking-wider uppercase">APRÈS AJOUT</span>
+                <span
+                  className="font-bold text-lg font-mono"
+                  style={{
+                    color: afterDisc.isExact
+                      ? 'var(--success)'
+                      : afterDisc.isOver
+                      ? 'var(--over)'
+                      : 'var(--text-primary)',
+                  }}
+                >
+                  {afterAdding} pcs
                 </span>
               </div>
-              <div className="mt-2">
-                {afterDisc.isExact && <span className="badge badge-exact flex items-center gap-1"><IconCheck size={11} /> SERA EXACT</span>}
+              <div className="pt-1 flex items-center gap-2">
+                {afterDisc.isExact && (
+                  <span className="badge badge-exact flex items-center gap-1">
+                    <IconCheck size={11} /> SERA EXACT
+                  </span>
+                )}
                 {afterDisc.isOver && <span className="badge badge-over">{afterDisc.over} EXCÉDENT</span>}
                 {afterDisc.isShort && <span className="badge badge-short">{afterDisc.remaining} RESTANTS</span>}
               </div>
@@ -6025,7 +6574,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               >
                 <span className="flex items-center gap-1">
                   {selectedContainer === null && <IconCheck size={12} />}
-                  Hors Colis (Vrac)
+                  Hors Colis (Fraq)
                 </span>
               </button>
 
@@ -6137,7 +6686,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   if (noContainer === 0) return null;
                   return (
                     <div className="flex justify-between text-sm py-1">
-                      <span className="text-muted">Hors Colis (Vrac)</span>
+                      <span className="text-muted">Hors Colis (Fraq)</span>
                       <span className="font-bold">{noContainer} unités</span>
                     </div>
                   );
@@ -6507,34 +7056,34 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
       </div>
 
       {/* Sticky confirm button & Next button */}
-      <div className="bottom-bar flex-col gap-2" style={{ padding: '8px 12px' }}>
-        {/* Glanceable Current Count Banner (Zero Scroll Needed) */}
+      <div
+        className="bottom-bar flex-col gap-2"
+        style={{
+          padding: '10px 14px',
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border)',
+          zIndex: 1000,
+          boxShadow: '0 -8px 28px rgba(0, 0, 0, 0.25)',
+        }}
+      >
+        {/* Glanceable Current Count Banner (Zero Bleed-Through, Clean Single Row) */}
         <div
           className="flex items-center justify-between w-full"
           style={{
-            padding: '5px 12px',
-            borderRadius: '12px',
+            padding: '7px 14px',
+            borderRadius: '9999px',
             background: stageTotal > 0
-              ? (showQuantities
-                  ? (disc.isExact ? 'rgba(16, 185, 129, 0.18)' : disc.isOver ? 'rgba(168, 85, 247, 0.18)' : 'rgba(245, 158, 11, 0.18)')
-                  : 'rgba(16, 185, 129, 0.12)')
-              : 'rgba(255, 255, 255, 0.06)',
-            border: `1px solid ${
-              stageTotal > 0
-                ? (showQuantities
-                    ? (disc.isExact ? 'rgba(16, 185, 129, 0.35)' : disc.isOver ? 'rgba(168, 85, 247, 0.35)' : 'rgba(245, 158, 11, 0.35)')
-                    : 'rgba(16, 185, 129, 0.25)')
-                : 'rgba(255, 255, 255, 0.08)'
-            }`,
+              ? (disc.isExact ? 'rgba(16, 185, 129, 0.16)' : disc.isOver ? 'rgba(168, 85, 247, 0.16)' : 'rgba(245, 158, 11, 0.16)')
+              : 'var(--bg-card)',
+            border: '1px solid var(--border)',
           }}
         >
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+          <div className="flex items-center gap-2 min-w-0" style={{ fontSize: '0.82rem' }}>
+            <span style={{ fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)', fontSize: '0.72rem' }}>
               {stage === 'preparation' ? 'Préparé' : stage === 'chargement' ? 'Chargé' : 'Pointé'} :
             </span>
             <span
               style={{
-                fontSize: '0.88rem',
                 fontWeight: 800,
                 fontFamily: 'var(--font-mono)',
                 color: stageTotal > 0
@@ -6547,27 +7096,28 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               {showQuantities ? `${stageTotal} / ${line.orderedQty} pcs` : `${stageTotal} pcs`}
             </span>
             {effectiveBatch > 0 && (
-              <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--accent)', marginLeft: 4, whiteSpace: 'nowrap' }}>
-                {showQuantities ? `→ après : ${afterAdding} pcs` : `(+${effectiveBatch} pcs)`}
+              <span style={{ fontWeight: 700, color: 'var(--accent)', fontSize: '0.75rem' }}>
+                ➔ Nouveau : {afterAdding} pcs
               </span>
             )}
           </div>
 
           <span
+            className="badge"
             style={{
               fontSize: '0.72rem',
               fontWeight: 800,
-              padding: '2px 8px',
-              borderRadius: '6px',
+              padding: '3px 10px',
+              borderRadius: '9999px',
               background: !showQuantities
-                ? (stageTotal > 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.06)')
+                ? (stageTotal > 0 ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-surface)')
                 : disc.isExact && stageTotal > 0
                 ? 'var(--success-bg)'
                 : disc.isOver
                 ? 'var(--over-bg)'
                 : disc.isShort && stageTotal > 0
                 ? 'var(--danger-bg)'
-                : 'rgba(255, 255, 255, 0.06)',
+                : 'var(--bg-surface)',
               color: !showQuantities
                 ? (stageTotal > 0 ? 'var(--accent)' : 'var(--text-muted)')
                 : disc.isExact && stageTotal > 0
@@ -6577,17 +7127,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 : disc.isShort && stageTotal > 0
                 ? '#f87171'
                 : 'var(--text-muted)',
-              border: `1px solid ${
-                !showQuantities
-                  ? 'transparent'
-                  : disc.isExact && stageTotal > 0
-                  ? 'var(--success-border)'
-                  : disc.isOver
-                  ? 'var(--over-border)'
-                  : disc.isShort && stageTotal > 0
-                  ? 'var(--danger-border)'
-                  : 'transparent'
-              }`,
+              border: '1px solid var(--border)',
               whiteSpace: 'nowrap',
               flexShrink: 0,
             }}
@@ -6600,7 +7140,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               ? 'Complet'
               : disc.isOver
               ? `+${disc.over} Excédent`
-              : `-${disc.remaining} Manquant`}
+              : `-${disc.remaining} Restant`}
           </span>
         </div>
 
@@ -8009,7 +8549,17 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
             className={`seg-btn ${summaryTab === 'cartons' ? 'active' : ''}`}
             onClick={() => setSummaryTab('cartons')}
           >
-            Colis ({containers.length})
+            {(() => {
+              const hasLooseUnits = lines.some((l) =>
+                (eventsByLine.get(l.id!) || []).some(
+                  (e) => e.stage === 'preparation' && !e.undone && !e.containerId && e.quantity > 0
+                )
+              );
+              if (containers.length === 0) {
+                return hasLooseUnits ? 'Colis & Fraq (1)' : 'Colis (0)';
+              }
+              return `Colis (${containers.length}${hasLooseUnits ? ' + Fraq' : ''})`;
+            })()}
           </button>
           <button
             type="button"
@@ -8103,7 +8653,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
                       <div className="font-bold flex items-center gap-2">
                         <span className="container-tag selected" style={{ fontSize: '0.9rem' }}>{c.label}</span>
                         <span className="text-xs text-muted">
-                          {c.type === 'chouala' ? 'Sac de conditionnement' : c.type === 'loose' ? 'Hors Colis (Vrac)' : c.type === 'large' ? 'Grand Colis' : 'Carton Standard'}
+                          {c.type === 'chouala' ? 'Sac de conditionnement' : c.type === 'loose' ? 'Hors Colis (Fraq)' : c.type === 'large' ? 'Grand Colis' : 'Carton Standard'}
                         </span>
                       </div>
                       <span className="badge badge-active font-mono">{totalUnits} unités</span>
@@ -8141,7 +8691,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
                 );
               })}
 
-              {/* Unassigned / Hors carton */}
+              {/* Unassigned / Hors carton (Fraq) */}
               {(() => {
                 const linesOutside = lines
                   .map(line => {
@@ -8159,7 +8709,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
                 return (
                   <div className="card mb-3" style={{ borderColor: 'var(--warning-border)' }}>
                     <div className="flex justify-between items-center mb-2">
-                      <span className="container-tag" style={{ background: 'var(--bg-surface)' }}>HORS CARTON</span>
+                      <span className="container-tag" style={{ background: 'var(--bg-surface)', fontWeight: 800 }}>HORS COLIS (FRAQ)</span>
 
                       <span className="badge badge-warning font-mono">{totalUnits} unités</span>
                     </div>
@@ -8666,12 +9216,13 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
         operators={operators}
         activeOperator={activeOperator}
         relatedBills={entityBills || []}
-        onSigned={(opName, batch) => {
+        onSigned={(opName, batch, notFoundCount) => {
           if (setToast) {
+            const extra = notFoundCount && notFoundCount > 0 ? ` (${notFoundCount} non pointés marqués introuvables)` : '';
             setToast(
               batch
-                ? `Toute la commande signée par ${opName}`
-                : `Phase ${stageScope} signée par ${opName}`
+                ? `Toute la commande signée par ${opName}${extra}`
+                : `Phase ${stageScope} signée par ${opName}${extra}`
             );
           }
         }}
