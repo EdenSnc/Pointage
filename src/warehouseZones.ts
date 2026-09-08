@@ -10,44 +10,47 @@ export interface WarehouseZoneOption {
   code: string;
   label: string;
   shortLabel: string;
-  category: 'chambre' | 'couloir' | 'salle4' | 'custom';
+  category: 'chambre' | 'couloir' | 'custom';
   compassRow?: number; // 1 = North, 2 = Middle, 3 = South
   compassCol?: number; // 1 = West, 2 = Center, 3 = East
+  roomNumber?: number; // 1 = Salle 1 (South), 2 = Salle 2, 3 = Salle 3, 4 = Salle 4 (North)
   order: number;
 }
 
 export const WAREHOUSE_ZONES: WarehouseZoneOption[] = [
   // --- Chambre Principale (Spatial Compass Grid) ---
+  // Entrance is to the South-West of the Main Chamber.
+  // Sequence sweeps from SW entrance across South, Middle, and North rows.
   {
-    code: 'CH_NW',
-    label: 'Chambre Principale • Nord-Ouest',
-    shortLabel: 'CH • Nord-Ouest',
+    code: 'CH_SW',
+    label: 'Chambre Principale • Sud-Ouest (Entrée)',
+    shortLabel: 'CH • Sud-Ouest',
     category: 'chambre',
-    compassRow: 1,
+    compassRow: 3,
     compassCol: 1,
     order: 10,
   },
   {
-    code: 'CH_N',
-    label: 'Chambre Principale • Nord',
-    shortLabel: 'CH • Nord',
+    code: 'CH_S',
+    label: 'Chambre Principale • Sud',
+    shortLabel: 'CH • Sud',
     category: 'chambre',
-    compassRow: 1,
+    compassRow: 3,
     compassCol: 2,
     order: 20,
   },
   {
-    code: 'CH_NE',
-    label: 'Chambre Principale • Nord-Est',
-    shortLabel: 'CH • Nord-Est',
+    code: 'CH_SE',
+    label: 'Chambre Principale • Sud-Est',
+    shortLabel: 'CH • Sud-Est',
     category: 'chambre',
-    compassRow: 1,
+    compassRow: 3,
     compassCol: 3,
     order: 30,
   },
   {
     code: 'CH_W',
-    label: 'Chambre Principale • Ouest',
+    label: 'Chambre Principale • Ouest (Accès Couloir)',
     shortLabel: 'CH • Ouest',
     category: 'chambre',
     compassRow: 2,
@@ -73,105 +76,68 @@ export const WAREHOUSE_ZONES: WarehouseZoneOption[] = [
     order: 60,
   },
   {
-    code: 'CH_SW',
-    label: 'Chambre Principale • Sud-Ouest',
-    shortLabel: 'CH • Sud-Ouest',
+    code: 'CH_NW',
+    label: 'Chambre Principale • Nord-Ouest (Accès Salle 4)',
+    shortLabel: 'CH • Nord-Ouest',
     category: 'chambre',
-    compassRow: 3,
+    compassRow: 1,
     compassCol: 1,
     order: 70,
   },
   {
-    code: 'CH_S',
-    label: 'Chambre Principale • Sud',
-    shortLabel: 'CH • Sud',
+    code: 'CH_N',
+    label: 'Chambre Principale • Nord',
+    shortLabel: 'CH • Nord',
     category: 'chambre',
-    compassRow: 3,
+    compassRow: 1,
     compassCol: 2,
     order: 80,
   },
   {
-    code: 'CH_SE',
-    label: 'Chambre Principale • Sud-Est',
-    shortLabel: 'CH • Sud-Est',
+    code: 'CH_NE',
+    label: 'Chambre Principale • Nord-Est',
+    shortLabel: 'CH • Nord-Est',
     category: 'chambre',
-    compassRow: 3,
+    compassRow: 1,
     compassCol: 3,
     order: 90,
   },
 
-  // --- Couloir (Salles 1 à 3) ---
+  // --- Couloir (Hallway South to North, Salles 1 to 4) ---
+  // Hallway is to the left of the main chamber with multiple connecting openings.
+  // Salle 1 is southmost (by entrance), Salle 4 is northmost.
+  // When coming out of North Chamber, picker sweeps Salle 4 down to Salle 1 (direct exit to SW dock).
   {
-    code: 'CO_R1',
-    label: 'Couloir • Salle 1',
-    shortLabel: 'Salle 1',
+    code: 'CO_R4',
+    label: 'Couloir • Salle 4 (Nord / Fond)',
+    shortLabel: 'Couloir • Salle 4',
     category: 'couloir',
+    roomNumber: 4,
+    order: 100,
+  },
+  {
+    code: 'CO_R3',
+    label: 'Couloir • Salle 3',
+    shortLabel: 'Couloir • Salle 3',
+    category: 'couloir',
+    roomNumber: 3,
     order: 110,
   },
   {
     code: 'CO_R2',
     label: 'Couloir • Salle 2',
-    shortLabel: 'Salle 2',
+    shortLabel: 'Couloir • Salle 2',
     category: 'couloir',
+    roomNumber: 2,
     order: 120,
   },
   {
-    code: 'CO_R3',
-    label: 'Couloir • Salle 3',
-    shortLabel: 'Salle 3',
+    code: 'CO_R1',
+    label: 'Couloir • Salle 1 (Sud / Entrée)',
+    shortLabel: 'Couloir • Salle 1',
     category: 'couloir',
+    roomNumber: 1,
     order: 130,
-  },
-
-  // --- Salle 4 (Stock Principal, Allées Sud → Nord) ---
-  {
-    code: 'CO_R4_S',
-    label: 'Salle 4 • Entrée Sud',
-    shortLabel: 'Salle 4 • Sud',
-    category: 'salle4',
-    order: 140,
-  },
-  {
-    code: 'CO_R4_A1',
-    label: 'Salle 4 • Allée 1',
-    shortLabel: 'Salle 4 • Allée 1',
-    category: 'salle4',
-    order: 141,
-  },
-  {
-    code: 'CO_R4_A2',
-    label: 'Salle 4 • Allée 2',
-    shortLabel: 'Salle 4 • Allée 2',
-    category: 'salle4',
-    order: 142,
-  },
-  {
-    code: 'CO_R4_A3',
-    label: 'Salle 4 • Allée 3',
-    shortLabel: 'Salle 4 • Allée 3',
-    category: 'salle4',
-    order: 143,
-  },
-  {
-    code: 'CO_R4_A4',
-    label: 'Salle 4 • Allée 4',
-    shortLabel: 'Salle 4 • Allée 4',
-    category: 'salle4',
-    order: 144,
-  },
-  {
-    code: 'CO_R4_N',
-    label: 'Salle 4 • Fond Nord',
-    shortLabel: 'Salle 4 • Nord',
-    category: 'salle4',
-    order: 149,
-  },
-  {
-    code: 'CO_R4',
-    label: 'Salle 4 (Général)',
-    shortLabel: 'Salle 4',
-    category: 'salle4',
-    order: 150,
   },
 ];
 
@@ -183,6 +149,12 @@ const LEGACY_ZONE_MAP: Record<string, string> = {
   SOUTH_EAST: 'CH_SE',
   LITTLE_ROOM_ENTRANCE: 'CO_R1',
   LITTLE_ROOM_DEEP: 'CO_R2',
+  CO_R4_S: 'CO_R4',
+  CO_R4_A1: 'CO_R4',
+  CO_R4_A2: 'CO_R4',
+  CO_R4_A3: 'CO_R4',
+  CO_R4_A4: 'CO_R4',
+  CO_R4_N: 'CO_R4',
 };
 
 export function normalizeZoneCode(code: string | null | undefined): string | null {
@@ -279,7 +251,9 @@ export async function updateProductWarehouseZone(
 }
 
 /**
- * Sorts lines by warehouse picking path (Chambre compass -> Couloir -> Salle 4 S->N -> Unassigned)
+ * Sorts lines by warehouse picking path:
+ * Chambre (Entrée SW ➔ Sud ➔ Centre ➔ Nord) ⟶ Couloir (Salle 4 ➔ Salle 1 Sud / Sortie) ⟶ Custom ⟶ Non assignés
+ * Eliminates backtracking across the facility during order picking.
  */
 export function sortLinesByWarehouseZone(
   lines: OrderLine[],
@@ -302,4 +276,11 @@ export function sortLinesByWarehouseZone(
     if (pageDiff !== 0) return pageDiff;
     return (Number(a.no) || 0) - (Number(b.no) || 0);
   });
+}
+
+/**
+ * Returns human-readable description of physical picking circuit
+ */
+export function getWarehouseCircuitDescription(): string {
+  return 'Chambre (Entrée SW ➔ NE) ⟶ Couloir (Salles 4 ➔ 1)';
 }

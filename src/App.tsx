@@ -152,6 +152,7 @@ import {
   getZoneLabel,
   getZoneShortLabel,
   sortLinesByWarehouseZone,
+  getWarehouseCircuitDescription,
 } from './warehouseZones';
 import {
   downloadTripExitWorkbook,
@@ -3857,6 +3858,29 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               : `${displayLines.length} / ${lines.length} lignes`}
           </span>
         </div>
+
+        {/* Picking Circuit Order Banner when sortByZone is active */}
+        {sortByZone && (
+          <div
+            className="flex items-center justify-between px-3 py-1.5 mb-2 rounded-xl text-xs font-semibold"
+            style={{
+              background: 'rgba(16, 185, 129, 0.08)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+              color: 'var(--accent)',
+            }}
+          >
+            <div className="flex items-center gap-1.5 truncate">
+              <IconCompass size={14} className="flex-shrink-0" />
+              <span className="truncate">Circuit de ramasse : {getWarehouseCircuitDescription()}</span>
+            </div>
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider"
+              style={{ background: 'rgba(16, 185, 129, 0.18)', color: 'var(--accent)' }}
+            >
+              0 Retour
+            </span>
+          </div>
+        )}
 
         {/* Selection Toolbar when in multi-select mode */}
         {isSelectionMode && (

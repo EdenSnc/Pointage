@@ -18,7 +18,7 @@ interface WarehouseZoneModalProps {
   onZoneUpdated?: (newZone: string | null) => void;
 }
 
-type ZoneTab = 'chambre' | 'salle4' | 'couloir' | 'custom';
+type ZoneTab = 'chambre' | 'couloir' | 'custom';
 
 export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
   isOpen,
@@ -36,7 +36,6 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
   // Auto-detect initial tab from current zone
   const [activeTab, setActiveTab] = useState<ZoneTab>(() => {
     if (!currentZoneNorm) return 'chambre';
-    if (currentZoneNorm.startsWith('CO_R4')) return 'salle4';
     if (currentZoneNorm.startsWith('CO_')) return 'couloir';
     if (currentInfo?.category === 'custom') return 'custom';
     return 'chambre';
@@ -79,7 +78,6 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
 
   const chambreZones = WAREHOUSE_ZONES.filter((z) => z.category === 'chambre');
   const couloirZones = WAREHOUSE_ZONES.filter((z) => z.category === 'couloir');
-  const salle4Zones = WAREHOUSE_ZONES.filter((z) => z.category === 'salle4');
 
   return (
     <div
@@ -189,31 +187,23 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
           <button
             type="button"
             className={`btn btn-xs flex-1 ${activeTab === 'chambre' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ fontSize: '0.72rem', padding: '5px 4px', borderRadius: 'var(--radius-sm)' }}
+            style={{ fontSize: '0.74rem', padding: '6px 4px', borderRadius: 'var(--radius-sm)' }}
             onClick={() => setActiveTab('chambre')}
           >
-            Chambre
-          </button>
-          <button
-            type="button"
-            className={`btn btn-xs flex-1 ${activeTab === 'salle4' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ fontSize: '0.72rem', padding: '5px 4px', borderRadius: 'var(--radius-sm)' }}
-            onClick={() => setActiveTab('salle4')}
-          >
-            Salle 4
+            Chambre (9 zones)
           </button>
           <button
             type="button"
             className={`btn btn-xs flex-1 ${activeTab === 'couloir' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ fontSize: '0.72rem', padding: '5px 4px', borderRadius: 'var(--radius-sm)' }}
+            style={{ fontSize: '0.74rem', padding: '6px 4px', borderRadius: 'var(--radius-sm)' }}
             onClick={() => setActiveTab('couloir')}
           >
-            Couloir
+            Couloir (Salles 1–4)
           </button>
           <button
             type="button"
             className={`btn btn-xs flex-1 ${activeTab === 'custom' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ fontSize: '0.72rem', padding: '5px 4px', borderRadius: 'var(--radius-sm)' }}
+            style={{ fontSize: '0.74rem', padding: '6px 4px', borderRadius: 'var(--radius-sm)' }}
             onClick={() => setActiveTab('custom')}
           >
             Autre
@@ -224,7 +214,7 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
         {activeTab === 'chambre' && (
           <div>
             <div className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2 flex justify-between items-center">
-              <span>Orientation spatiale Chambre :</span>
+              <span>Grille Chambre Principale (9 zones) :</span>
               <span className="text-[10px] text-accent">1 Tap pour choisir</span>
             </div>
 
@@ -240,18 +230,22 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
                   const z = chambreZones.find((item) => item.compassRow === r && item.compassCol === c);
                   if (!z) return <div key={`${r}-${c}`} />;
                   const isSelected = currentZoneNorm === z.code;
+                  const isEntrance = z.code === 'CH_SW';
+                  const isCouloirAccess = z.code === 'CH_W' || z.code === 'CH_NW';
+
                   return (
                     <button
                       key={z.code}
                       type="button"
-                      className={`p-2.5 rounded-xl flex flex-col items-center justify-center text-center transition-all ${
+                      className={`p-2 rounded-xl flex flex-col items-center justify-center text-center transition-all ${
                         isSelected ? 'border-accent bg-accent/15' : ''
                       }`}
                       style={{
-                        minHeight: 58,
+                        minHeight: 64,
                         background: isSelected ? 'rgba(16, 185, 129, 0.18)' : 'var(--bg-input)',
                         border: isSelected ? '1.5px solid var(--accent)' : '1px solid var(--glass-border-subtle)',
                         cursor: 'pointer',
+                        position: 'relative',
                       }}
                       onClick={() => handleSelectZone(z.code)}
                     >
@@ -261,6 +255,31 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
                       >
                         {z.shortLabel.replace('CH • ', '')}
                       </span>
+
+                      {isEntrance && (
+                        <span
+                          className="mt-1 px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider"
+                          style={{
+                            background: 'rgba(59, 130, 246, 0.2)',
+                            color: '#60a5fa',
+                            border: '1px solid rgba(59, 130, 246, 0.4)',
+                          }}
+                        >
+                          Entrée
+                        </span>
+                      )}
+
+                      {isCouloirAccess && !isEntrance && (
+                        <span
+                          className="mt-1 px-1 py-0.2 rounded text-[9px] text-muted font-semibold"
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.05)',
+                          }}
+                        >
+                          ⟵ Couloir
+                        </span>
+                      )}
+
                       {isSelected && (
                         <span className="flex items-center gap-0.5 text-[10px] text-accent font-bold mt-1">
                           <IconCheck size={11} /> Choisi
@@ -274,26 +293,26 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
           </div>
         )}
 
-        {/* Tab 2: Salle 4 (South to North order) */}
-        {activeTab === 'salle4' && (
+        {/* Tab 2: Couloir (Salles 1 à 4, South to North) */}
+        {activeTab === 'couloir' && (
           <div>
             <div className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2 flex justify-between items-center">
-              <span>Allées numérotées Sud → Nord :</span>
+              <span>Salles du Couloir (Sud ➔ Nord) :</span>
               <span className="text-[10px] text-accent">1 Tap pour choisir</span>
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <div className="text-[10px] font-mono text-muted text-right pr-2">▲ FOND (NORD)</div>
-              {salle4Zones
+            <div className="flex flex-col gap-2">
+              <div className="text-[10px] font-mono text-muted text-right pr-2">▲ FOND DU COULOIR (NORD)</div>
+              {couloirZones
                 .slice()
-                .reverse()
+                .sort((a, b) => (b.roomNumber || 0) - (a.roomNumber || 0))
                 .map((z) => {
                   const isSelected = currentZoneNorm === z.code;
                   return (
                     <button
                       key={z.code}
                       type="button"
-                      className="p-2.5 rounded-xl flex items-center justify-between text-left transition-all"
+                      className="p-3 rounded-xl flex items-center justify-between text-left transition-all"
                       style={{
                         background: isSelected ? 'rgba(16, 185, 129, 0.18)' : 'var(--bg-input)',
                         border: isSelected ? '1.5px solid var(--accent)' : '1px solid var(--glass-border-subtle)',
@@ -301,81 +320,42 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
                       }}
                       onClick={() => handleSelectZone(z.code)}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2.5">
                         <div
                           style={{
-                            width: 22,
-                            height: 22,
-                            borderRadius: 7,
+                            width: 28,
+                            height: 28,
+                            borderRadius: 9,
                             background: isSelected ? 'var(--accent)' : 'rgba(255, 255, 255, 0.06)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             color: isSelected ? '#fff' : 'var(--text-muted)',
+                            flexShrink: 0,
                           }}
                         >
-                          {isSelected ? <IconCheck size={13} /> : <IconMapPin size={12} />}
+                          {isSelected ? <IconCheck size={15} /> : <IconMapPin size={14} />}
                         </div>
-                        <span className="text-xs font-bold">{z.label}</span>
+                        <div>
+                          <div className="text-sm font-bold">{z.label}</div>
+                          <div className="text-[10px] text-muted">
+                            {z.code === 'CO_R4' && 'Au bout du couloir • Face à la Chambre Nord-Ouest'}
+                            {z.code === 'CO_R3' && 'Zone intermédiaire Nord'}
+                            {z.code === 'CO_R2' && 'Zone intermédiaire Sud'}
+                            {z.code === 'CO_R1' && 'Début du couloir • Accès direct Entrée Entrepôt SW'}
+                          </div>
+                        </div>
                       </div>
-                      <span className="badge" style={{ fontSize: '0.65rem' }}>{z.shortLabel}</span>
+                      <span className="badge badge-exact font-bold">{z.shortLabel}</span>
                     </button>
                   );
                 })}
-              <div className="text-[10px] font-mono text-muted text-right pr-2">▼ ENTRÉE (SUD)</div>
+              <div className="text-[10px] font-mono text-muted text-right pr-2">▼ ENTRÉE ENTREPÔT (SUD-OUEST)</div>
             </div>
           </div>
         )}
 
-        {/* Tab 3: Couloir (Salles 1 à 3) */}
-        {activeTab === 'couloir' && (
-          <div>
-            <div className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2 flex justify-between items-center">
-              <span>Salles du Couloir :</span>
-              <span className="text-[10px] text-accent">1 Tap pour choisir</span>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              {couloirZones.map((z) => {
-                const isSelected = currentZoneNorm === z.code;
-                return (
-                  <button
-                    key={z.code}
-                    type="button"
-                    className="p-3 rounded-xl flex items-center justify-between text-left transition-all"
-                    style={{
-                      background: isSelected ? 'rgba(16, 185, 129, 0.18)' : 'var(--bg-input)',
-                      border: isSelected ? '1.5px solid var(--accent)' : '1px solid var(--glass-border-subtle)',
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => handleSelectZone(z.code)}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        style={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: 8,
-                          background: isSelected ? 'var(--accent)' : 'rgba(255, 255, 255, 0.06)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: isSelected ? '#fff' : 'var(--text-muted)',
-                        }}
-                      >
-                        {isSelected ? <IconCheck size={14} /> : <IconMapPin size={13} />}
-                      </div>
-                      <span className="text-sm font-bold">{z.label}</span>
-                    </div>
-                    <span className="badge badge-exact font-bold">{z.shortLabel}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Tab 4: Custom / Rayon */}
+        {/* Tab 3: Custom / Rayon */}
         {activeTab === 'custom' && (
           <div>
             <div className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2">
@@ -402,7 +382,7 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
 
             <div className="text-xs text-muted mb-1 font-semibold">Suggestions rapides :</div>
             <div className="flex flex-wrap gap-1.5">
-              {['Quai Réception', 'Mezzanine', 'Entrée Atelier', 'Rayon 1', 'Rayon 2', 'Rayon 3'].map((sug) => (
+              {['Quai Réception', 'Quai Expédition', 'Mezzanine', 'Entrée Atelier', 'Chambre Froide', 'Zone Tampon'].map((sug) => (
                 <button
                   key={sug}
                   type="button"
