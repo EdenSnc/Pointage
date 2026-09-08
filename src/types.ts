@@ -67,6 +67,7 @@ export type AuditEventType =
   | 'trip_created'
   | 'trip_dispatched'
   | 'trip_cancelled'
+  | 'legacy_code_linked'
   | 'status_changed';
 
 export type SessionStatus = 'active' | 'completed';
@@ -181,6 +182,8 @@ export interface OrderLine {
   packagesRaw: string | null;
   // Compound reference aliases for search
   referenceAliases: string[];
+  // Historical legacy code (when product dropped its code on newer bills)
+  historicalReference?: string | null;
   colisage?: string | null;
   substituteForId?: number | null;
   substitutedById?: number | null;
@@ -257,6 +260,9 @@ export interface IdentifierSuggestion {
 export interface ProductProfile {
   id?: number;
   reference: string;
+  designation?: string | null;
+  normalizedDesignation?: string | null;
+  legacyCodes?: string[];
   outerPackSize: number | null;
   innerPackSize: number | null;
   warehouseZone: WarehouseZone | null;

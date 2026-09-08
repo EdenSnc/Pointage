@@ -53,6 +53,13 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
     return info?.category === 'custom' ? first : '';
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth <= 640 : false));
+
+  React.useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 640);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const handleToggleZone = (code: string) => {
     hapticTap('light');
@@ -109,13 +116,13 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(6px)',
+        backgroundColor: 'rgba(0, 0, 0, 0.78)',
+        backdropFilter: 'blur(8px)',
         zIndex: 960,
         display: 'flex',
-        alignItems: 'center',
+        alignItems: isMobile ? 'stretch' : 'center',
         justifyContent: 'center',
-        padding: 16,
+        padding: isMobile ? 0 : 16,
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -125,14 +132,17 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
         className="card"
         style={{
           width: '100%',
-          maxWidth: 440,
-          maxHeight: '90vh',
+          maxWidth: isMobile ? '100%' : 440,
+          height: isMobile ? '100%' : 'auto',
+          maxHeight: isMobile ? '100vh' : '90vh',
+          borderRadius: isMobile ? 0 : 24,
           overflowY: 'auto',
           backgroundColor: 'var(--bg-surface)',
-          border: '1px solid var(--border)',
+          border: isMobile ? 'none' : '1px solid var(--border)',
           boxShadow: 'var(--shadow-xl)',
-          borderRadius: 24,
-          padding: 20,
+          padding: isMobile ? '16px 14px' : 20,
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
         {/* Header */}

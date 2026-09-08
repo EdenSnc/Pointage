@@ -4,6 +4,7 @@
 
 import { db } from './db';
 import { generateReferenceAliases } from './logic';
+import { findProductProfileMatch, saveProductProfile } from './hooks';
 import type {
   ImportPayload,
   ImportBillJSON,
@@ -298,7 +299,27 @@ export async function importBills(
         if (!isDuplicate) {
           const finalNo = cleanNo || String(existingLines.length + addedForThisBill + 1);
           const designation = lineData.designation?.trim() || (ref ? `Réf: ${ref}` : `Article ${finalNo}`);
-          const aliases = generateReferenceAliases(ref);
+
+          let historicalRef: string | null = null;
+          let matchedProfile = null;
+
+          if (!ref && designation) {
+            matchedProfile = await findProductProfileMatch(null, designation);
+            if (matchedProfile) {
+              historicalRef = matchedProfile.reference;
+            }
+          } else if (ref) {
+            matchedProfile = await findProductProfileMatch(ref, designation);
+            saveProductProfile(ref, { designation }).catch(() => {});
+          }
+
+          const aliases = Array.from(
+            new Set([
+              ...generateReferenceAliases(ref),
+              ...(historicalRef ? [historicalRef] : []),
+              ...(matchedProfile?.legacyCodes || []),
+            ])
+          );
 
           const orderLine: OrderLine = {
             billId: matchingBill.id,
@@ -317,11 +338,13 @@ export async function importBills(
             orderedQty: qty,
             unitPrice,
             status: 'active',
-            outerPackSize: null,
-            innerPackSize: null,
-            warehouseZone: null,
+            outerPackSize: matchedProfile?.outerPackSize ?? null,
+            innerPackSize: matchedProfile?.innerPackSize ?? null,
+            warehouseZone: matchedProfile?.warehouseZone ?? null,
+            imageUrl: matchedProfile?.imageUrl ?? null,
             packagesRaw: lineData.packagesRaw != null ? String(lineData.packagesRaw) : null,
             referenceAliases: aliases,
+            historicalReference: historicalRef,
             createdAt: now,
             updatedAt: now,
           };
@@ -413,7 +436,28 @@ export async function importBills(
         const ean = lineData.ean != null ? String(lineData.ean).trim() : null;
         const finalNo = lineData.no ? String(lineData.no).trim() : String(i + 1);
         const designation = lineData.designation?.trim() || (ref ? `Réf: ${ref}` : `Article ${finalNo}`);
-        const aliases = generateReferenceAliases(ref);
+
+        let historicalRef: string | null = null;
+        let matchedProfile = null;
+
+        if (!ref && designation) {
+          matchedProfile = await findProductProfileMatch(null, designation);
+          if (matchedProfile) {
+            historicalRef = matchedProfile.reference;
+          }
+        } else if (ref) {
+          matchedProfile = await findProductProfileMatch(ref, designation);
+          saveProductProfile(ref, { designation }).catch(() => {});
+        }
+
+        const aliases = Array.from(
+          new Set([
+            ...generateReferenceAliases(ref),
+            ...(historicalRef ? [historicalRef] : []),
+            ...(matchedProfile?.legacyCodes || []),
+          ])
+        );
+
         const rawPrice = lineData.unitPrice;
         const unitPrice = typeof rawPrice === 'number' && !isNaN(rawPrice) && rawPrice >= 0 ? rawPrice : null;
 
@@ -434,11 +478,13 @@ export async function importBills(
           orderedQty: qty,
           unitPrice,
           status: 'active',
-          outerPackSize: null,
-          innerPackSize: null,
-          warehouseZone: null,
+          outerPackSize: matchedProfile?.outerPackSize ?? null,
+          innerPackSize: matchedProfile?.innerPackSize ?? null,
+          warehouseZone: matchedProfile?.warehouseZone ?? null,
+          imageUrl: matchedProfile?.imageUrl ?? null,
           packagesRaw: lineData.packagesRaw != null ? String(lineData.packagesRaw) : null,
           referenceAliases: aliases,
+          historicalReference: historicalRef,
           createdAt: now,
           updatedAt: now,
         };

@@ -15,7 +15,7 @@ import type {
   BillIdentifierOverride,
   ProductProfile,
 } from './types';
-import { smartSearchScore } from './logic';
+import { smartSearchScore, normalizeDesignation, areDesignationsMatching } from './logic';
 
 // ---------- Session ----------
 export function useActiveSession() {
@@ -823,20 +823,143 @@ export async function saveProductProfile(
     .where('reference')
     .equals(reference)
     .first();
+  const normalized = data.designation ? normalizeDesignation(data.designation) : undefined;
   if (existing) {
+    const mergedLegacy = Array.from(
+      new Set([...(existing.legacyCodes || []), ...(data.legacyCodes || [])])
+    );
     await db.productProfiles.update(existing.id!, {
       ...data,
+      designation: data.designation !== undefined ? data.designation : existing.designation,
+      normalizedDesignation: normalized !== undefined ? normalized : existing.normalizedDesignation,
+      legacyCodes: mergedLegacy.length > 0 ? mergedLegacy : undefined,
       updatedAt: new Date().toISOString(),
     });
   } else {
     await db.productProfiles.add({
       reference,
+      designation: data.designation ?? null,
+      normalizedDesignation: normalized ?? null,
+      legacyCodes: data.legacyCodes ?? [],
       outerPackSize: data.outerPackSize ?? null,
       innerPackSize: data.innerPackSize ?? null,
       warehouseZone: data.warehouseZone ?? null,
+      imageUrl: data.imageUrl ?? null,
       updatedAt: new Date().toISOString(),
     });
   }
+}
+
+/**
+ * Look up a known ProductProfile either by current/legacy reference or by normalized designation.
+ * Handles the edge case where an article dropped its reference on a new delivery note / bill.
+ */
+export async function findProductProfileMatch(
+  reference?: string | null,
+  designation?: string | null
+): Promise<ProductProfile | null> {
+  if (reference) {
+    const byRef = await db.productProfiles.where('reference').equals(reference).first();
+    if (byRef) return byRef;
+  }
+  if (designation) {
+    const norm = normalizeDesignation(designation);
+    if (norm.length >= 3) {
+      // 1. Direct match on indexed normalizedDesignation
+      const byNorm = await db.productProfiles
+        .where('normalizedDesignation')
+        .equals(norm)
+        .first();
+      if (byNorm) return byNorm;
+
+      // 2. Scan profiles for token match or legacy code match
+      const allProfiles = await db.productProfiles.toArray();
+      if (reference) {
+        const byLegacy = allProfiles.find((p) => (p.legacyCodes || []).includes(reference));
+        if (byLegacy) return byLegacy;
+      }
+      for (const p of allProfiles) {
+        if (p.normalizedDesignation && areDesignationsMatching(norm, p.normalizedDesignation)) {
+          return p;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Explicitly links an old/legacy reference code to an order line and its underlying product profile.
+ * Inherits warehouse location and pack sizes if present on the profile.
+ */
+export async function linkLegacyReference(
+  orderLineId: number,
+  legacyReference: string | null
+): Promise<void> {
+  const line = await db.orderLines.get(orderLineId);
+  if (!line) return;
+
+  const oldLegacy = line.historicalReference || null;
+  const newLegacy = legacyReference?.trim() || null;
+  const updatedAliases = Array.from(
+    new Set([
+      ...(line.referenceAliases || []),
+      ...(newLegacy ? [newLegacy] : []),
+    ])
+  );
+
+  const updates: Partial<OrderLine> = {
+    historicalReference: newLegacy,
+    referenceAliases: updatedAliases,
+    updatedAt: new Date().toISOString(),
+  };
+
+  // If a profile exists for the new legacy code, inherit its metadata if currently missing on the line
+  if (newLegacy) {
+    const profile = await db.productProfiles.where('reference').equals(newLegacy).first();
+    if (profile) {
+      if (!line.warehouseZone && profile.warehouseZone) {
+        updates.warehouseZone = profile.warehouseZone;
+      }
+      if (!line.outerPackSize && profile.outerPackSize) {
+        updates.outerPackSize = profile.outerPackSize;
+      }
+      if (!line.innerPackSize && profile.innerPackSize) {
+        updates.innerPackSize = profile.innerPackSize;
+      }
+      if (!line.imageUrl && profile.imageUrl) {
+        updates.imageUrl = profile.imageUrl;
+      }
+
+      // Record this line's designation and link on the profile
+      await saveProductProfile(newLegacy, {
+        designation: profile.designation || line.designation,
+        legacyCodes: Array.from(new Set([...(profile.legacyCodes || []), newLegacy])),
+      });
+    } else {
+      // Create a profile for this legacy reference to remember it for future imports
+      await saveProductProfile(newLegacy, {
+        designation: line.designation,
+        legacyCodes: [newLegacy],
+        warehouseZone: line.warehouseZone || null,
+        outerPackSize: line.outerPackSize || null,
+        innerPackSize: line.innerPackSize || null,
+      });
+    }
+  }
+
+  await db.orderLines.update(orderLineId, updates);
+
+  await db.auditEvents.add({
+    billId: line.billId,
+    orderLineId,
+    stage: null,
+    type: 'legacy_code_linked',
+    oldValue: oldLegacy,
+    newValue: newLegacy,
+    reason: 'manual_legacy_code_association',
+    timestamp: new Date().toISOString(),
+  });
 }
 
 // ---------- Search ----------
@@ -861,9 +984,11 @@ export function searchLines(
       (l) =>
         l.reference?.toLowerCase().includes(q) ||
         l.originalReference?.toLowerCase().includes(q) ||
+        l.historicalReference?.toLowerCase().includes(q) ||
         (cleanQ.length >= 2 && (
           (l.reference && l.reference.toLowerCase().replace(/[^a-z0-9]/gi, '').includes(cleanQ)) ||
-          (l.originalReference && l.originalReference.toLowerCase().replace(/[^a-z0-9]/gi, '').includes(cleanQ))
+          (l.originalReference && l.originalReference.toLowerCase().replace(/[^a-z0-9]/gi, '').includes(cleanQ)) ||
+          (l.historicalReference && l.historicalReference.toLowerCase().replace(/[^a-z0-9]/gi, '').includes(cleanQ))
         )) ||
         l.referenceAliases.some((a) => a.toLowerCase().includes(q))
     );

@@ -381,6 +381,47 @@ export function generateReferenceAliases(reference: string | null): string[] {
 }
 
 /**
+ * Normalizes a product designation string by:
+ * - Lowercasing
+ * - Stripping diacritics (accents like é, è, ê, à, ç)
+ * - Replacing punctuation and symbols with whitespace
+ * - Collapsing multiple consecutive spaces and trimming
+ */
+export function normalizeDesignation(designation?: string | null): string {
+  if (!designation) return '';
+  return designation
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/**
+ * Checks if two product designations match, either by exact normalized identity
+ * or high token overlap (Jaccard similarity >= 0.75) for warehouse product profiles.
+ */
+export function areDesignationsMatching(desigA?: string | null, desigB?: string | null): boolean {
+  const normA = normalizeDesignation(desigA);
+  const normB = normalizeDesignation(desigB);
+  if (!normA || !normB) return false;
+  if (normA === normB) return true;
+
+  const tokensA = new Set(normA.split(' ').filter(t => t.length >= 2));
+  const tokensB = new Set(normB.split(' ').filter(t => t.length >= 2));
+  if (tokensA.size === 0 || tokensB.size === 0) return false;
+
+  let intersection = 0;
+  for (const t of tokensA) {
+    if (tokensB.has(t)) intersection++;
+  }
+
+  const union = new Set([...tokensA, ...tokensB]).size;
+  const similarity = intersection / union;
+  return similarity >= 0.75;
+}
+
+/**
  * Check if search query matches a line (for SMART mode).
  * Returns a priority score (lower = better match). -1 = no match.
  */
@@ -407,15 +448,18 @@ export function smartSearchScore(
   if (line.ean?.toLowerCase() === q) return 4;
   // 5. exact original EAN
   if (line.originalEan?.toLowerCase() === q) return 5;
-  // 6. reference aliases
+  // 6. reference aliases & historical legacy references
+  if (line.historicalReference && line.historicalReference.toLowerCase() === q) return 6.1;
   if ((line.referenceAliases || []).some(a => a?.toLowerCase() === q)) return 6;
   // 7. partial reference match (contains query or clean alphanumeric substring)
   if (
     line.reference?.toLowerCase().includes(q) ||
     line.originalReference?.toLowerCase().includes(q) ||
+    line.historicalReference?.toLowerCase().includes(q) ||
     (cleanQ.length >= 2 && (
       (line.reference && line.reference.toLowerCase().replace(/[^a-z0-9]/gi, '').includes(cleanQ)) ||
-      (line.originalReference && line.originalReference.toLowerCase().replace(/[^a-z0-9]/gi, '').includes(cleanQ))
+      (line.originalReference && line.originalReference.toLowerCase().replace(/[^a-z0-9]/gi, '').includes(cleanQ)) ||
+      (line.historicalReference && line.historicalReference.toLowerCase().replace(/[^a-z0-9]/gi, '').includes(cleanQ))
     ))
   ) return 7;
   // 7.5. partial barcode / EAN match (contains query or clean numeric substring, e.g. last 4 digits)

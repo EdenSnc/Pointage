@@ -134,6 +134,9 @@ import {
   IconMapPin,
   IconSparkles,
   IconClock,
+  IconMaximize,
+  IconMinimize,
+  IconHistory,
 } from './icons';
 
 import {
@@ -153,6 +156,7 @@ import { StageSignOffModal } from './StageSignOffModal';
 import { CrossBillReallocationModal } from './CrossBillReallocationModal';
 import { TripDispatchModal } from './TripDispatchModal';
 import { WarehouseZoneModal } from './WarehouseZoneModal';
+import { LegacyCodeModal } from './LegacyCodeModal';
 import {
   getZoneLabel,
   getZoneShortLabel,
@@ -392,6 +396,90 @@ function AudioMuteButton({ className, style }: { className?: string; style?: Rea
       aria-label={muted ? 'Activer le son' : 'Couper le son'}
     >
       {muted ? <IconVolumeX size={18} /> : <IconVolume size={18} />}
+    </button>
+  );
+}
+
+// ---- Reusable Fullscreen Toggle (Hides Android status bar and browser chrome) ----
+export function FullscreenButton({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  const [isFullscreen, setIsFullscreen] = useState(() => {
+    if (typeof document === 'undefined') return false;
+    return !!(
+      document.fullscreenElement ||
+      (document as any).webkitFullscreenElement ||
+      (document as any).mozFullScreenElement ||
+      (document as any).msFullscreenElement
+    );
+  });
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      const fs = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      setIsFullscreen(fs);
+    };
+
+    document.addEventListener('fullscreenchange', handleFsChange);
+    document.addEventListener('webkitfullscreenchange', handleFsChange);
+    document.addEventListener('mozfullscreenchange', handleFsChange);
+    document.addEventListener('MSFullscreenChange', handleFsChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      document.removeEventListener('webkitfullscreenchange', handleFsChange);
+      document.removeEventListener('mozfullscreenchange', handleFsChange);
+      document.removeEventListener('MSFullscreenChange', handleFsChange);
+    };
+  }, []);
+
+  const toggleFullscreen = async () => {
+    hapticTap('light');
+    try {
+      if (!isFullscreen) {
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+          await elem.requestFullscreen();
+        } else if ((elem as any).webkitRequestFullscreen) {
+          await (elem as any).webkitRequestFullscreen();
+        } else if ((elem as any).mozRequestFullScreen) {
+          await (elem as any).mozRequestFullScreen();
+        } else if ((elem as any).msRequestFullscreen) {
+          await (elem as any).msRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          await (document as any).webkitExitFullscreen();
+        } else if ((document as any).mozCancelFullScreen) {
+          await (document as any).mozCancelFullScreen();
+        } else if ((document as any).msExitFullscreen) {
+          await (document as any).msExitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.warn('Fullscreen toggle request:', err);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      className={className || 'header-icon-btn'}
+      style={{
+        borderRadius: 9999,
+        color: isFullscreen ? 'var(--accent)' : 'inherit',
+        ...style,
+      }}
+      onClick={toggleFullscreen}
+      title={isFullscreen ? 'Quitter le plein écran' : 'Plein écran immersif (Masquer barre Android & statut)'}
+      aria-label={isFullscreen ? 'Quitter le plein écran' : 'Plein écran immersif'}
+    >
+      {isFullscreen ? <IconMinimize size={18} /> : <IconMaximize size={18} />}
     </button>
   );
 }
@@ -1062,6 +1150,7 @@ function HomeScreen({
             activeOperator={activeOperator}
             onClick={() => setShowOperatorModal(true)}
           />
+          <FullscreenButton className="header-icon-btn" />
           <button
             type="button"
             className="header-icon-btn"
@@ -3049,6 +3138,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   }, [productProfiles]);
 
   const [zoneModalLine, setZoneModalLine] = useState<OrderLine | null>(null);
+  const [legacyModalLine, setLegacyModalLine] = useState<OrderLine | null>(null);
   type LineSortMode = 'bl' | 'circuit' | 'recent' | 'family';
   const [sortMode, setSortMode] = useState<LineSortMode>(() => {
     const saved = localStorage.getItem('pointage_sort_mode');
@@ -3682,6 +3772,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             activeOperator={activeOperator}
             onClick={() => setShowOperatorModal(true)}
           />
+          <FullscreenButton className="header-icon-btn" />
           <button
             type="button"
             className="header-icon-btn"
@@ -4499,11 +4590,43 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                   </div>
 
                   {line.reference && <div className="line-ref">REF: {line.reference}</div>}
+                  {!line.reference && line.historicalReference && (
+                    <div className="flex items-center gap-1.5 mt-0.5 mb-0.5">
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs flex items-center gap-1"
+                        style={{
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                          padding: '1px 8px',
+                          borderRadius: '9999px',
+                          background: 'rgba(245, 158, 11, 0.14)',
+                          border: '1px solid rgba(245, 158, 11, 0.32)',
+                          color: '#f59e0b',
+                          cursor: 'pointer',
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLegacyModalLine(line);
+                        }}
+                        title="Ancien code associé (cliquer pour gérer)"
+                      >
+                        <IconHistory size={11} />
+                        <span>ANCIEN CODE: {line.historicalReference}</span>
+                      </button>
+                    </div>
+                  )}
                   <div className="line-designation">{line.designation}</div>
 
                   {/* Warehouse Location Zone Badge (Hidden in pointage, read-only in chargement, editable in preparation) */}
                   {stage !== 'pointage' && (() => {
-                    const effectiveZone = line.warehouseZone || (line.reference ? profileMap.get(line.reference)?.warehouseZone : null);
+                    const effectiveZone =
+                      line.warehouseZone ||
+                      (line.reference
+                        ? profileMap.get(line.reference)?.warehouseZone
+                        : line.historicalReference
+                        ? profileMap.get(line.historicalReference)?.warehouseZone
+                        : null);
                     const zoneShort = getZoneShortLabel(effectiveZone);
                     if (stage === 'chargement') {
                       if (!effectiveZone) return null;
@@ -4934,6 +5057,20 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           }}
         />
       )}
+
+      {legacyModalLine && (
+        <LegacyCodeModal
+          isOpen={Boolean(legacyModalLine)}
+          onClose={() => setLegacyModalLine(null)}
+          line={legacyModalLine}
+          onLinked={(newRef) => {
+            showToast(
+              newRef ? `Ancien code ${newRef} associé avec succès` : 'Ancien code délié',
+              setToast
+            );
+          }}
+        />
+      )}
     </>
   );
 }
@@ -5058,6 +5195,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const [showCrossBillModal, setShowCrossBillModal] = useState(false);
   const [showReplenishModal, setShowReplenishModal] = useState(false);
   const [showZoneModal, setShowZoneModal] = useState(false);
+  const [showLegacyModal, setShowLegacyModal] = useState(false);
   const [replenishQtyInput, setReplenishQtyInput] = useState<number>(1);
 
   const handleSelectOperator = (op: string) => {
@@ -5426,6 +5564,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             activeOperator={activeOperator}
             onClick={() => setShowOperatorModal(true)}
           />
+          <FullscreenButton className="header-icon-btn" />
         </div>
       </header>
 
@@ -5475,9 +5614,31 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                     {line.page != null && <span className="line-page">PAGE {line.page}</span>}
                   </div>
                   <div className="font-bold text-lg mt-1 break-words">{line.designation}</div>
-                  <div className="text-sm text-secondary mt-1">
-                    {line.reference ? `REF: ${line.reference}` : 'Sans réf.'}
-                    {line.ean ? ` • EAN: ${line.ean}` : ''}
+                  <div className="text-sm text-secondary mt-1 flex items-center gap-2 flex-wrap">
+                    <span>{line.reference ? `REF: ${line.reference}` : 'Sans réf.'}</span>
+                    {line.ean ? <span>• EAN: {line.ean}</span> : null}
+                    {line.historicalReference && (
+                      <span
+                        style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '9999px',
+                          background: 'rgba(245, 158, 11, 0.14)',
+                          border: '1px solid rgba(245, 158, 11, 0.32)',
+                          color: '#f59e0b',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => setShowLegacyModal(true)}
+                        title="Ancien code associé (cliquer pour gérer)"
+                      >
+                        <IconHistory size={12} />
+                        Ancien code: {line.historicalReference}
+                      </span>
+                    )}
                   </div>
                   {line.packagesRaw && (
                     <div className="text-xs text-muted mt-1">Colisage document: {line.packagesRaw}</div>
@@ -5493,7 +5654,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               </div>
             </div>
           </div>
-          <div className="flex gap-2 mt-2">
+          <div className="flex gap-2 mt-2 flex-wrap">
             <button className="btn btn-xs btn-ghost flex items-center gap-1" onClick={() => { setEditingField('reference'); setEditFieldVal(line.reference || ''); }}>
               <IconPencil size={11} /> Réf
             </button>
@@ -5502,6 +5663,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             </button>
             <button className="btn btn-xs btn-ghost flex items-center gap-1" onClick={() => { setEditingField('page'); setEditFieldVal(line.page != null ? String(line.page) : ''); }}>
               <IconPencil size={11} /> Page
+            </button>
+            <button className="btn btn-xs btn-ghost flex items-center gap-1" onClick={() => setShowLegacyModal(true)} title="Gérer ou associer un ancien code">
+              <IconTag size={11} /> Ancien code
             </button>
           </div>
           {disc.isModified && (
@@ -7499,6 +7663,20 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             onZoneUpdated={(newZone) => {
               showToast(
                 newZone ? `Emplacement mis à jour : ${getZoneShortLabel(newZone)}` : 'Emplacement effacé',
+                setToast
+              );
+            }}
+          />
+        )}
+
+        {showLegacyModal && line && (
+          <LegacyCodeModal
+            isOpen={showLegacyModal}
+            onClose={() => setShowLegacyModal(false)}
+            line={line}
+            onLinked={(newRef) => {
+              showToast(
+                newRef ? `Ancien code ${newRef} associé avec succès` : 'Ancien code délié',
                 setToast
               );
             }}

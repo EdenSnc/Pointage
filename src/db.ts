@@ -92,6 +92,13 @@ export class PointageDB extends Dexie {
           }
         }
       });
+
+    // Version 4: Historical legacy codes & normalized designation index
+    this.version(4).stores({
+      orderLines:
+        '++id, billId, no, reference, ean, status, originalReference, originalEan, *referenceAliases, historicalReference',
+      productProfiles: '++id, reference, normalizedDesignation',
+    });
   }
 }
 

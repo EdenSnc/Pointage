@@ -16,7 +16,12 @@ import {
   sortLinesByWarehouseZone,
   getWarehouseCircuitDescription,
 } from './warehouseZones';
-import { searchLines } from './hooks';
+import {
+  searchLines,
+  findProductProfileMatch,
+  linkLegacyReference,
+  saveProductProfile,
+} from './hooks';
 import {
   sumStageEvents,
   calcDiscrepancy,
@@ -25,7 +30,11 @@ import {
   formatPackagingEquivalence,
   getPackHierarchyDescription,
   calcBatchQty,
+  normalizeDesignation,
+  areDesignationsMatching,
+  smartSearchScore,
 } from './logic';
+import { importBills } from './importer';
 import type { OrderLine, CountEvent } from './types';
 
 function makeLine(overrides: Partial<OrderLine> = {}): OrderLine {
@@ -392,4 +401,138 @@ describe('Multi-Tier Packaging Hierarchy & Smallest Unit Rule', () => {
     expect(calcBatchQty(0, 3, 5, outerPack, innerPack)).toBe(155);
   });
 });
+
+describe('Edge Case: Product Historically Had a Code and Now Does Not', () => {
+  beforeEach(async () => {
+    await db.orderLines.clear();
+    await db.bills.clear();
+    await db.productProfiles.clear();
+    await db.countEvents.clear();
+    await db.workSessions.clear();
+  });
+
+  it('normalizes product designations stripping diacritics and punctuation', () => {
+    expect(normalizeDesignation('SAC A DOS MOYEN 22 L 4 MO 71662')).toBe('sac a dos moyen 22 l 4 mo 71662');
+    expect(normalizeDesignation('Stylo à bille - Vert (50 pcs) ')).toBe('stylo a bille vert 50 pcs');
+    expect(normalizeDesignation('CLASSEUR CHRONO 40 MM / BLANC')).toBe('classeur chrono 40 mm blanc');
+    expect(normalizeDesignation('')).toBe('');
+    expect(normalizeDesignation(null)).toBe('');
+  });
+
+  it('accurately matches designations even with slight formatting differences', () => {
+    expect(areDesignationsMatching('SAC A DOS MOYEN 22 L 4 MO 71662', 'sac a dos moyen 22 l 4 mo 71662')).toBe(true);
+    expect(areDesignationsMatching('Stylo à bille - Vert (50 pcs)', 'Stylo a bille Vert 50 pcs')).toBe(true);
+    expect(areDesignationsMatching('Cahier 96P Seyes', 'Classeur A4 Plastique')).toBe(false);
+  });
+
+  it('auto-detects codeless products and links historical reference, zone, and pack sizes upon import', async () => {
+    // 1. Seed a historical product profile for code "71662"
+    await saveProductProfile('71662', {
+      designation: 'SAC A DOS MOYEN 22 L 4 MO 71662',
+      warehouseZone: 'CH_NW',
+      outerPackSize: 20,
+      innerPackSize: null,
+    });
+
+    // Verify lookup by designation works
+    const profileMatch = await findProductProfileMatch(null, 'SAC A DOS MOYEN 22 L 4 MO 71662');
+    expect(profileMatch).toBeDefined();
+    expect(profileMatch?.reference).toBe('71662');
+    expect(profileMatch?.warehouseZone).toBe('CH_NW');
+
+    // 2. Now import a new bill where the supplier omitted the reference (ref is null)
+    const result = await importBills({
+      bills: [
+        {
+          billNumber: 'BL-NEW-2026',
+          client: 'PAPETERIE DU CENTRE',
+          lines: [
+            {
+              no: '1',
+              reference: null, // CODE IS MISSING ON NEW INVOICE!
+              designation: 'SAC A DOS MOYEN 22 L 4 MO 71662',
+              quantity: 40,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.bills.length).toBe(1);
+    const importedLines = await db.orderLines.where('billId').equals(result.bills[0].id!).toArray();
+    expect(importedLines.length).toBe(1);
+
+    const codelessLine = importedLines[0];
+    expect(codelessLine.reference).toBeNull();
+    // Historical reference was auto-linked!
+    expect(codelessLine.historicalReference).toBe('71662');
+    // Reference aliases include the old code so searching/scanning works!
+    expect(codelessLine.referenceAliases).toContain('71662');
+    // Warehouse location was automatically inherited!
+    expect(codelessLine.warehouseZone).toBe('CH_NW');
+    // Packaging was automatically inherited!
+    expect(codelessLine.outerPackSize).toBe(20);
+  });
+
+  it('allows pickers to find and highlight the codeless line by searching or scanning the old code', async () => {
+    const codelessLine = makeLine({
+      id: 99,
+      reference: null,
+      historicalReference: '71662',
+      referenceAliases: ['71662'],
+      designation: 'SAC A DOS MOYEN 22 L 4 MO',
+    });
+
+    // 1. smartSearchScore recognizes old code as high-priority match
+    const scoreExactLegacy = smartSearchScore(codelessLine, '71662');
+    expect(scoreExactLegacy).toBe(6.1);
+
+    // 2. Partial search for legacy code
+    const scorePartial = smartSearchScore(codelessLine, '7166');
+    expect(scorePartial).toBe(7);
+
+    // 3. searchLines in SMART mode and REF mode finds the line
+    const searchSmart = searchLines([codelessLine], '71662', 'smart');
+    expect(searchSmart.length).toBe(1);
+    expect(searchSmart[0].id).toBe(99);
+
+    const searchRef = searchLines([codelessLine], '71662', 'ref');
+    expect(searchRef.length).toBe(1);
+    expect(searchRef[0].id).toBe(99);
+  });
+
+  it('supports manually linking, modifying, or unlinking legacy codes via linkLegacyReference', async () => {
+    // Seed profile with zone
+    await saveProductProfile('LEGACY-99', {
+      designation: 'Règle plate 30cm',
+      warehouseZone: 'CO_R2',
+    });
+
+    const lineId = (await db.orderLines.add(
+      makeLine({
+        reference: null,
+        designation: 'Règle plate 30cm',
+        warehouseZone: null,
+        referenceAliases: [],
+      })
+    )) as number;
+
+    // Link legacy code
+    await linkLegacyReference(lineId, 'LEGACY-99');
+    let updated = await db.orderLines.get(lineId);
+    expect(updated?.historicalReference).toBe('LEGACY-99');
+    expect(updated?.referenceAliases).toContain('LEGACY-99');
+    expect(updated?.warehouseZone).toBe('CO_R2');
+
+    // Verify audit trail logged
+    const audits = await db.auditEvents.where('orderLineId').equals(lineId).toArray();
+    expect(audits.some((a) => a.type === 'legacy_code_linked')).toBe(true);
+
+    // Unlink legacy code
+    await linkLegacyReference(lineId, null);
+    updated = await db.orderLines.get(lineId);
+    expect(updated?.historicalReference).toBeNull();
+  });
+});
+
 
