@@ -77,6 +77,7 @@ import type {
   ChangeReason,
   SearchMode,
   TransportContainer,
+  ProductProfile,
 } from './types';
 
 import {
@@ -126,6 +127,8 @@ import {
   IconAlertTriangle,
   IconTruck,
   IconArchive,
+  IconCompass,
+  IconMapPin,
 } from './icons';
 
 import {
@@ -144,6 +147,12 @@ import { OperatorModal } from './OperatorModal';
 import { StageSignOffModal } from './StageSignOffModal';
 import { CrossBillReallocationModal } from './CrossBillReallocationModal';
 import { TripDispatchModal } from './TripDispatchModal';
+import { WarehouseZoneModal } from './WarehouseZoneModal';
+import {
+  getZoneLabel,
+  getZoneShortLabel,
+  sortLinesByWarehouseZone,
+} from './warehouseZones';
 import {
   downloadTripExitWorkbook,
   formatTripWhatsAppMessage,
@@ -3003,6 +3012,20 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const entityEvents = useEntityEvents(bill?.client);
   const entityContainers = useEntityContainers(bill?.client);
 
+  const productProfiles = useLiveQuery(() => db.productProfiles.toArray());
+  const profileMap = React.useMemo(() => {
+    const map = new Map<string, ProductProfile>();
+    for (const p of productProfiles || []) {
+      if (p.reference) map.set(p.reference, p);
+    }
+    return map;
+  }, [productProfiles]);
+
+  const [zoneModalLine, setZoneModalLine] = useState<OrderLine | null>(null);
+  const [sortByZone, setSortByZone] = useState<boolean>(() => {
+    return localStorage.getItem('pointage_sort_by_zone') === 'true';
+  });
+
   const [searchParams, setSearchParams] = useSearchParams();
   const initialStage = (searchParams.get('stage') || sessionStorage.getItem(`pointage_stage_${billId}`) || 'preparation') as Stage;
   const [stage, setStage] = useState<Stage>(initialStage);
@@ -3359,22 +3382,26 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
     });
   }
 
-  // Sort: incomplete/problem first
-  displayLines.sort((a, b) => {
-    if (a.status !== 'active' && b.status === 'active') return 1;
-    if (a.status === 'active' && b.status !== 'active') return -1;
+  // Sort: warehouse zone picking path OR incomplete/problem first
+  if (sortByZone) {
+    displayLines = sortLinesByWarehouseZone(displayLines, profileMap);
+  } else {
+    displayLines.sort((a, b) => {
+      if (a.status !== 'active' && b.status === 'active') return 1;
+      if (a.status === 'active' && b.status !== 'active') return -1;
 
-    const evA = eventsByLine.get(a.id!) || [];
-    const evB = eventsByLine.get(b.id!) || [];
-    const dA = calcDiscrepancy(a, sumStageEvents(evA, stage));
-    const dB = calcDiscrepancy(b, sumStageEvents(evB, stage));
+      const evA = eventsByLine.get(a.id!) || [];
+      const evB = eventsByLine.get(b.id!) || [];
+      const dA = calcDiscrepancy(a, sumStageEvents(evA, stage));
+      const dB = calcDiscrepancy(b, sumStageEvents(evB, stage));
 
-    // Not done first
-    if (!dA.isExact && dB.isExact) return -1;
-    if (dA.isExact && !dB.isExact) return 1;
+      // Not done first
+      if (!dA.isExact && dB.isExact) return -1;
+      if (dA.isExact && !dB.isExact) return 1;
 
-    return 0;
-  });
+      return 0;
+    });
+  }
 
   if (!bill) {
     return (
@@ -3821,6 +3848,22 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               <IconWarning size={14} /> Problèmes
             </button>
             <button
+              type="button"
+              className={`btn btn-sm ${sortByZone ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
+              onClick={() => {
+                hapticTap('light');
+                setSortByZone((prev) => {
+                  const next = !prev;
+                  localStorage.setItem('pointage_sort_by_zone', String(next));
+                  return next;
+                });
+              }}
+              title="Trier par ordre de parcours entrepôt"
+            >
+              <IconCompass size={14} />
+              <span>{sortByZone ? 'Parcours' : 'Ordre BL'}</span>
+            </button>
+            <button
               className={`btn btn-sm ${showQuantities ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
               onClick={() => {
                 hapticTap('light');
@@ -3979,6 +4022,28 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
 
                   {line.reference && <div className="line-ref">REF: {line.reference}</div>}
                   <div className="line-designation">{line.designation}</div>
+
+                  {/* Warehouse Location Zone Badge */}
+                  {(() => {
+                    const effectiveZone = line.warehouseZone || (line.reference ? profileMap.get(line.reference)?.warehouseZone : null);
+                    const zoneShort = getZoneShortLabel(effectiveZone);
+                    return (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <button
+                          type="button"
+                          className={`badge-zone-pill ${effectiveZone ? 'badge-zone-assigned' : 'badge-zone-unassigned'}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setZoneModalLine(line);
+                          }}
+                          title="Modifier l'emplacement entrepôt"
+                        >
+                          <IconMapPin size={10} />
+                          <span>{zoneShort || '+ Emplacement'}</span>
+                        </button>
+                      </div>
+                    );
+                  })()}
 
                   {/* Packaging Container Badges */}
                   {(() => {
@@ -4331,6 +4396,25 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           }}
         />
       )}
+
+      {zoneModalLine && (
+        <WarehouseZoneModal
+          isOpen={Boolean(zoneModalLine)}
+          onClose={() => setZoneModalLine(null)}
+          line={zoneModalLine}
+          currentZone={
+            zoneModalLine.warehouseZone ||
+            (zoneModalLine.reference ? profileMap.get(zoneModalLine.reference)?.warehouseZone : null)
+          }
+          activeOperator={activeOperator}
+          onZoneUpdated={(newZone) => {
+            showToast(
+              newZone ? `Emplacement mis à jour : ${getZoneShortLabel(newZone)}` : 'Emplacement effacé',
+              setToast
+            );
+          }}
+        />
+      )}
     </>
   );
 }
@@ -4451,6 +4535,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const [selectedCrossBillOption, setSelectedCrossBillOption] = useState<CrossBillPreparedStockOption | null>(null);
   const [showCrossBillModal, setShowCrossBillModal] = useState(false);
   const [showReplenishModal, setShowReplenishModal] = useState(false);
+  const [showZoneModal, setShowZoneModal] = useState(false);
   const [replenishQtyInput, setReplenishQtyInput] = useState<number>(1);
 
   const handleSelectOperator = (op: string) => {
@@ -4908,6 +4993,55 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               </span>
             </div>
           )}
+
+          {/* Warehouse Location Zone */}
+          {(() => {
+            const currentZone = line.warehouseZone || profile?.warehouseZone || null;
+            return (
+              <div
+                className="flex items-center justify-between mt-3 pt-2.5"
+                style={{ borderTop: '1px solid var(--glass-border-subtle)' }}
+              >
+                <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 8,
+                      background: currentZone ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: currentZone ? 'var(--accent)' : 'var(--text-muted)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <IconMapPin size={15} />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="text-[10px] font-bold text-muted uppercase tracking-wider">
+                      Emplacement Entrepôt
+                    </div>
+                    <div
+                      className="text-xs font-bold truncate"
+                      style={{ color: currentZone ? 'var(--accent)' : 'var(--text-muted)' }}
+                    >
+                      {currentZone ? getZoneLabel(currentZone) : 'Non assigné'}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-xs btn-secondary flex items-center gap-1 flex-shrink-0"
+                  style={{ borderRadius: 'var(--radius-pill)', padding: '4px 10px' }}
+                  onClick={() => setShowZoneModal(true)}
+                >
+                  <IconCompass size={12} />
+                  <span>{currentZone ? 'Modifier' : 'Définir'}</span>
+                </button>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Expected & Stage Totals */}
@@ -6621,6 +6755,22 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             showToast(`+${qty} pcs prélevées avec succès`, setToast);
           }}
         />
+
+        {showZoneModal && line && (
+          <WarehouseZoneModal
+            isOpen={showZoneModal}
+            onClose={() => setShowZoneModal(false)}
+            line={line}
+            currentZone={line.warehouseZone || profile?.warehouseZone}
+            activeOperator={activeOperator}
+            onZoneUpdated={(newZone) => {
+              showToast(
+                newZone ? `Emplacement mis à jour : ${getZoneShortLabel(newZone)}` : 'Emplacement effacé',
+                setToast
+              );
+            }}
+          />
+        )}
       </div>
     </ErrorBoundary>
   );

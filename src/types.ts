@@ -15,13 +15,33 @@ export type SearchMode = 'smart' | 'no' | 'ref' | 'ean' | 'name';
 export type ChangeReason = 'official_change' | 'bill_correction' | 'other';
 
 export type WarehouseZone =
+  | 'CH_NW'
+  | 'CH_N'
+  | 'CH_NE'
+  | 'CH_W'
+  | 'CH_CTR'
+  | 'CH_E'
+  | 'CH_SW'
+  | 'CH_S'
+  | 'CH_SE'
+  | 'CO_R1'
+  | 'CO_R2'
+  | 'CO_R3'
+  | 'CO_R4'
+  | 'CO_R4_S'
+  | 'CO_R4_A1'
+  | 'CO_R4_A2'
+  | 'CO_R4_A3'
+  | 'CO_R4_A4'
+  | 'CO_R4_N'
   | 'NORTH_WEST'
   | 'NORTH_EAST'
   | 'SOUTH_WEST'
   | 'SOUTH_EAST'
   | 'LITTLE_ROOM_ENTRANCE'
   | 'LITTLE_ROOM_DEEP'
-  | 'UNKNOWN';
+  | 'UNKNOWN'
+  | (string & {});
 
 export type AuditEventType =
   | 'quantity_changed'
@@ -43,6 +63,7 @@ export type AuditEventType =
   | 'cross_bill_reallocation'
   | 'shortage_partial_delivery'
   | 'stage_operator_assigned'
+  | 'warehouse_zone_changed'
   | 'trip_created'
   | 'trip_dispatched'
   | 'trip_cancelled'

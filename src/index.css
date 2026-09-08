@@ -2880,5 +2880,60 @@ select,
   gap: 12px;
 }
 
+/* ============================================================
+   WAREHOUSE LOCATION / ZONE STYLES (2-Tap Zone Taxonomy)
+   ============================================================ */
+.badge-zone-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  transition: all 0.15s ease;
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid transparent;
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge-zone-assigned {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--accent);
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: 0 0 12px -3px rgba(16, 185, 129, 0.2);
+}
+
+.badge-zone-assigned:hover {
+  background: rgba(16, 185, 129, 0.22);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.badge-zone-assigned:active {
+  transform: scale(0.96);
+}
+
+.badge-zone-unassigned {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  border-color: var(--glass-border-subtle);
+  border-style: dashed;
+}
+
+.badge-zone-unassigned:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--text-secondary);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.badge-zone-unassigned:active {
+  transform: scale(0.96);
+}
+
 
 

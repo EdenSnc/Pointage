@@ -24,7 +24,15 @@ import {
   QRSyncPayload,
 } from './logic';
 
-import type { CountEvent, OrderLine } from './types';
+import type { CountEvent, OrderLine, ProductProfile } from './types';
+import {
+  WAREHOUSE_ZONES,
+  normalizeZoneCode,
+  getZoneInfo,
+  getZoneLabel,
+  getZoneShortLabel,
+  sortLinesByWarehouseZone,
+} from './warehouseZones';
 
 function makeEvent(overrides: Partial<CountEvent> = {}): CountEvent {
   return {
@@ -696,6 +704,83 @@ describe('Multi-operator concurrent pointage & commutative delta aggregation', (
     // Stepping outer cartons (+3 cartons of 24)
     let outerCount = 3;
     expect(calcBatchQty(outerCount, innerCount, loose, outerPack, innerPack)).toBe(89);
+  });
+});
+
+describe('Warehouse Zones Taxonomy & Utilities', () => {
+  it('contains structured zones for Chambre, Couloir and Salle 4', () => {
+    expect(WAREHOUSE_ZONES.length).toBeGreaterThan(12);
+
+    const chambre = WAREHOUSE_ZONES.filter((z) => z.category === 'chambre');
+    expect(chambre.length).toBe(9); // 3x3 compass grid
+
+    const salle4 = WAREHOUSE_ZONES.filter((z) => z.category === 'salle4');
+    expect(salle4.length).toBeGreaterThanOrEqual(6); // South, Allée 1..4, North
+  });
+
+  it('correctly normalizes legacy zone codes', () => {
+    expect(normalizeZoneCode('NORTH_WEST')).toBe('CH_NW');
+    expect(normalizeZoneCode('NORTH_EAST')).toBe('CH_NE');
+    expect(normalizeZoneCode('SOUTH_WEST')).toBe('CH_SW');
+    expect(normalizeZoneCode('SOUTH_EAST')).toBe('CH_SE');
+    expect(normalizeZoneCode('LITTLE_ROOM_ENTRANCE')).toBe('CO_R1');
+    expect(normalizeZoneCode('LITTLE_ROOM_DEEP')).toBe('CO_R2');
+    expect(normalizeZoneCode('  CH_CTR  ')).toBe('CH_CTR');
+    expect(normalizeZoneCode(null)).toBeNull();
+    expect(normalizeZoneCode('')).toBeNull();
+  });
+
+  it('retrieves detailed zone information and short labels', () => {
+    const nw = getZoneInfo('CH_NW');
+    expect(nw).not.toBeNull();
+    expect(nw?.category).toBe('chambre');
+    expect(nw?.compassRow).toBe(1);
+    expect(nw?.compassCol).toBe(1);
+
+    expect(getZoneShortLabel('CH_CTR')).toBe('CH • Centre');
+    expect(getZoneShortLabel('CO_R4_A2')).toBe('Salle 4 • Allée 2');
+    expect(getZoneLabel('CO_R1')).toBe('Couloir • Salle 1');
+
+    // Custom shelf / rack
+    const custom = getZoneInfo('Rayon B-04');
+    expect(custom?.category).toBe('custom');
+    expect(custom?.shortLabel).toBe('Rayon B-04');
+    expect(getZoneLabel(null)).toBe('');
+  });
+
+  it('sorts lines according to optimal warehouse picking path', () => {
+    const lines: OrderLine[] = [
+      makeLine({ id: 1, no: '1', warehouseZone: null }), // Unassigned (order 999)
+      makeLine({ id: 2, no: '2', warehouseZone: 'CO_R4_A3' as any }), // Salle 4 Allée 3 (order 143)
+      makeLine({ id: 3, no: '3', warehouseZone: 'CH_NW' as any }), // Chambre NW (order 10)
+      makeLine({ id: 4, no: '4', warehouseZone: 'CH_SE' as any }), // Chambre SE (order 90)
+      makeLine({ id: 5, no: '5', warehouseZone: 'CO_R2' as any }), // Couloir Salle 2 (order 120)
+      makeLine({ id: 6, no: '6', warehouseZone: 'CO_R4_S' as any }), // Salle 4 Sud (order 140)
+      makeLine({ id: 7, no: '7', warehouseZone: 'Rack Custom' as any }), // Custom (order 900)
+    ];
+
+    const sorted = sortLinesByWarehouseZone(lines);
+    const sortedIds = sorted.map((l) => l.id);
+
+    // Expected sequence: CH_NW (10) -> CH_SE (90) -> CO_R2 (120) -> CO_R4_S (140) -> CO_R4_A3 (143) -> Rack Custom (900) -> Unassigned (999)
+    expect(sortedIds).toEqual([3, 4, 5, 6, 2, 7, 1]);
+  });
+
+  it('inherits zone from product profile map when line zone is null', () => {
+    const lines: OrderLine[] = [
+      makeLine({ id: 1, no: '1', reference: 'REF_SALLE4', warehouseZone: null }),
+      makeLine({ id: 2, no: '2', reference: 'REF_CHAMBRE', warehouseZone: null }),
+    ];
+
+    const profilesMap = new Map<string, ProductProfile>([
+      ['REF_SALLE4', { reference: 'REF_SALLE4', warehouseZone: 'CO_R4_A1', updatedAt: '' } as any],
+      ['REF_CHAMBRE', { reference: 'REF_CHAMBRE', warehouseZone: 'CH_CTR', updatedAt: '' } as any],
+    ]);
+
+    const sorted = sortLinesByWarehouseZone(lines, profilesMap);
+    // CH_CTR (order 50) comes before CO_R4_A1 (order 141)
+    expect(sorted[0].id).toBe(2);
+    expect(sorted[1].id).toBe(1);
   });
 });
 
