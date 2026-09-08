@@ -167,6 +167,8 @@ html {
 body {
   font-family: var(--font);
   background: var(--bg-deep);
+  user-select: none;
+  -webkit-user-select: none;
   background-image: 
     radial-gradient(120% 90% at 50% -10%, #151d2f 0%, transparent 60%),
     radial-gradient(80% 50% at 50% 100%, #0d121c 0%, transparent 80%),
@@ -217,6 +219,15 @@ button,
 [role="button"] {
   user-select: none;
   -webkit-user-select: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable="true"],
+.selectable-text {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 #root {
@@ -363,10 +374,32 @@ button,
   color: #0f172a;
 }
 
-[data-theme="light"] .outcome-btn.selected {
-  background: rgba(16, 185, 129, 0.12);
+[data-theme="light"] .outcome-btn.selected.outcome-accepted {
+  background: rgba(16, 185, 129, 0.14);
   border-color: #059669;
   color: #047857;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+}
+
+[data-theme="light"] .outcome-btn.selected.outcome-damaged-accepted {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: #d97706;
+  color: #b45309;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.2);
+}
+
+[data-theme="light"] .outcome-btn.selected.outcome-damaged-refused {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: #dc2626;
+  color: #b91c1c;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
+}
+
+[data-theme="light"] .outcome-btn.selected.outcome-refused {
+  background: rgba(153, 27, 27, 0.16);
+  border-color: #991b1b;
+  color: #7f1d1d;
+  box-shadow: 0 0 12px rgba(153, 27, 27, 0.2);
 }
 
 
@@ -1365,6 +1398,26 @@ button,
   border-color: rgba(255, 255, 255, 0.2);
 }
 
+.product-card.just-updated-card {
+  border-color: var(--accent);
+  animation: justUpdatedPulse 2.5s ease-out forwards;
+}
+
+@keyframes justUpdatedPulse {
+  0% {
+    box-shadow: 0 0 0 3px var(--accent-glow), var(--glass-shadow);
+    background-color: rgba(16, 185, 129, 0.15);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent, var(--glass-shadow);
+  }
+}
+
+.product-card.selected-line-card {
+  border-color: var(--accent);
+  background: rgba(16, 185, 129, 0.08);
+}
+
 .product-card .line-no {
   font-size: 1.25rem;
   font-weight: 800;
@@ -1726,11 +1779,32 @@ button,
   line-height: 1.25;
 }
 
-.outcome-btn.selected {
-  border-color: var(--accent);
-  background: rgba(41, 121, 255, 0.2);
-  color: #fff;
-  box-shadow: 0 0 16px rgba(41, 121, 255, 0.35);
+.outcome-btn.selected.outcome-accepted {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.20);
+  color: #34d399;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.35);
+}
+
+.outcome-btn.selected.outcome-damaged-accepted {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.20);
+  color: #fbbf24;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.35);
+}
+
+.outcome-btn.selected.outcome-damaged-refused {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.20);
+  color: #f87171;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.35);
+}
+
+.outcome-btn.selected.outcome-refused {
+  border-color: #dc2626;
+  background: rgba(185, 28, 28, 0.25);
+  color: #fca5a5;
+  box-shadow: 0 0 16px rgba(220, 38, 38, 0.4);
 }
 
 .outcome-btn:active {
@@ -2674,7 +2748,7 @@ button,
 /* Floating Scroll-to-Top Pill */
 .scroll-top-pill {
   position: fixed;
-  bottom: 84px;
+  bottom: max(96px, calc(env(safe-area-inset-bottom, 0px) + 90px));
   right: 18px;
   z-index: 90;
   display: flex;

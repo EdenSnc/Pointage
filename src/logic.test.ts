@@ -622,6 +622,83 @@ describe('findNormalBackCamera (1x camera selection)', () => {
   });
 });
 
+describe('Multi-operator concurrent pointage & commutative delta aggregation', () => {
+  it('combines independent delta events from multiple operators commutatively (A + B = B + A)', () => {
+    const line = makeLine({ id: 42, orderedQty: 100 });
+    const eventWorkerA = makeEvent({
+      id: 101,
+      orderLineId: 42,
+      stage: 'pointage',
+      quantity: 50,
+      outcome: 'accepted',
+      createdAt: '2026-09-08T08:00:00.000Z',
+    });
+    const eventWorkerB = makeEvent({
+      id: 102,
+      orderLineId: 42,
+      stage: 'pointage',
+      quantity: 50,
+      outcome: 'accepted',
+      createdAt: '2026-09-08T08:00:01.000Z',
+    });
+
+    // Order 1: A then B
+    const totalOrder1 = sumStageEvents([eventWorkerA, eventWorkerB], 'pointage');
+    expect(totalOrder1).toBe(100);
+    const disc1 = calcDiscrepancy(line, totalOrder1);
+    expect(disc1.isExact).toBe(true);
+    expect(disc1.remaining).toBe(0);
+
+    // Order 2: B then A (network latency / asynchronous sync)
+    const totalOrder2 = sumStageEvents([eventWorkerB, eventWorkerA], 'pointage');
+    expect(totalOrder2).toBe(100);
+    const disc2 = calcDiscrepancy(line, totalOrder2);
+    expect(disc2.isExact).toBe(true);
+  });
+
+  it('correctly aggregates split pointage (compliant + damaged_refused with notes)', () => {
+    const line = makeLine({ id: 55, orderedQty: 100 });
+    const compliantBatch = makeEvent({
+      id: 201,
+      orderLineId: 55,
+      stage: 'pointage',
+      quantity: 80,
+      outcome: 'accepted',
+    });
+    const damagedBatch = makeEvent({
+      id: 202,
+      orderLineId: 55,
+      stage: 'pointage',
+      quantity: 20,
+      outcome: 'damaged_refused',
+    });
+
+    const total = sumStageEvents([compliantBatch, damagedBatch], 'pointage');
+    expect(total).toBe(100);
+
+    const disc = calcDiscrepancy(line, total);
+    expect(disc.isExact).toBe(true);
+    expect(disc.remaining).toBe(0);
+  });
+
+  it('correctly calculates batch quantity when stepping outer vs inner vs units', () => {
+    const outerPack = 24;
+    const innerPack = 6;
+
+    // Stepping units
+    let loose = 5;
+    expect(calcBatchQty(0, 0, loose, outerPack, innerPack)).toBe(5);
+
+    // Stepping inner packs (+2 packs of 6)
+    let innerCount = 2;
+    expect(calcBatchQty(0, innerCount, loose, outerPack, innerPack)).toBe(17);
+
+    // Stepping outer cartons (+3 cartons of 24)
+    let outerCount = 3;
+    expect(calcBatchQty(outerCount, innerCount, loose, outerPack, innerPack)).toBe(89);
+  });
+});
+
 
 
 

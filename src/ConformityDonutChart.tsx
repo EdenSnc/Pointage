@@ -27,12 +27,11 @@ export function ConformityDonutChart({
   billStatus,
   onToggleStatus,
 }: ConformityDonutChartProps) {
-  // Calculate completion percentage based on pieces fulfilled (capped at 100%)
+  // Calculate completion percentage based on products/lines completed (not skewed by massive quantities)
   const total = totalLines || 1;
-  const totalPiecesFulfilled = Math.min(orderedPieces, actualPieces);
-  const pctProgress = orderedPieces > 0
-    ? Math.min(100, Math.round((totalPiecesFulfilled / orderedPieces) * 100))
-    : (actualPieces > 0 ? 100 : 0);
+  const pctProgress = totalLines > 0
+    ? Math.min(100, Math.round((conformeCount / totalLines) * 100))
+    : (conformeCount > 0 ? 100 : 0);
   const diffPieces = actualPieces - orderedPieces;
 
   // Exact 100% full conformity requires 0 problems, 0 short, 0 over, and exact piece match

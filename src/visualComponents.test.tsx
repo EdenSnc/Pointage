@@ -89,7 +89,7 @@ describe('Apple Glass Visual Components Test Suite', () => {
         />
       );
 
-      expect(html).toContain('Plan de Chargement — Voyage');
+      expect(html).toContain('Chargement — Voyage');
       expect(html).toContain('Dans ce Camion');
       expect(html).toContain('45');
       expect(html).toContain('colis');

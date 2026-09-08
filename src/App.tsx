@@ -3114,11 +3114,20 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
 
   useEffect(() => {
     if (lastUpdatedLineId) {
+      const scrollTimer = setTimeout(() => {
+        const el = document.getElementById(`line-${lastUpdatedLineId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
       const timer = setTimeout(() => {
         sessionStorage.removeItem('pointage_last_updated_line_id');
         setLastUpdatedLineId(0);
-      }, 2500);
-      return () => clearTimeout(timer);
+      }, 3000);
+      return () => {
+        clearTimeout(scrollTimer);
+        clearTimeout(timer);
+      };
     }
   }, [lastUpdatedLineId]);
 
@@ -3783,17 +3792,19 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               );
             })}
 
-            <button
-              type="button"
-              className={`colis-filter-pill loose ${selectedContainerFilter === 'loose' ? 'active' : ''}`}
-              onClick={() => setSelectedContainerFilter(selectedContainerFilter === 'loose' ? 'all' : 'loose')}
-            >
-              <span className="flex items-center gap-1">
-                <IconTag size={12} />
-                <span>Hors Colis</span>
-              </span>
-              <span className="colis-pill-badge">{containerStats.get('loose')?.linesCount || 0}</span>
-            </button>
+            {activeContainers.length > 0 && (
+              <button
+                type="button"
+                className={`colis-filter-pill loose ${selectedContainerFilter === 'loose' ? 'active' : ''}`}
+                onClick={() => setSelectedContainerFilter(selectedContainerFilter === 'loose' ? 'all' : 'loose')}
+              >
+                <span className="flex items-center gap-1">
+                  <IconTag size={12} />
+                  <span>Hors Colis</span>
+                </span>
+                <span className="colis-pill-badge">{containerStats.get('loose')?.linesCount || 0}</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -3988,7 +3999,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                           ))}
                         </div>
                       );
-                    } else if (stage !== 'preparation' && stageTotal > 0) {
+                    } else if (stage !== 'preparation' && stageTotal > 0 && activeContainers.length > 0) {
                       return (
                         <div className="flex items-center gap-1.5 mt-1">
                           <span className="badge badge-loose flex items-center gap-1">
@@ -4403,12 +4414,18 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const [outerCount, setOuterCount] = useState(0);
   const [innerCount, setInnerCount] = useState(0);
   const [loose, setLoose] = useState(0);
+  const [activeField, setActiveField] = useState<'outer' | 'inner' | 'unit'>('unit');
   const [directTotal, setDirectTotal] = useState('');
   const [useDirectEntry, setUseDirectEntry] = useState(false);
   const [selectedContainer, setSelectedContainer] = useState<number | null>(null);
   const [outcome, setOutcome] = useState<PointageOutcome>('accepted');
   const [refusalNote, setRefusalNote] = useState('');
-  const [showTransferModal, setShowTransferModal] = useState(false);
+
+  // Split Pointage state (e.g. 80 compliant + 20 damaged)
+  const [isSplitMode, setIsSplitMode] = useState(false);
+  const [splitDamagedQty, setSplitDamagedQty] = useState(0);
+  const [splitOutcome, setSplitOutcome] = useState<PointageOutcome>('damaged_refused');
+  const [splitNote, setSplitNote] = useState('');
 
   // Substitution state
   const [showSubModal, setShowSubModal] = useState(false);
@@ -4511,7 +4528,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const batchQty = useDirectEntry
     ? (parseInt(directTotal) || 0)
     : calcBatchQty(outerCount, innerCount, loose, outerPack, innerPack);
-  const afterAdding = stageTotal + batchQty;
+  const effectiveBatch = (stage === 'pointage' && isSplitMode) ? (batchQty + splitDamagedQty) : batchQty;
+  const afterAdding = stageTotal + effectiveBatch;
   const afterDisc = calcDiscrepancy(line, afterAdding);
 
   const stageTotals = {
@@ -4522,36 +4540,71 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
 
   const pointageTotals = getStageTotals(events, 'pointage');
 
-  let mismatchedStage: Stage | null = null;
-  if (stageTotals[stage] === 0) {
-    if (stage === 'preparation' && stageTotals.chargement > 0) mismatchedStage = 'chargement';
-    else if (stage === 'chargement' && stageTotals.preparation > 0) mismatchedStage = 'preparation';
-    else if (stage === 'pointage' && stageTotals.chargement > 0) mismatchedStage = 'chargement';
-    else if (stage === 'pointage' && stageTotals.preparation > 0) mismatchedStage = 'preparation';
-  }
-
+  const stepTarget = (delta: number) => {
+    hapticTap('light');
+    if (useDirectEntry) {
+      const cur = parseInt(directTotal) || 0;
+      const next = Math.max(0, cur + delta);
+      setDirectTotal(next > 0 ? String(next) : '');
+    } else if (activeField === 'outer' && outerPack) {
+      setOuterCount(prev => Math.max(0, prev + delta));
+    } else if (activeField === 'inner' && innerPack) {
+      setInnerCount(prev => Math.max(0, prev + delta));
+    } else {
+      setLoose(prev => Math.max(0, prev + delta));
+    }
+  };
 
   const handleAddCount = async (targetNextLineId?: number) => {
     const now = Date.now();
     if (now - lastSubmitTimeRef.current < 600) return;
-    if (isSubmittingRef.current || batchQty <= 0) return;
+    const effectiveTotalBatch = (stage === 'pointage' && isSplitMode) ? (batchQty + splitDamagedQty) : batchQty;
+    if (isSubmittingRef.current || effectiveTotalBatch <= 0) return;
     isSubmittingRef.current = true;
     lastSubmitTimeRef.current = now;
     setIsSubmitting(true);
 
     try {
       hapticTap('medium');
-      const qtyAdded = batchQty;
+      const qtyAdded = effectiveTotalBatch;
 
-      await addCountEvent(
-        billId,
-        lineId,
-        stage,
-        batchQty,
-        (stage === 'preparation' || stage === 'chargement') ? selectedContainer : null,
-        stage === 'pointage' ? outcome : null,
-        stage === 'pointage' && outcome !== 'accepted' ? refusalNote : null
-      );
+      if (stage === 'pointage' && isSplitMode) {
+        if (batchQty > 0) {
+          await addCountEvent(
+            billId,
+            lineId,
+            stage,
+            batchQty,
+            null,
+            'accepted',
+            null
+          );
+        }
+        if (splitDamagedQty > 0) {
+          await addCountEvent(
+            billId,
+            lineId,
+            stage,
+            splitDamagedQty,
+            null,
+            splitOutcome,
+            splitNote || refusalNote || null
+          );
+        }
+        setSplitDamagedQty(0);
+        setSplitNote('');
+        setIsSplitMode(false);
+      } else {
+        await addCountEvent(
+          billId,
+          lineId,
+          stage,
+          batchQty,
+          (stage === 'preparation' || stage === 'chargement') ? selectedContainer : null,
+          stage === 'pointage' ? outcome : null,
+          stage === 'pointage' && outcome !== 'accepted' ? refusalNote : null
+        );
+      }
 
       if (stage === 'pointage') setRefusalNote('');
 
@@ -4859,95 +4912,63 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
 
         {/* Expected & Stage Totals */}
         <div className="card">
-          <div className="flex justify-between items-center">
-            <div>
-              <div className="text-xs text-muted">Attendu</div>
-              <div className="qty-big qty-expected">{showQuantities ? line.orderedQty : '•••'}</div>
-            </div>
-            <div className="flex items-center gap-2">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-xs font-bold text-muted uppercase tracking-wider">Quantité Attendue</span>
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                className={`btn btn-xs ${showQuantities ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
+                className={`btn btn-xs ${showQuantities ? 'btn-ghost' : 'btn-secondary'} flex items-center gap-1`}
                 onClick={toggleShowQuantities}
-                style={{ fontSize: '0.72rem' }}
+                style={{ fontSize: '0.72rem', padding: '3px 8px', borderRadius: 'var(--radius-pill)' }}
                 title="Afficher/masquer les quantités attendues"
               >
                 {showQuantities ? <IconEye size={13} /> : <IconEyeOff size={13} />}
-                {showQuantities ? 'Visible' : 'Masqué'}
+                <span>{showQuantities ? 'Visible' : 'Masqué'}</span>
               </button>
-              <button className="btn btn-sm btn-secondary flex items-center gap-1" onClick={() => {
-                setEditingQty(true);
-                setEditQtyVal(String(line.orderedQty));
-              }}>
-                <IconPencil size={13} /> Modifier
+              <button
+                type="button"
+                className="btn btn-xs btn-secondary flex items-center gap-1"
+                style={{ fontSize: '0.72rem', padding: '3px 8px', borderRadius: 'var(--radius-pill)' }}
+                onClick={() => {
+                  setEditingQty(true);
+                  setEditQtyVal(String(line.orderedQty));
+                }}
+              >
+                <IconPencil size={12} /> Modifier
               </button>
             </div>
           </div>
 
-          <div className="divider" />
+          <div className="qty-big qty-expected" style={{ fontSize: '2.4rem', lineHeight: 1.1, marginBottom: 8 }}>
+            {showQuantities ? `${line.orderedQty} pcs` : '•••'}
+          </div>
 
-          <div className="flex gap-3 flex-wrap">
+          <div className="divider" style={{ margin: '8px 0 12px 0' }} />
+
+          <div className="flex gap-4 flex-wrap">
             <div>
-              <div className="text-xs text-muted">Préparé</div>
-              <div className="font-bold text-lg">{stageTotals.preparation}</div>
+              <div className="text-xs text-muted font-bold">Préparé</div>
+              <div className="font-bold text-lg font-mono">{stageTotals.preparation}</div>
             </div>
             <div>
-              <div className="text-xs text-muted">Chargé</div>
-              <div className="font-bold text-lg">{stageTotals.chargement}</div>
+              <div className="text-xs text-muted font-bold">Chargé</div>
+              <div className="font-bold text-lg font-mono">{stageTotals.chargement}</div>
             </div>
             <div>
-              <div className="text-xs text-muted">Pointé</div>
-              <div className="font-bold text-lg">{stageTotals.pointage}</div>
+              <div className="text-xs text-muted font-bold">Pointé</div>
+              <div className="font-bold text-lg font-mono">{stageTotals.pointage}</div>
             </div>
           </div>
 
           {stage === 'pointage' && stageTotals.pointage > 0 && (
-            <div className="flex gap-3 flex-wrap mt-2">
-              <div className="text-xs flex items-center gap-1"><IconCheck size={12} /> {pointageTotals.byOutcome.accepted}</div>
-              <div className="text-xs flex items-center gap-1"><IconWarning size={12} /> D.Accepté {pointageTotals.byOutcome.damaged_accepted}</div>
-              <div className="text-xs flex items-center gap-1"><IconX size={12} /> D.Refusé {pointageTotals.byOutcome.damaged_refused}</div>
-              <div className="text-xs flex items-center gap-1"><IconBan size={12} /> Refusé {pointageTotals.byOutcome.refused}</div>
+            <div className="flex gap-3 flex-wrap mt-2.5 pt-2" style={{ borderTop: '1px solid var(--glass-border-subtle)' }}>
+              <div className="text-xs flex items-center gap-1"><IconCheck size={12} style={{ color: 'var(--success)' }} /> {pointageTotals.byOutcome.accepted}</div>
+              <div className="text-xs flex items-center gap-1"><IconWarning size={12} style={{ color: 'var(--warning)' }} /> D.Accepté {pointageTotals.byOutcome.damaged_accepted}</div>
+              <div className="text-xs flex items-center gap-1"><IconX size={12} style={{ color: 'var(--danger)' }} /> D.Refusé {pointageTotals.byOutcome.damaged_refused}</div>
+              <div className="text-xs flex items-center gap-1"><IconBan size={12} style={{ color: '#991b1b' }} /> Refusé {pointageTotals.byOutcome.refused}</div>
             </div>
           )}
         </div>
-
-        {/* Smart Transfer Suggestion Banner */}
-        {stageTotal === 0 && mismatchedStage && (
-          <div
-            className="card mb-3 flex justify-between items-center"
-            style={{
-              background: 'rgba(245, 158, 11, 0.12)',
-              border: '1px solid rgba(245, 158, 11, 0.35)',
-              padding: '10px 14px',
-            }}
-          >
-            <div className="flex items-center gap-2">
-              <IconTransfer size={18} style={{ color: 'var(--warning)', flexShrink: 0 }} />
-              <div>
-                <div className="font-bold text-xs" style={{ color: 'var(--warning)' }}>
-                  {stageTotals[mismatchedStage]} pièces comptées en {mismatchedStage === 'preparation' ? 'Préparation' : mismatchedStage === 'chargement' ? 'Chargement' : 'Pointage'}
-                </div>
-                <div className="text-xs text-muted">
-                  Erreur d'étape ? Vous êtes actuellement en {stage === 'preparation' ? 'Préparation' : stage === 'chargement' ? 'Chargement' : 'Pointage'}.
-                </div>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="btn btn-xs btn-primary flex items-center gap-1"
-              style={{ fontWeight: 700, whiteSpace: 'nowrap' }}
-              onClick={async () => {
-                const units = await transferLineStageCounts(billId, lineId, mismatchedStage, stage);
-                playSuccessChime();
-                hapticTap('medium');
-                const STAGE_NAMES = { preparation: 'Préparation', chargement: 'Chargement', pointage: 'Pointage' };
-                showToast(`${units} pièces basculées vers ${STAGE_NAMES[stage]}`, setToast);
-              }}
-            >
-              ⇄ Basculer ici
-            </button>
-          </div>
-        )}
 
         {/* Cannibalized Stock Restock Warning */}
         {line.reallocatedQty && line.reallocatedQty < 0 && (
@@ -5149,15 +5170,15 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               {stage === 'preparation' ? 'PRÉPARATION' : stage === 'chargement' ? 'CHARGEMENT' : 'POINTAGE'}
             </span>
             <div className="flex items-center gap-1.5">
-              {events.filter(e => !e.undone).length > 0 && (
+              {events.filter(e => e.stage === stage && !e.undone).length > 0 && (
                 <button
                   type="button"
-                  className="btn btn-xs btn-ghost flex items-center gap-1"
-                  style={{ fontSize: '0.68rem', padding: '2px 6px', color: 'var(--accent)' }}
-                  onClick={() => setShowTransferModal(true)}
-                  title="Transférer les comptages vers une autre étape"
+                  className="btn btn-xs btn-ghost text-muted flex items-center gap-1"
+                  onClick={handleUndo}
+                  style={{ fontSize: '0.68rem', padding: '2px 6px' }}
+                  title="Annuler la toute dernière saisie de comptage"
                 >
-                  <IconTransfer size={12} /> Transférer
+                  <IconUndo size={11} /> Annuler
                 </button>
               )}
               {stageTotal > 0 && (
@@ -5471,56 +5492,137 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
         {/* Pointage outcome (Placed before quantity so worker picks status first) */}
         {stage === 'pointage' && (
           <div className="card">
-            <div className="section-title" style={{ marginTop: 0 }}>RÉSULTAT DU POINTAGE</div>
-            <div className="outcome-grid">
-              {(['accepted', 'damaged_accepted', 'damaged_refused', 'refused'] as PointageOutcome[]).map((o) => (
-                <button
-                  key={o}
-                  className={`outcome-btn ${outcome === o ? 'selected' : ''}`}
-                  onClick={() => setOutcome(o)}
-                >
-                  {o === 'accepted' ? (
-                    <span className="flex items-center justify-center gap-1"><IconCheck size={16} /> Conforme</span>
-                  ) : o === 'damaged_accepted' ? (
-                    <span className="flex items-center justify-center gap-1"><IconWarning size={16} /> Avarié Accepté</span>
-                  ) : o === 'damaged_refused' ? (
-                    <span className="flex items-center justify-center gap-1"><IconX size={16} /> Avarié Refusé</span>
-                  ) : (
-                    <span className="flex items-center justify-center gap-1"><IconBan size={16} /> Refusé</span>
-                  )}
-                </button>
-              ))}
+            <div className="flex justify-between items-center mb-2">
+              <div className="section-title" style={{ marginTop: 0, marginBottom: 0 }}>RÉSULTAT DU POINTAGE</div>
+              <button
+                type="button"
+                className={`btn btn-xs ${isSplitMode ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
+                style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: 'var(--radius-pill)' }}
+                onClick={() => setIsSplitMode(!isSplitMode)}
+                title="Saisir à la fois des pièces conformes et des pièces avariées/refusées"
+              >
+                <span>{isSplitMode ? 'Mode fractionné actif' : 'Fractionner (Conforme + Litige)'}</span>
+              </button>
             </div>
 
-            {stage === 'pointage' && outcome !== 'accepted' && (
-              <div className="mt-3 p-2" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-badge)', border: '1px solid var(--glass-border-bright)' }}>
-                <div className="text-xs font-bold text-muted mb-1">MOTIF :</div>
-                <div className="flex flex-wrap gap-1 mb-2">
-                  {['Emballage écrasé / ouvert', 'Article cassé / défectueux', 'Non commandé / Réf erronée', 'Date dépassée'].map(chip => (
+            {!isSplitMode ? (
+              <>
+                <div className="outcome-grid">
+                  {(['accepted', 'damaged_accepted', 'damaged_refused', 'refused'] as PointageOutcome[]).map((o) => (
                     <button
-                      key={chip}
-                      type="button"
-                      className="btn btn-xs btn-ghost"
-                      style={{
-                        fontSize: '0.75rem',
-                        borderColor: refusalNote === chip ? 'var(--accent)' : 'var(--border)',
-                        background: refusalNote === chip ? 'var(--accent-glow)' : 'transparent',
-                        color: refusalNote === chip ? 'var(--accent)' : 'inherit',
-                      }}
-                      onClick={() => setRefusalNote(chip)}
+                      key={o}
+                      className={`outcome-btn ${outcome === o ? `selected outcome-${o.replace('_', '-')}` : ''}`}
+                      onClick={() => setOutcome(o)}
                     >
-                      {chip}
+                      {o === 'accepted' ? (
+                        <span className="flex items-center justify-center gap-1"><IconCheck size={16} /> Conforme</span>
+                      ) : o === 'damaged_accepted' ? (
+                        <span className="flex items-center justify-center gap-1"><IconWarning size={16} /> Avarié Accepté</span>
+                      ) : o === 'damaged_refused' ? (
+                        <span className="flex items-center justify-center gap-1"><IconX size={16} /> Avarié Refusé</span>
+                      ) : (
+                        <span className="flex items-center justify-center gap-1"><IconBan size={16} /> Refusé</span>
+                      )}
                     </button>
                   ))}
                 </div>
-                <input
-                  type="text"
-                  className="input input-sm"
-                  style={{ width: '100%' }}
-                  placeholder="Ou précisez le problème (ex: 2 trousses fermeture bloquée)..."
-                  value={refusalNote}
-                  onChange={e => setRefusalNote(e.target.value)}
-                />
+
+                {outcome !== 'accepted' && (
+                  <div className="mt-3 p-3" style={{ background: 'var(--bg-surface)', borderRadius: '14px', border: '1px solid var(--glass-border-bright)' }}>
+                    <div className="text-xs font-bold text-muted mb-1.5">MOTIF :</div>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {['Emballage écrasé / ouvert', 'Article cassé / défectueux', 'Non commandé / Réf erronée', 'Date dépassée'].map(chip => (
+                        <button
+                          key={chip}
+                          type="button"
+                          className="btn btn-xs btn-ghost"
+                          style={{
+                            fontSize: '0.75rem',
+                            borderRadius: 'var(--radius-pill)',
+                            borderColor: refusalNote === chip ? 'var(--accent)' : 'var(--border)',
+                            background: refusalNote === chip ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                            color: refusalNote === chip ? 'var(--accent)' : 'inherit',
+                          }}
+                          onClick={() => setRefusalNote(chip)}
+                        >
+                          {chip}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="text"
+                      className="input input-sm"
+                      style={{ width: '100%', borderRadius: '10px' }}
+                      placeholder="Ou précisez le problème (ex: 2 trousses fermeture bloquée)..."
+                      value={refusalNote}
+                      onChange={e => setRefusalNote(e.target.value)}
+                    />
+                  </div>
+                )}
+              </>
+            ) : (
+              /* Split Pointage View */
+              <div className="flex flex-col gap-3">
+                <div className="p-2.5 rounded-xl" style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+                  <div className="text-xs font-bold text-accent mb-1 flex items-center gap-1">
+                    <IconCheck size={14} /> 1. Pièces Conformes
+                  </div>
+                  <div className="text-xs text-muted">Quantité saisie dans le pavé ci-dessous ({batchQty} pcs).</div>
+                </div>
+
+                <div className="p-3 rounded-xl" style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)' }}>
+                  <div className="text-xs font-bold text-danger mb-2 flex items-center gap-1">
+                    <IconWarning size={14} /> 2. Pièces Litigieuses / Avariées
+                  </div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-semibold" style={{ minWidth: 70 }}>Quantité :</span>
+                    <input
+                      type="number"
+                      className="input input-sm text-center font-mono font-bold"
+                      style={{ width: 90 }}
+                      min={0}
+                      value={splitDamagedQty || ''}
+                      placeholder="0"
+                      onChange={(e) => setSplitDamagedQty(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                    />
+                    <div className="flex gap-1">
+                      {[1, 2, 5, 10].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          className="btn btn-xs btn-secondary"
+                          onClick={() => setSplitDamagedQty(prev => prev + n)}
+                        >
+                          +{n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="text-xs font-semibold mb-1">Statut du litige :</div>
+                  <div className="flex gap-1 mb-2">
+                    {(['damaged_refused', 'damaged_accepted', 'refused'] as PointageOutcome[]).map((o) => (
+                      <button
+                        key={o}
+                        type="button"
+                        className={`btn btn-xs ${splitOutcome === o ? 'btn-primary' : 'btn-secondary'} flex-1`}
+                        style={{ fontSize: '0.72rem' }}
+                        onClick={() => setSplitOutcome(o)}
+                      >
+                        {o === 'damaged_refused' ? 'Avarié Refusé' : o === 'damaged_accepted' ? 'Avarié Accepté' : 'Refusé'}
+                      </button>
+                    ))}
+                  </div>
+
+                  <input
+                    type="text"
+                    className="input input-sm w-full"
+                    placeholder="Motif (ex: 2 pièces cassées au fond du carton)..."
+                    value={splitNote}
+                    onChange={(e) => setSplitNote(e.target.value)}
+                    style={{ fontSize: '0.78rem' }}
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -5559,20 +5661,68 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           ) : (
             <div>
               {outerPack && (
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold">EXT (×{outerPack})</span>
-                  <Stepper value={outerCount} onChange={setOuterCount} />
+                <div
+                  className="flex items-center justify-between p-2 mb-1.5 rounded-lg transition-colors cursor-pointer"
+                  style={{
+                    background: activeField === 'outer' ? 'rgba(16, 185, 129, 0.08)' : 'transparent',
+                    border: activeField === 'outer' ? '1px solid var(--accent)' : '1px solid transparent',
+                  }}
+                  onClick={() => setActiveField('outer')}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-semibold">EXT (×{outerPack})</span>
+                    {activeField === 'outer' && <span className="badge badge-exact" style={{ fontSize: '0.62rem', padding: '1px 5px' }}>Cible</span>}
+                  </div>
+                  <Stepper
+                    value={outerCount}
+                    onChange={(v) => {
+                      setActiveField('outer');
+                      setOuterCount(v);
+                    }}
+                  />
                 </div>
               )}
               {innerPack && (
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold">INT (×{innerPack})</span>
-                  <Stepper value={innerCount} onChange={setInnerCount} />
+                <div
+                  className="flex items-center justify-between p-2 mb-1.5 rounded-lg transition-colors cursor-pointer"
+                  style={{
+                    background: activeField === 'inner' ? 'rgba(16, 185, 129, 0.08)' : 'transparent',
+                    border: activeField === 'inner' ? '1px solid var(--accent)' : '1px solid transparent',
+                  }}
+                  onClick={() => setActiveField('inner')}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-semibold">INT (×{innerPack})</span>
+                    {activeField === 'inner' && <span className="badge badge-exact" style={{ fontSize: '0.62rem', padding: '1px 5px' }}>Cible</span>}
+                  </div>
+                  <Stepper
+                    value={innerCount}
+                    onChange={(v) => {
+                      setActiveField('inner');
+                      setInnerCount(v);
+                    }}
+                  />
                 </div>
               )}
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold">UNITÉS</span>
-                <Stepper value={loose} onChange={setLoose} />
+              <div
+                className="flex items-center justify-between p-2 mb-1 rounded-lg transition-colors cursor-pointer"
+                style={{
+                  background: activeField === 'unit' ? 'rgba(16, 185, 129, 0.08)' : 'transparent',
+                  border: activeField === 'unit' ? '1px solid var(--accent)' : '1px solid transparent',
+                }}
+                onClick={() => setActiveField('unit')}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-semibold">UNITÉS</span>
+                  {activeField === 'unit' && <span className="badge badge-exact" style={{ fontSize: '0.62rem', padding: '1px 5px' }}>Cible</span>}
+                </div>
+                <Stepper
+                  value={loose}
+                  onChange={(v) => {
+                    setActiveField('unit');
+                    setLoose(v);
+                  }}
+                />
               </div>
               {((outerCount > 0 && outerPack) || (innerCount > 0 && innerPack)) && (
                 <div className="text-xs font-mono text-muted mt-2 px-2 py-1" style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)' }}>
@@ -5586,117 +5736,127 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           )}
 
           {/* Quick preset chips for rapid warehouse counting */}
-          <div className="flex gap-1 mt-3 flex-wrap items-center">
-            <button className="btn btn-xs btn-secondary" onClick={() => {
-              hapticTap('light');
-              if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + 1));
-              else setLoose(prev => prev + 1);
-            }}>+1</button>
-            <button className="btn btn-xs btn-secondary" onClick={() => {
-              hapticTap('light');
-              if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + 5));
-              else setLoose(prev => prev + 5);
-            }}>+5</button>
-            <button className="btn btn-xs btn-secondary" onClick={() => {
-              hapticTap('light');
-              if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + 10));
-              else setLoose(prev => prev + 10);
-            }}>+10</button>
-            <button className="btn btn-xs btn-secondary" onClick={() => {
-              hapticTap('light');
-              if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + 12));
-              else setLoose(prev => prev + 12);
-            }}>+12</button>
-            {innerPack && innerPack > 1 && innerPack !== 5 && innerPack !== 10 && innerPack !== 12 && (
-              <button className="btn btn-xs btn-secondary" onClick={() => {
-                hapticTap('light');
-                if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + innerPack));
-                else setLoose(prev => prev + innerPack);
-              }}>+{innerPack}</button>
-            )}
-            {outerPack && outerPack > 1 && (
-              <button className="btn btn-xs btn-secondary" onClick={() => {
-                hapticTap('light');
-                if (useDirectEntry) setDirectTotal(String((parseInt(directTotal) || 0) + outerPack));
-                else setLoose(prev => prev + outerPack);
-              }}>+{outerPack}</button>
-            )}
-
-            {/* Minus buttons to correct accidental taps */}
-            <button
-              type="button"
-              className="btn btn-xs btn-ghost text-muted"
-              style={{ border: '1px dashed var(--border)' }}
-              onClick={() => {
-                hapticTap('light');
-                if (useDirectEntry) {
-                  const c = parseInt(directTotal) || 0;
-                  if (c > 0) setDirectTotal(String(c - 1));
-                } else {
-                  setLoose(prev => Math.max(0, prev - 1));
-                }
-              }}
-              title="Diminuer de 1"
-            >
-              -1
-            </button>
-            <button
-              type="button"
-              className="btn btn-xs btn-ghost text-muted"
-              style={{ border: '1px dashed var(--border)' }}
-              onClick={() => {
-                hapticTap('light');
-                if (useDirectEntry) {
-                  const c = parseInt(directTotal) || 0;
-                  if (c >= 5) setDirectTotal(String(c - 5));
-                  else setDirectTotal('0');
-                } else {
-                  setLoose(prev => Math.max(0, prev - 5));
-                }
-              }}
-              title="Diminuer de 5"
-            >
-              -5
-            </button>
-
-            {/* STRICT BLIND COUNT: Only show SOLDE / AU PLUS PROCHE when quantities are VISIBLE */}
-            {showQuantities && disc.remaining > 0 && (() => {
-              const activePack = innerPack || outerPack;
-              const rec = activePack && activePack > 1 ? calcClosestPackRecommendation(disc.remaining, activePack) : null;
-              return (
-                <>
-                  {rec && !rec.isExactMultiple && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] text-muted font-bold uppercase tracking-wider">
+                Raccourcis ({activeField === 'outer' ? `Carton EXT ×${outerPack}` : activeField === 'inner' ? `Sous-pack INT ×${innerPack}` : 'Unités'}) :
+              </span>
+              {(outerPack || innerPack) && (
+                <div className="flex gap-1">
+                  {outerPack && (
                     <button
                       type="button"
-                      className="btn btn-xs flex items-center gap-1"
-                      style={{
-                        background: 'rgba(37, 99, 235, 0.15)',
-                        border: '1px solid rgba(37, 99, 235, 0.35)',
-                        color: 'var(--accent)',
-                        fontWeight: 700,
-                      }}
-                      onClick={() => handleApplyPackQty(rec.closestQty, rec.closestPacks, activePack)}
-                      title={`Régler au plus proche : ${rec.closestQty} pcs (${rec.closestPacks} colis)`}
+                      className={`btn btn-xs ${activeField === 'outer' ? 'btn-primary' : 'btn-ghost'}`}
+                      style={{ fontSize: '0.68rem', padding: '1px 6px' }}
+                      onClick={() => setActiveField('outer')}
                     >
-                      <IconBox size={13} /> AU PLUS PROCHE ({rec.closestQty})
+                      EXT
                     </button>
                   )}
-                  <button className="btn btn-xs btn-primary flex items-center gap-1" onClick={() => {
-                    hapticTap('medium');
-                    playExactMatchChime();
-                    if (useDirectEntry) setDirectTotal(String(disc.remaining));
-                    else setLoose(disc.remaining);
-                  }}>
-                    <IconBolt size={13} /> SOLDE ({disc.remaining})
+                  {innerPack && (
+                    <button
+                      type="button"
+                      className={`btn btn-xs ${activeField === 'inner' ? 'btn-primary' : 'btn-ghost'}`}
+                      style={{ fontSize: '0.68rem', padding: '1px 6px' }}
+                      onClick={() => setActiveField('inner')}
+                    >
+                      INT
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${activeField === 'unit' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: '0.68rem', padding: '1px 6px' }}
+                    onClick={() => setActiveField('unit')}
+                  >
+                    UNITÉS
                   </button>
-                </>
-              );
-            })()}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-1 flex-wrap items-center">
+              <button type="button" className="btn btn-xs btn-secondary" onClick={() => stepTarget(1)}>+1</button>
+              <button type="button" className="btn btn-xs btn-secondary" onClick={() => stepTarget(activeField === 'unit' ? 5 : 2)}>
+                +{activeField === 'unit' ? 5 : 2}
+              </button>
+              <button type="button" className="btn btn-xs btn-secondary" onClick={() => stepTarget(activeField === 'unit' ? 10 : 5)}>
+                +{activeField === 'unit' ? 10 : 5}
+              </button>
+              <button type="button" className="btn btn-xs btn-secondary" onClick={() => stepTarget(activeField === 'unit' ? 12 : 10)}>
+                +{activeField === 'unit' ? 12 : 10}
+              </button>
+
+              {activeField === 'unit' && innerPack && innerPack > 1 && innerPack !== 5 && innerPack !== 10 && innerPack !== 12 && (
+                <button type="button" className="btn btn-xs btn-secondary" onClick={() => stepTarget(innerPack)}>+{innerPack}</button>
+              )}
+              {activeField === 'unit' && outerPack && outerPack > 1 && (
+                <button type="button" className="btn btn-xs btn-secondary" onClick={() => stepTarget(outerPack)}>+{outerPack}</button>
+              )}
+
+              {/* Minus buttons to correct accidental taps */}
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost text-muted"
+                style={{ border: '1px dashed var(--border)' }}
+                onClick={() => stepTarget(-1)}
+                title="Diminuer de 1"
+              >
+                -1
+              </button>
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost text-muted"
+                style={{ border: '1px dashed var(--border)' }}
+                onClick={() => stepTarget(activeField === 'unit' ? -5 : -2)}
+                title={activeField === 'unit' ? "Diminuer de 5" : "Diminuer de 2"}
+              >
+                -{activeField === 'unit' ? 5 : 2}
+              </button>
+
+              {/* STRICT BLIND COUNT: Only show SOLDE / AU PLUS PROCHE when quantities are VISIBLE */}
+              {showQuantities && disc.remaining > 0 && (() => {
+                const activePack = innerPack || outerPack;
+                const rec = activePack && activePack > 1 ? calcClosestPackRecommendation(disc.remaining, activePack) : null;
+                return (
+                  <>
+                    {rec && !rec.isExactMultiple && (
+                      <button
+                        type="button"
+                        className="btn btn-xs flex items-center gap-1"
+                        style={{
+                          background: 'rgba(37, 99, 235, 0.15)',
+                          border: '1px solid rgba(37, 99, 235, 0.35)',
+                          color: 'var(--accent)',
+                          fontWeight: 700,
+                        }}
+                        onClick={() => handleApplyPackQty(rec.closestQty, rec.closestPacks, activePack)}
+                        title={`Régler au plus proche : ${rec.closestQty} pcs (${rec.closestPacks} colis)`}
+                      >
+                        <IconBox size={13} /> AU PLUS PROCHE ({rec.closestQty})
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-xs btn-primary flex items-center gap-1"
+                      onClick={() => {
+                        hapticTap('medium');
+                        playExactMatchChime();
+                        if (useDirectEntry) setDirectTotal(String(disc.remaining));
+                        else setLoose(disc.remaining);
+                      }}
+                    >
+                      <IconBolt size={13} /> SOLDE ({disc.remaining})
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
           </div>
 
           {/* Batch preview */}
           {batchQty > 0 && (
-            <div className="mt-3 p-2" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-badge)', border: 'var(--glass-border-subtle)' }}>
+            <div className="mt-3 p-2.5" style={{ background: 'var(--bg-surface)', borderRadius: '14px', border: '1px solid var(--glass-border-subtle)' }}>
               <div className="flex justify-between items-baseline">
                 <span className="text-sm text-muted font-semibold">CE LOT</span>
                 <span className="font-bold text-lg" style={{ fontFamily: 'var(--font-mono)' }}>+{batchQty}</span>
@@ -5909,30 +6069,33 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         )}
 
-        {/* Commercial Sample Card */}
-        <div className="card mb-3">
-          <div className="flex justify-between items-center">
-            <div>
-              <div className="section-title" style={{ marginTop: 0, marginBottom: 2 }}>ÉCHANTILLON COMMERCIAL</div>
-              <div className="text-xs text-muted">Pièce prélevée pour démonstration commerciale</div>
+        {/* Commercial Sample Card (Pointage only) */}
+        {stage === 'pointage' && (
+          <div className="card mb-3">
+            <div className="flex justify-between items-center">
+              <div>
+                <div className="section-title" style={{ marginTop: 0, marginBottom: 2 }}>ÉCHANTILLON COMMERCIAL</div>
+                <div className="text-xs text-muted">Pièce prélevée pour démonstration commerciale</div>
+              </div>
+              <button
+                type="button"
+                className={`btn btn-xs ${line.sampleTaken ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
+                onClick={async () => {
+                  const nextVal = line.sampleTaken ? null : 1;
+                  await db.orderLines.update(line.id!, { sampleTaken: nextVal, updatedAt: new Date().toISOString() });
+                  if (setToast) setToast(nextVal ? 'Échantillon commercial noté (à réintégrer plus tard)' : 'Échantillon réintégré');
+                }}
+              >
+                {line.sampleTaken ? '1 pc prêtée' : 'Aucun'}
+              </button>
             </div>
-            <button
-              type="button"
-              className={`btn btn-xs ${line.sampleTaken ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
-              onClick={async () => {
-                const nextVal = line.sampleTaken ? null : 1;
-                await db.orderLines.update(line.id!, { sampleTaken: nextVal, updatedAt: new Date().toISOString() });
-                if (setToast) setToast(nextVal ? 'Échantillon commercial noté (à réintégrer plus tard)' : 'Échantillon réintégré');
-              }}
-            >
-              {line.sampleTaken ? '1 pc prêtée' : 'Aucun'}
-            </button>
           </div>
-        </div>
+        )}
 
-        {/* Statut article (Cas particuliers & Annulation / Substitution) */}
-        <div className="card mb-3">
-          <div className="section-title" style={{ marginTop: 0 }}>STATUT ARTICLE (CAS PARTICULIERS)</div>
+        {/* Statut article (Cas particuliers & Annulation / Substitution - Prépa et Chargement uniquement) */}
+        {stage !== 'pointage' && (
+          <div className="card mb-3">
+            <div className="section-title" style={{ marginTop: 0 }}>STATUT ARTICLE (CAS PARTICULIERS)</div>
           {line.status === 'active' ? (
             <div className="flex flex-col gap-2">
               <div className="flex gap-2">
@@ -6027,6 +6190,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             </div>
           )}
         </div>
+        )}
 
         {/* Modal Substitution Dialog */}
         {showSubModal && (
@@ -6262,22 +6426,6 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         )}
 
-        {/* Single product stage transfer modal */}
-        <TransferStageModal
-          isOpen={showTransferModal}
-          onClose={() => setShowTransferModal(false)}
-          billId={billId}
-          lineId={lineId}
-          currentLineTitle={`N°${line.no} — ${line.designation}`}
-          initialFromStage={stage === 'preparation' && stageTotals.chargement > 0 ? 'chargement' : stage}
-          initialToStage={stage === 'preparation' ? 'chargement' : 'preparation'}
-          onSuccess={(units, _, from, to) => {
-            playSuccessChime();
-            hapticTap('medium');
-            const STAGE_NAMES = { preparation: 'Préparation', chargement: 'Chargement', pointage: 'Pointage' };
-            showToast(`${units} pièces basculées de ${STAGE_NAMES[from]} vers ${STAGE_NAMES[to]}`, setToast);
-          }}
-        />
       </div>
 
       {/* Sticky confirm button & Next button */}
@@ -6299,7 +6447,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           }}
         >
           <div className="flex items-center gap-1.5 min-w-0">
-            <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
               {stage === 'preparation' ? 'Préparé' : stage === 'chargement' ? 'Chargé' : 'Pointé'} :
             </span>
             <span
@@ -6314,8 +6462,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             >
               {stageTotal} / {line.orderedQty} pcs
             </span>
-            {batchQty > 0 && (
-              <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--accent)', marginLeft: 4 }}>
+            {effectiveBatch > 0 && (
+              <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--accent)', marginLeft: 4, whiteSpace: 'nowrap' }}>
                 → après : {afterAdding} pcs
               </span>
             )}
@@ -6334,12 +6482,16 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           <button
             className="btn btn-success btn-lg flex-1 flex items-center justify-center gap-2"
             onClick={() => handleAddCount()}
-            disabled={isSubmitting || batchQty <= 0 || line.status !== 'active'}
+            disabled={isSubmitting || effectiveBatch <= 0 || line.status !== 'active'}
           >
-            <IconCheck size={20} />
-            {isSubmitting
-              ? 'Enregistré !'
-              : `Ajouter ${batchQty > 0 ? batchQty : ''} ${stage === 'preparation' ? 'préparé' : stage === 'chargement' ? 'chargé' : 'pointé'} & retourner`}
+            <IconCheck size={18} />
+            <span style={{ whiteSpace: 'nowrap' }}>
+              {isSubmitting
+                ? 'Enregistré !'
+                : effectiveBatch > 0
+                ? `+${effectiveBatch} pcs • Valider & Retourner`
+                : 'Valider & Retourner'}
+            </span>
           </button>
 
           {nextLine && (
@@ -6347,14 +6499,14 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               type="button"
               className="btn btn-secondary btn-lg flex items-center justify-center gap-1"
               onClick={() => {
-                if (batchQty > 0 && line.status === 'active') {
+                if (effectiveBatch > 0 && line.status === 'active') {
                   handleAddCount(nextLine.id);
                 } else {
                   nav(`/bill/${billId}/line/${nextLine.id}?stage=${stage}${fromParam ? `&from=${fromParam}` : ''}`, { replace: true });
                 }
               }}
-              title={batchQty > 0 ? `Enregistrer et passer à l'article suivant N°${nextLine.no}` : `Passer à l'article suivant N°${nextLine.no}`}
-              style={{ padding: stage === 'pointage' ? '0 12px' : '0 16px', fontWeight: 800, flexShrink: 0 }}
+              title={effectiveBatch > 0 ? `Enregistrer et passer à l'article suivant N°${nextLine.no}` : `Passer à l'article suivant N°${nextLine.no}`}
+              style={{ padding: '0 14px', fontWeight: 800, flexShrink: 0 }}
             >
               <span>N°{nextLine.no}</span>
               <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>›</span>

@@ -339,10 +339,20 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
 
           {availableContainers.length === 0 ? (
             <div
-              className="p-2.5 rounded text-xs text-muted"
-              style={{ background: 'var(--bg-input)', border: '1px dashed var(--border)' }}
+              className="p-3 rounded-xl text-xs flex items-center justify-between"
+              style={{
+                background: 'rgba(16, 185, 129, 0.08)',
+                border: '1px solid rgba(16, 185, 129, 0.25)',
+              }}
             >
-              Aucun colis spécifique scellé. L'ensemble des articles pointés est comptabilisé.
+              <div className="flex items-center gap-2">
+                <IconBox size={16} style={{ color: 'var(--accent)' }} />
+                <div>
+                  <div className="font-bold text-accent">Expédition directe en vrac</div>
+                  <div className="text-muted text-[11px]">Tous les articles chargés sont inclus ({tripUnits} pcs).</div>
+                </div>
+              </div>
+              <span className="badge badge-exact font-bold font-mono text-xs">{tripUnits} pcs</span>
             </div>
           ) : (
             <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
@@ -392,8 +402,8 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
             </div>
           )}
 
-          {/* Loose items toggle */}
-          {looseUnits > 0 && (
+          {/* Loose items toggle (only relevant when packaging containers exist) */}
+          {availableContainers.length > 0 && looseUnits > 0 && (
             <button
               type="button"
               className="flex items-center justify-between p-2 mt-1.5 rounded w-full transition-colors text-left"
@@ -432,7 +442,7 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
         {/* Chauffeur selection */}
         <div className="mb-3">
           <label className="text-xs font-bold text-muted uppercase tracking-wider block mb-1">
-            2. Chauffeur (1 Tap)
+            2. Chauffeur
           </label>
           <div className="flex flex-wrap gap-1.5 mb-1.5">
             {COMMON_DRIVERS.map((d) => (
@@ -442,7 +452,7 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
                 className={`btn btn-xs ${
                   driverName === d && !customDriver ? 'btn-primary' : 'btn-secondary'
                 }`}
-                style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                style={{ fontSize: '0.75rem', padding: '5px 11px', borderRadius: 'var(--radius-pill)' }}
                 onClick={() => {
                   setDriverName(d);
                   setCustomDriver('');
@@ -455,7 +465,7 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
           <input
             type="text"
             className="input input-sm w-full"
-            placeholder="Autre chauffeur (ex: Yacine, Chauffeur Fournisseur)..."
+            placeholder="Autre chauffeur (ex: Yacine, Chauffeur Client)..."
             value={customDriver}
             onChange={(e) => setCustomDriver(e.target.value)}
             style={{ fontSize: '0.8rem' }}
@@ -465,7 +475,7 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
         {/* Véhicule & Matricule */}
         <div className="mb-3">
           <label className="text-xs font-bold text-muted uppercase tracking-wider block mb-1">
-            3. Véhicule / Camion
+            3. Véhicule
           </label>
           <div className="flex flex-wrap gap-1.5 mb-1.5">
             {COMMON_VEHICLES.map((v) => (
@@ -475,7 +485,7 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
                 className={`btn btn-xs ${
                   truckPlate === v && !customPlate ? 'btn-primary' : 'btn-secondary'
                 }`}
-                style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                style={{ fontSize: '0.75rem', padding: '5px 11px', borderRadius: 'var(--radius-pill)' }}
                 onClick={() => {
                   setTruckPlate(v);
                   setCustomPlate('');

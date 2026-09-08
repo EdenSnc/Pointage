@@ -42,38 +42,41 @@ export function TruckLoadingDiagram({
       }}
     >
       {/* Header with Visual Status */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           <div
             style={{
-              width: 32,
-              height: 32,
+              width: 30,
+              height: 30,
               borderRadius: '50%',
               background: isFullyShipped ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
               color: isFullyShipped ? 'var(--accent)' : '#3b82f6',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              flexShrink: 0,
             }}
           >
-            <IconTruck size={17} />
+            <IconTruck size={16} />
           </div>
-          <span style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-            Plan de Chargement — Voyage {tripNumber} {totalTrips > 1 ? `/ ${totalTrips}` : ''}
+          <span style={{ fontSize: '0.84rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+            Chargement — Voyage {tripNumber} {totalTrips > 1 ? `/ ${totalTrips}` : ''}
           </span>
         </div>
 
         <span
           style={{
-            fontSize: '0.72rem',
+            fontSize: '0.70rem',
             fontWeight: 800,
-            padding: '3px 10px',
+            padding: '3px 9px',
             borderRadius: '9999px',
-            background: isFullyShipped ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+            background: isFullyShipped ? 'rgba(16, 185, 129, 0.16)' : 'rgba(245, 158, 11, 0.16)',
             color: isFullyShipped ? 'var(--accent)' : 'var(--warning)',
             display: 'inline-flex',
             alignItems: 'center',
             gap: 4,
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
           }}
         >
           {isFullyShipped && <IconCheck size={12} />}
