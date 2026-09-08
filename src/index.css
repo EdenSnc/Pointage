@@ -216,9 +216,19 @@ button,
 .btn-pill-primary,
 .btn-pill-whatsapp,
 .btn-pill-glass,
+.card,
+.product-card,
+.badge,
+.app-header,
+.bottom-bar,
+.container-tag,
+.line-qty-row,
+.section-title,
+.stepper,
 [role="button"] {
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 input,
@@ -262,7 +272,7 @@ select,
 }
 
 [data-theme="light"] .app-header {
-  background: rgba(255, 255, 255, 0.95);
+  background: #ffffff !important;
   border-bottom: 1px solid #cbd5e1;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
 }
@@ -430,14 +440,14 @@ select,
 .app-header {
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 120;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 14px 20px;
   min-height: 64px;
-  background: rgba(18, 19, 23, 0.94);
+  background: #121316;
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border-bottom: var(--glass-border);
@@ -445,7 +455,7 @@ select,
 }
 
 [data-theme="light"] .app-header {
-  background: rgba(255, 255, 255, 0.96);
+  background: #ffffff !important;
   border-bottom: 1px solid #e5e7eb;
   box-shadow: 0 2px 14px rgba(0, 0, 0, 0.04);
 }
@@ -1667,6 +1677,7 @@ select,
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.6px;
+  white-space: nowrap;
   backdrop-filter: blur(8px);
 }
 
@@ -2748,7 +2759,7 @@ select,
 /* Floating Scroll-to-Top Pill */
 .scroll-top-pill {
   position: fixed;
-  bottom: max(96px, calc(env(safe-area-inset-bottom, 0px) + 90px));
+  bottom: max(124px, calc(env(safe-area-inset-bottom, 0px) + 118px));
   right: 18px;
   z-index: 90;
   display: flex;

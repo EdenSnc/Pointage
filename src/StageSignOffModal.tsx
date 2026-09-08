@@ -32,7 +32,7 @@ export function StageSignOffModal({
   onSigned,
 }: StageSignOffModalProps) {
   const [selectedOp, setSelectedOp] = useState<string>(activeOperator || operators[0] || 'Opérateur');
-  const [applyToBatch, setApplyToBatch] = useState<boolean>(true);
+  const [applyToBatch, setApplyToBatch] = useState<boolean>(stage !== 'preparation');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   if (!isOpen) return null;

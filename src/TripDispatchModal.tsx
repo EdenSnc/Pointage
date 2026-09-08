@@ -288,11 +288,13 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
               <IconTruck size={14} />
               <span>Dans ce camion (Voyage {dockStatus.nextTripNumber}) :</span>
             </div>
-            <div className="text-lg font-bold">
-              {tripUnits} pièces{' '}
-              <span className="text-xs font-normal text-muted">
-                ({selectedContainerIds.length} colis)
-              </span>
+            <div className="text-lg font-bold flex items-baseline gap-1.5 flex-wrap">
+              <span>{tripUnits} pièces</span>
+              {availableContainers.length > 0 && (
+                <span className="text-xs font-normal text-muted" style={{ whiteSpace: 'nowrap' }}>
+                  ({selectedContainerIds.length} colis)
+                </span>
+              )}
             </div>
           </div>
 
@@ -465,7 +467,7 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
           <input
             type="text"
             className="input input-sm w-full"
-            placeholder="Autre chauffeur (ex: Yacine, Chauffeur Client)..."
+            placeholder="Autre chauffeur..."
             value={customDriver}
             onChange={(e) => setCustomDriver(e.target.value)}
             style={{ fontSize: '0.8rem' }}
@@ -498,7 +500,7 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
           <input
             type="text"
             className="input input-sm w-full"
-            placeholder="Immatriculation ou précision véhicule..."
+            placeholder="Immatriculation / Marque..."
             value={customPlate}
             onChange={(e) => setCustomPlate(e.target.value)}
             style={{ fontSize: '0.8rem' }}

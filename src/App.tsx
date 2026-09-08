@@ -3382,24 +3382,14 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
     });
   }
 
-  // Sort: warehouse zone picking path OR incomplete/problem first
+  // Sort: warehouse zone picking path OR natural document order (preserves scroll position upon completion)
   if (sortByZone) {
     displayLines = sortLinesByWarehouseZone(displayLines, profileMap);
   } else {
     displayLines.sort((a, b) => {
       if (a.status !== 'active' && b.status === 'active') return 1;
       if (a.status === 'active' && b.status !== 'active') return -1;
-
-      const evA = eventsByLine.get(a.id!) || [];
-      const evB = eventsByLine.get(b.id!) || [];
-      const dA = calcDiscrepancy(a, sumStageEvents(evA, stage));
-      const dB = calcDiscrepancy(b, sumStageEvents(evB, stage));
-
-      // Not done first
-      if (!dA.isExact && dB.isExact) return -1;
-      if (dA.isExact && !dB.isExact) return 1;
-
-      return 0;
+      return (a.no ?? 0) - (b.no ?? 0);
     });
   }
 
@@ -3552,38 +3542,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </>
         )}
 
-        {/* Stage Operator Attribution Pill */}
-        <div
-          className="card p-2 mb-2 flex items-center justify-between"
-          style={{ background: 'var(--bg-surface)', border: '1px solid var(--glass-border-subtle)', borderRadius: 20 }}
-        >
-          <div className="flex items-center gap-2">
-            <IconUser size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-            <div className="text-xs">
-              <span className="text-muted">
-                {stage === 'preparation' ? 'Préparateur :' : stage === 'chargement' ? 'Chargeur :' : 'Pointeur :'}
-              </span>{' '}
-              <strong style={{ color: 'var(--text-primary)' }}>
-                {stage === 'preparation'
-                  ? bill?.preparedBy || 'Non assigné'
-                  : stage === 'chargement'
-                  ? bill?.loadedBy || 'Non assigné'
-                  : bill?.checkedBy || 'Non assigné'}
-              </strong>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="btn btn-secondary btn-xs flex items-center gap-1"
-            style={{ fontSize: '0.72rem', padding: '3px 8px' }}
-            onClick={() => setShowStageSignOffModal(true)}
-          >
-            <IconCheck size={12} />
-            {(stage === 'preparation' ? bill?.preparedBy : stage === 'chargement' ? bill?.loadedBy : bill?.checkedBy)
-              ? 'Changer'
-              : 'Signer'}
-          </button>
-        </div>
+
 
         {/* Rotations Chauffeur / Expédition en Plusieurs Voyages */}
         {(stage === 'chargement' || (trips && trips.length > 0)) && (
@@ -4011,7 +3970,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                       {line.status === 'active' && disc.isExact && stageTotal > 0 && (
                         <span className="badge badge-exact flex items-center gap-1"><IconCheck size={11} /> Exact</span>
                       )}
-                      {line.status === 'active' && disc.isShort && (
+                      {line.status === 'active' && disc.isShort && stageTotal > 0 && (
                         <span className="badge badge-short flex items-center gap-1"><IconWarning size={11} /> {showQuantities ? `${disc.remaining} Manq` : 'Manquant'}</span>
                       )}
                       {line.status === 'active' && disc.isOver && (
@@ -4062,15 +4021,6 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                               <span>{c.label}</span>
                             </span>
                           ))}
-                        </div>
-                      );
-                    } else if (stage !== 'preparation' && stageTotal > 0 && activeContainers.length > 0) {
-                      return (
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <span className="badge badge-loose flex items-center gap-1">
-                            <IconTag size={10} />
-                            <span>Hors Colis</span>
-                          </span>
                         </div>
                       );
                     }
@@ -4582,6 +4532,13 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
 
       setOuterPack(outer);
       setInnerPack(inner);
+      if (outer && outer > 1) {
+        setActiveField('outer');
+      } else if (inner && inner > 1) {
+        setActiveField('inner');
+      } else {
+        setActiveField('unit');
+      }
     }
   }, [line?.id, profile?.id]);
 
@@ -4939,8 +4896,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             </div>
 
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="flex justify-between items-start">
-                <div style={{ minWidth: 0 }}>
+              <div className="flex justify-between items-start gap-2">
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="line-no" style={{ fontSize: '1.2rem' }}>N°{line.no}</span>
                     {line.page != null && <span className="line-page">PAGE {line.page}</span>}
@@ -4956,7 +4913,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 </div>
                 <button
                   className="btn btn-xs btn-ghost flex items-center gap-1 flex-shrink-0"
-                  style={{ alignSelf: 'flex-start', padding: '3px 8px', borderRadius: '9999px' }}
+                  style={{ alignSelf: 'flex-start', padding: '3px 8px', borderRadius: '9999px', whiteSpace: 'nowrap' }}
                   onClick={() => { setEditingField('designation'); setEditFieldVal(line.designation); }}
                 >
                   <IconPencil size={11} /> Modifier
@@ -5082,19 +5039,19 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           <div className="flex gap-4 flex-wrap">
             <div>
               <div className="text-xs text-muted font-bold">Préparé</div>
-              <div className="font-bold text-lg font-mono">{stageTotals.preparation}</div>
+              <div className="font-bold text-lg font-mono">{showQuantities ? stageTotals.preparation : '•••'}</div>
             </div>
             <div>
               <div className="text-xs text-muted font-bold">Chargé</div>
-              <div className="font-bold text-lg font-mono">{stageTotals.chargement}</div>
+              <div className="font-bold text-lg font-mono">{showQuantities ? stageTotals.chargement : '•••'}</div>
             </div>
             <div>
               <div className="text-xs text-muted font-bold">Pointé</div>
-              <div className="font-bold text-lg font-mono">{stageTotals.pointage}</div>
+              <div className="font-bold text-lg font-mono">{showQuantities ? stageTotals.pointage : '•••'}</div>
             </div>
           </div>
 
-          {stage === 'pointage' && stageTotals.pointage > 0 && (
+          {stage === 'pointage' && stageTotals.pointage > 0 && showQuantities && (
             <div className="flex gap-3 flex-wrap mt-2.5 pt-2" style={{ borderTop: '1px solid var(--glass-border-subtle)' }}>
               <div className="text-xs flex items-center gap-1"><IconCheck size={12} style={{ color: 'var(--success)' }} /> {pointageTotals.byOutcome.accepted}</div>
               <div className="text-xs flex items-center gap-1"><IconWarning size={12} style={{ color: 'var(--warning)' }} /> D.Accepté {pointageTotals.byOutcome.damaged_accepted}</div>
@@ -5809,6 +5766,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   </div>
                   <Stepper
                     value={outerCount}
+                    onFocus={() => setActiveField('outer')}
                     onChange={(v) => {
                       setActiveField('outer');
                       setOuterCount(v);
@@ -5831,6 +5789,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   </div>
                   <Stepper
                     value={innerCount}
+                    onFocus={() => setActiveField('inner')}
                     onChange={(v) => {
                       setActiveField('inner');
                       setInnerCount(v);
@@ -5852,6 +5811,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 </div>
                 <Stepper
                   value={loose}
+                  onFocus={() => setActiveField('unit')}
                   onChange={(v) => {
                     setActiveField('unit');
                     setLoose(v);
@@ -6015,7 +5975,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
         </div>
 
         {/* Transport Containers (Carton & Chouala) */}
-        {(stage === 'preparation' || stage === 'chargement') ? (
+        {(stage === 'preparation' || stage === 'chargement') && (
           <div className="card">
             <div className="flex justify-between items-center mb-2">
               <div className="section-title" style={{ marginTop: 0, marginBottom: 0 }}>
@@ -6160,46 +6120,6 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 })()}
               </div>
             )}
-          </div>
-        ) : (
-          /* Pointage: READ-ONLY view */
-          <div className="card">
-            <div className="flex justify-between items-center mb-2">
-              <div className="section-title" style={{ margin: 0 }}>COLIS DE RANGEMENT</div>
-              <span className="badge badge-secondary" style={{ fontSize: '0.68rem' }}>Lecture seule</span>
-            </div>
-            <div className="flex flex-col gap-1">
-              {containers.map((c) => {
-                const qty = events
-                  .filter(e => !e.undone && e.containerId === c.id)
-                  .reduce((s, e) => s + e.quantity, 0);
-                if (qty === 0) return null;
-                return (
-                  <div key={c.id} className="flex justify-between text-sm py-1 border-b" style={{ borderColor: 'var(--glass-border-subtle)' }}>
-                    <span className="container-tag selected flex items-center gap-1" style={{ fontSize: '0.8rem' }}>
-                      {c.type === 'chouala' ? <IconBag size={12} /> : <IconBox size={12} />}
-                      {c.label} (BL {bill.billNumber})
-                    </span>
-                    <span className="font-bold font-mono text-base">{qty} unités</span>
-                  </div>
-                );
-              })}
-              {(() => {
-                const noContainer = events
-                  .filter(e => !e.undone && !e.containerId)
-                  .reduce((s, e) => s + e.quantity, 0);
-                if (noContainer === 0) return null;
-                return (
-                  <div className="flex justify-between text-sm py-1">
-                    <span className="text-muted">Hors Colis (Vrac)</span>
-                    <span className="font-bold font-mono text-base">{noContainer} unités</span>
-                  </div>
-                );
-              })()}
-              {events.filter(e => !e.undone).length === 0 && (
-                <div className="text-xs text-muted py-1">Aucun colis assigné en préparation</div>
-              )}
-            </div>
           </div>
         )}
 
@@ -6568,14 +6488,18 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
         <div
           className="flex items-center justify-between w-full"
           style={{
-            padding: '4px 10px',
-            borderRadius: 'var(--radius-pill)',
+            padding: '5px 12px',
+            borderRadius: '12px',
             background: stageTotal > 0
-              ? (disc.isExact ? 'rgba(16, 185, 129, 0.18)' : disc.isOver ? 'rgba(168, 85, 247, 0.18)' : 'rgba(245, 158, 11, 0.18)')
+              ? (showQuantities
+                  ? (disc.isExact ? 'rgba(16, 185, 129, 0.18)' : disc.isOver ? 'rgba(168, 85, 247, 0.18)' : 'rgba(245, 158, 11, 0.18)')
+                  : 'rgba(16, 185, 129, 0.12)')
               : 'rgba(255, 255, 255, 0.06)',
             border: `1px solid ${
               stageTotal > 0
-                ? (disc.isExact ? 'rgba(16, 185, 129, 0.35)' : disc.isOver ? 'rgba(168, 85, 247, 0.35)' : 'rgba(245, 158, 11, 0.35)')
+                ? (showQuantities
+                    ? (disc.isExact ? 'rgba(16, 185, 129, 0.35)' : disc.isOver ? 'rgba(168, 85, 247, 0.35)' : 'rgba(245, 158, 11, 0.35)')
+                    : 'rgba(16, 185, 129, 0.25)')
                 : 'rgba(255, 255, 255, 0.08)'
             }`,
           }}
@@ -6590,24 +6514,69 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 fontWeight: 800,
                 fontFamily: 'var(--font-mono)',
                 color: stageTotal > 0
-                  ? (disc.isExact ? 'var(--success)' : disc.isOver ? 'var(--over)' : 'var(--warning)')
+                  ? (showQuantities
+                      ? (disc.isExact ? 'var(--success)' : disc.isOver ? 'var(--over)' : 'var(--warning)')
+                      : 'var(--accent)')
                   : 'var(--text-secondary)',
               }}
             >
-              {stageTotal} / {line.orderedQty} pcs
+              {showQuantities ? `${stageTotal} / ${line.orderedQty} pcs` : `${stageTotal} pcs`}
             </span>
             {effectiveBatch > 0 && (
               <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--accent)', marginLeft: 4, whiteSpace: 'nowrap' }}>
-                → après : {afterAdding} pcs
+                {showQuantities ? `→ après : ${afterAdding} pcs` : `(+${effectiveBatch} pcs)`}
               </span>
             )}
           </div>
 
           <span
-            className={`badge ${disc.isExact && stageTotal > 0 ? 'badge-exact' : disc.isOver ? 'badge-over' : disc.isShort && stageTotal > 0 ? 'badge-short' : ''}`}
-            style={{ fontSize: '0.68rem', fontWeight: 800, padding: '1px 7px', flexShrink: 0 }}
+            style={{
+              fontSize: '0.72rem',
+              fontWeight: 800,
+              padding: '2px 8px',
+              borderRadius: '6px',
+              background: !showQuantities
+                ? (stageTotal > 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.06)')
+                : disc.isExact && stageTotal > 0
+                ? 'var(--success-bg)'
+                : disc.isOver
+                ? 'var(--over-bg)'
+                : disc.isShort && stageTotal > 0
+                ? 'var(--danger-bg)'
+                : 'rgba(255, 255, 255, 0.06)',
+              color: !showQuantities
+                ? (stageTotal > 0 ? 'var(--accent)' : 'var(--text-muted)')
+                : disc.isExact && stageTotal > 0
+                ? '#34d399'
+                : disc.isOver
+                ? '#c084fc'
+                : disc.isShort && stageTotal > 0
+                ? '#f87171'
+                : 'var(--text-muted)',
+              border: `1px solid ${
+                !showQuantities
+                  ? 'transparent'
+                  : disc.isExact && stageTotal > 0
+                  ? 'var(--success-border)'
+                  : disc.isOver
+                  ? 'var(--over-border)'
+                  : disc.isShort && stageTotal > 0
+                  ? 'var(--danger-border)'
+                  : 'transparent'
+              }`,
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
           >
-            {stageTotal === 0 ? 'Non compté' : disc.isExact ? 'Complet' : disc.isOver ? `+${disc.over} Excédent` : `-${disc.remaining} Manquant`}
+            {!showQuantities
+              ? (stageTotal > 0 ? 'En cours' : 'Non compté')
+              : stageTotal === 0
+              ? 'Non compté'
+              : disc.isExact
+              ? 'Complet'
+              : disc.isOver
+              ? `+${disc.over} Excédent`
+              : `-${disc.remaining} Manquant`}
           </span>
         </div>
 
@@ -6619,7 +6588,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             disabled={isSubmitting || effectiveBatch <= 0 || line.status !== 'active'}
           >
             <IconCheck size={18} />
-            <span style={{ whiteSpace: 'nowrap' }}>
+            <span style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
               {isSubmitting
                 ? 'Enregistré !'
                 : effectiveBatch > 0
@@ -6778,7 +6747,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
 
 
 // ---- Stepper Component ----
-function Stepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function Stepper({ value, onChange, onFocus }: { value: number; onChange: (v: number) => void; onFocus?: () => void }) {
   const [text, setText] = useState(String(value));
 
   useEffect(() => {
@@ -6805,7 +6774,10 @@ function Stepper({ value, onChange }: { value: number; onChange: (v: number) => 
         type="text"
         inputMode="numeric"
         value={text}
-        onFocus={(e) => e.target.select()}
+        onFocus={(e) => {
+          onFocus?.();
+          e.target.select();
+        }}
         onChange={(e) => {
           const val = e.target.value;
           setText(val);
