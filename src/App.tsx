@@ -253,6 +253,58 @@ export default function App() {
     return 'light';
   });
 
+  // Auto-engage fullscreen on first user gesture (touch / click) by default
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const shouldAutoFullscreen = () => {
+      try {
+        return localStorage.getItem('pointage_fullscreen_default') !== 'false';
+      } catch {
+        return true;
+      }
+    };
+
+    if (!shouldAutoFullscreen()) return;
+
+    const engageFullscreen = () => {
+      if (!shouldAutoFullscreen()) return;
+
+      const doc = document as any;
+      const isCurrentlyFullscreen = !!(
+        doc.fullscreenElement ||
+        doc.webkitFullscreenElement ||
+        doc.mozFullScreenElement ||
+        doc.msFullscreenElement
+      );
+
+      if (!isCurrentlyFullscreen) {
+        const elem = document.documentElement as any;
+        const req =
+          elem.requestFullscreen ||
+          elem.webkitRequestFullscreen ||
+          elem.mozRequestFullScreen ||
+          elem.msRequestFullscreen;
+        if (req) {
+          req.call(elem).catch(() => {});
+        }
+      }
+
+      window.removeEventListener('pointerdown', engageFullscreen, true);
+      window.removeEventListener('touchstart', engageFullscreen, true);
+      window.removeEventListener('click', engageFullscreen, true);
+    };
+
+    window.addEventListener('pointerdown', engageFullscreen, true);
+    window.addEventListener('touchstart', engageFullscreen, true);
+    window.addEventListener('click', engageFullscreen, true);
+
+    return () => {
+      window.removeEventListener('pointerdown', engageFullscreen, true);
+      window.removeEventListener('touchstart', engageFullscreen, true);
+      window.removeEventListener('click', engageFullscreen, true);
+    };
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -272,6 +324,7 @@ export default function App() {
             background: 'rgba(16, 185, 129, 0.16)',
             borderBottom: '1px solid rgba(16, 185, 129, 0.35)',
             padding: '6px 12px',
+            paddingTop: 'max(6px, calc(env(safe-area-inset-top, 0px) + 2px))',
             fontSize: '0.74rem',
             display: 'flex',
             alignItems: 'center',
@@ -440,6 +493,9 @@ export function FullscreenButton({ className, style }: { className?: string; sty
     hapticTap('light');
     try {
       if (!isFullscreen) {
+        try {
+          localStorage.setItem('pointage_fullscreen_default', 'true');
+        } catch {}
         const elem = document.documentElement;
         if (elem.requestFullscreen) {
           await elem.requestFullscreen();
@@ -451,6 +507,9 @@ export function FullscreenButton({ className, style }: { className?: string; sty
           await (elem as any).msRequestFullscreen();
         }
       } else {
+        try {
+          localStorage.setItem('pointage_fullscreen_default', 'false');
+        } catch {}
         if (document.exitFullscreen) {
           await document.exitFullscreen();
         } else if ((document as any).webkitExitFullscreen) {

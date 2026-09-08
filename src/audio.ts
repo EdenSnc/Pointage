@@ -46,6 +46,20 @@ export function triggerAmbientFlash(type: 'success' | 'warning' | 'error') {
   } catch {}
 }
 
+let audioSuspendTimeout: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Suspends Web Audio DAC after 2.5s of inactivity to eliminate hardware idle power drain
+ */
+function scheduleAudioSuspend() {
+  if (audioSuspendTimeout) clearTimeout(audioSuspendTimeout);
+  audioSuspendTimeout = setTimeout(() => {
+    if (audioCtx && audioCtx.state === 'running') {
+      audioCtx.suspend().catch(() => {});
+    }
+  }, 2500);
+}
+
 /**
  * Lazily initialize or resume Web Audio Context on user gesture
  */
@@ -62,6 +76,7 @@ function getAudioContext(): AudioContext | null {
     if (audioCtx && audioCtx.state === 'suspended') {
       audioCtx.resume().catch(() => {});
     }
+    scheduleAudioSuspend();
     return audioCtx;
   } catch {
     return null;

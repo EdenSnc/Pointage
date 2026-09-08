@@ -45,11 +45,15 @@ describe('deviceProfile - Samsung Galaxy A54 5G & Mobile Optimization', () => {
     const profile = detectDeviceProfile();
     expect(profile.isSamsungA54).toBe(true);
     expect(profile.hasAmoled).toBe(true);
-    expect(profile.isHighRefreshRate).toBe(true);
+    expect(profile.isHighRefreshRate).toBe(false);
+    expect(profile.isBatterySaver).toBe(true);
+    expect(profile.refreshRate).toBe('60hz');
 
     applyDeviceOptimizations();
     expect(mockAttributes['data-device']).toBe('samsung-a54');
     expect(mockAttributes['data-screen']).toBe('amoled');
+    expect(mockAttributes['data-refresh']).toBe('60hz');
+    expect(mockAttributes['data-battery-saver']).toBe('true');
 
     if (origDescriptor) {
       Object.defineProperty(globalThis.navigator, 'userAgent', origDescriptor);
@@ -61,10 +65,15 @@ describe('deviceProfile - Samsung Galaxy A54 5G & Mobile Optimization', () => {
     const profile = detectDeviceProfile();
     expect(profile.isSamsungA54).toBe(true);
     expect(profile.isForcedA54).toBe(true);
+    expect(profile.isHighRefreshRate).toBe(false);
+    expect(profile.isBatterySaver).toBe(true);
+    expect(profile.refreshRate).toBe('60hz');
 
     applyDeviceOptimizations();
     expect(mockAttributes['data-device']).toBe('samsung-a54');
     expect(mockAttributes['data-screen']).toBe('amoled');
+    expect(mockAttributes['data-refresh']).toBe('60hz');
+    expect(mockAttributes['data-battery-saver']).toBe('true');
 
     // Turn off forced mode
     setForcedA54Mode(false);

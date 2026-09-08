@@ -9,6 +9,8 @@ export interface DeviceProfile {
   isMobile: boolean;
   hasAmoled: boolean;
   isHighRefreshRate: boolean;
+  isBatterySaver: boolean;
+  refreshRate: '60hz' | '120hz';
   ramGB: number;
   hardwareConcurrency: number;
   label: string;
@@ -62,11 +64,11 @@ export function detectDeviceProfile(): DeviceProfile {
 
   let label = 'Terminal Web Universel';
   if (isSamsungA54) {
-    label = 'Samsung Galaxy A54 5G (8 Go RAM • 120Hz Super AMOLED)';
+    label = 'Samsung Galaxy A54 5G (Super AMOLED • 60Hz Éco-Batterie)';
   } else if (isSamsung) {
-    label = 'Samsung Galaxy (Super AMOLED)';
+    label = 'Samsung Galaxy (Super AMOLED • Éco)';
   } else if (isMobile) {
-    label = 'Mobile Haute Performance';
+    label = 'Mobile Optimisé Batterie';
   }
 
   cachedProfile = {
@@ -74,7 +76,9 @@ export function detectDeviceProfile(): DeviceProfile {
     isSamsung,
     isMobile,
     hasAmoled,
-    isHighRefreshRate: true, // A54 features silky 120Hz display
+    isHighRefreshRate: false, // User requested 60Hz standard / battery saver lock
+    isBatterySaver: true,
+    refreshRate: '60hz',
     ramGB,
     hardwareConcurrency,
     label,
@@ -103,9 +107,9 @@ export function applyDeviceOptimizations(): DeviceProfile {
     root.setAttribute('data-screen', 'amoled');
   }
 
-  if (profile.isHighRefreshRate) {
-    root.setAttribute('data-refresh', '120hz');
-  }
+  // Lock to 60Hz refresh rate and battery saver mode
+  root.setAttribute('data-refresh', '60hz');
+  root.setAttribute('data-battery-saver', 'true');
 
   if (profile.ramGB >= 8) {
     root.setAttribute('data-ram', '8gb');

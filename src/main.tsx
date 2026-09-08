@@ -28,18 +28,23 @@ const updateSW = registerSW({
       // 1. Check for update immediately on launch
       registration.update().catch(() => {});
 
-      // 2. Poll GitHub Pages for new releases every 45 seconds
+      // 2. Passive 15-minute background check (only when app is actively visible) to conserve all-day battery
       setInterval(() => {
-        registration.update().catch(() => {});
-      }, 45 * 1000);
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          registration.update().catch(() => {});
+        }
+      }, 15 * 60 * 1000);
 
-      // 3. Check every time the phone is unlocked or user switches back to Pointage
+      // 3. Event-driven checks: phone unlock, tab resume, or network reconnect
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
           registration.update().catch(() => {});
         }
       });
       window.addEventListener('focus', () => {
+        registration.update().catch(() => {});
+      });
+      window.addEventListener('online', () => {
         registration.update().catch(() => {});
       });
     }

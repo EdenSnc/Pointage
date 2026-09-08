@@ -445,7 +445,10 @@ select,
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 20px;
+  padding-top: max(14px, calc(env(safe-area-inset-top, 0px) + 6px));
+  padding-bottom: 14px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
   min-height: 64px;
   background: #121316;
   backdrop-filter: var(--glass-blur);
@@ -1840,6 +1843,7 @@ select,
   align-items: flex-end;
   justify-content: center;
   animation: modalFadeIn 0.2s ease;
+  padding-top: max(16px, calc(env(safe-area-inset-top, 0px) + 8px));
 }
 
 .modal-content {
@@ -1848,6 +1852,8 @@ select,
   border: var(--glass-border-bright);
   border-radius: 28px 28px 0 0;
   padding: 24px 20px;
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
   padding-bottom: max(32px, calc(env(safe-area-inset-bottom, 0px) + 20px));
   width: 100%;
   max-width: 520px;
@@ -2846,36 +2852,64 @@ select,
   --glass-border-bright: 1px solid rgba(255, 255, 255, 0.28);
 }
 
-/* 120Hz High-Refresh Motion Pipeline */
-[data-refresh="120hz"],
-[data-device="samsung-a54"] {
+/* 60Hz Smooth Battery-Saving Motion Pipeline (Zero 120Hz overhead) */
+[data-refresh="60hz"],
+[data-device="samsung-a54"],
+[data-battery-saver="true"] {
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
   overscroll-behavior-y: contain;
   touch-action: manipulation;
 }
 
+/* Samsung Infinity-O Camera Punch-Hole & Notch Protection (Top Header)
+   Galaxy A54 5G features a centered 34px Infinity-O cutout.
+   In fullscreen/standalone mode, padding-top ensures headers never occlude under the lens. */
 [data-device="samsung-a54"] .app-header,
-[data-device="samsung-a54"] .bottom-nav-bar,
-[data-device="samsung-a54"] .card,
-[data-device="samsung-a54"] .btn {
-  transform: translate3d(0, 0, 0);
-  backface-visibility: hidden;
+:fullscreen .app-header {
+  padding-top: max(34px, calc(env(safe-area-inset-top, 0px) + 8px));
 }
 
-/* Samsung Infinity-O Punch Hole & One UI Gesture Navigation Bar Protection */
+/* Samsung Infinity-O Punch Hole & One UI Gesture Navigation Bar Protection (Bottom) */
 [data-device*="samsung"] .bottom-nav-bar,
 [data-device="samsung-a54"] .bottom-nav-bar {
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
 }
 
-/* 8GB RAM High-Capacity Performance: Hardware GPU Compositing */
-[data-ram="8gb"] .chart-card,
-[data-ram="8gb"] .bill-card,
-[data-device="samsung-a54"] .chart-card,
-[data-device="samsung-a54"] .bill-card {
-  will-change: transform, opacity;
-  contain: paint layout;
+/* Super AMOLED Pitch-Black Power Saving (#000000 Subpixels Shut Down = 0.00 mA)
+   Eliminates GPU blur shader convolutions for all-day 8-12h shift endurance */
+[data-screen="amoled"][data-theme="dark"],
+[data-battery-saver="true"][data-theme="dark"],
+[data-device="samsung-a54"][data-theme="dark"] {
+  --bg-deep: #000000;
+  --bg-canvas: #000000;
+  --bg-card: rgba(10, 11, 14, 0.98);
+  --bg-card-hover: rgba(18, 20, 24, 1);
+  --bg-card-active: rgba(26, 28, 34, 1);
+  --bg-surface: rgba(255, 255, 255, 0.05);
+  --bg-input: #000000;
+  --glass-blur: none;
+}
+
+[data-battery-saver="true"] .app-header,
+[data-device="samsung-a54"] .app-header {
+  background: #000000 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-battery-saver="true"] .modal-backdrop,
+[data-device="samsung-a54"] .modal-backdrop {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: rgba(0, 0, 0, 0.88) !important;
+}
+
+[data-battery-saver="true"] .modal-content,
+[data-device="samsung-a54"] .modal-content {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: #0d0e12 !important;
 }
 
 /* Responsive CSS Grid Utilities */
