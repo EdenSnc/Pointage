@@ -24,7 +24,7 @@ RÈGLES CRITIQUES D'EXTRACTION:
    - "reference": LA RÉFÉRENCE OU LE CODE ARTICLE (ex: "71662", "29129", "70380/84"). Dans les factures, la colonne s'intitule "CODE".
    - "ean": code-barres à 13 chiffres si présent dans la colonne "EAN" (ex: "6941782115831"), sinon null.
    - "designation": nom complet de l'article (ex: "SAC A DOS MOYEN 22 L 4 MO 71662").
-   - "quantity": quantité numérique entière. ATTENTION : si le document comporte des annotations manuscrites d'atelier au stylo (ex: "-1" ou "-2" en marge, ou un nombre biffé), déduis la quantité corrigée finale réelle.
+   - "quantity": quantité numérique entière. TOUJOURS exprimée dans la plus petite unité (pièces/stylos/unités), JAMAIS en cartons ou boîtes. ATTENTION : si le document comporte des annotations manuscrites d'atelier au stylo (ex: "-1" ou "-2" en marge, ou un nombre biffé), déduis la quantité corrigée finale réelle.
    - "unitPrice": prix unitaire HT numérique (colonne "PU", ex: 3332.50). Si absent, null.
    - "packagesRaw": colisage ou conditionnement (colonne "Packages", "Colisage" ou "Qté/Carton", ex: "0,04", "50,00", "1CT/50").
    - "discountPercent": remise ligne en % (colonne "Rem(%)" ou "Rem. Paiement(%)", ex: 15.0), sinon null.

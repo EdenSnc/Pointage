@@ -494,8 +494,33 @@ export function parsePackagingString(
       return { outerPackSize: outer > 0 ? outer : null, innerPackSize: inner > 0 ? inner : null };
     }
 
-    // 2. Pattern: "3x6" or "3*6" or "3 x 6"
-    const multMatch = s.match(/^(\d+)\s*[x*×]\s*(\d+)$/i);
+    // 2. Nested multi-tier container pattern in raw:
+    // e.g. "50 BTE DE 50", "50 POTS DE 50", "50 BOITES X 50", "50 BTL DE 40", "50 BTE / 50 PCS"
+    const nestedRawMatch = s.match(/(\d+)\s*(?:bte|btes|boite|boites|pot|pots|btl|bouteille|bouteilles|présentoir|presentoir|pack|packs)\s*(?:de|x|\*|\/)\s*(\d+)/i);
+    if (nestedRawMatch) {
+      const a = parseInt(nestedRawMatch[1], 10);
+      const b = parseInt(nestedRawMatch[2], 10);
+      if (a > 0 && b > 0 && a <= 500 && b <= 2000) {
+        outer = a * b;
+        inner = b;
+        return { outerPackSize: outer > 1 ? outer : null, innerPackSize: inner > 1 ? inner : null };
+      }
+    }
+
+    // 3. Pattern: "1CT/50/50" or "1CT:50x50" or "CT/50*50" or "CARTON 50 BTE DE 50"
+    const ctNestedMatch = s.match(/\d*\s*(?:carton|colis|ct)\s*[\/:\s]*(?:de)?\s*(\d+)\s*(?:bte|btes|boite|boites|pot|pots|btl|pcs)?\s*(?:de|[x*×\/])\s*(\d+)/i);
+    if (ctNestedMatch) {
+      const a = parseInt(ctNestedMatch[1], 10);
+      const b = parseInt(ctNestedMatch[2], 10);
+      if (a > 0 && b > 0 && a <= 500 && b <= 2000) {
+        outer = a * b;
+        inner = b;
+        return { outerPackSize: outer > 1 ? outer : null, innerPackSize: inner > 1 ? inner : null };
+      }
+    }
+
+    // 4. Pattern: "3x6" or "3*6" or "3 x 6" or "50x50 pcs"
+    const multMatch = s.match(/^(\d+)\s*[x*×]\s*(\d+)(?:\s*(?:pcs|pièces|pieces|stylos|unités|u))?$/i);
     if (multMatch) {
       const a = parseInt(multMatch[1], 10);
       const b = parseInt(multMatch[2], 10);
@@ -504,28 +529,28 @@ export function parsePackagingString(
       return { outerPackSize: outer > 0 ? outer : null, innerPackSize: inner > 0 ? inner : null };
     }
 
-    // 3. Pattern: "2CT/10" or "1CT/50" or "3CT/24" (CT = carton)
+    // 5. Pattern: "2CT/10" or "1CT/50" or "3CT/24" (CT = carton)
     const ctMatch = s.match(/\d*\s*CT\s*[\/:x*]\s*(\d+)/i);
     if (ctMatch) {
       outer = parseInt(ctMatch[1], 10);
       return { outerPackSize: outer > 0 ? outer : null, innerPackSize: null };
     }
 
-    // 4. Pattern: "CT 24" or "CT24" or "Carton 24" or "Carton de 24"
+    // 6. Pattern: "CT 24" or "CT24" or "Carton 24" or "Carton de 24"
     const cartonMatch = s.match(/(?:carton|colis|ct)\s*(?:de)?\s*(\d+)/i);
     if (cartonMatch) {
       outer = parseInt(cartonMatch[1], 10);
       return { outerPackSize: outer > 0 ? outer : null, innerPackSize: null };
     }
 
-    // 5. Pattern: "/ 24" or "/24"
+    // 7. Pattern: "/ 24" or "/24"
     const slashMatch = s.match(/^\/\s*(\d+)$/);
     if (slashMatch) {
       outer = parseInt(slashMatch[1], 10);
       return { outerPackSize: outer > 0 ? outer : null, innerPackSize: null };
     }
 
-    // 6. Simple single number "24" or "50"
+    // 8. Simple single number "24" or "50"
     const numOnly = s.match(/^(\d+)$/);
     if (numOnly) {
       const n = parseInt(numOnly[1], 10);
@@ -536,11 +561,38 @@ export function parsePackagingString(
     }
   }
 
-  // Check designation (e.g. "PEINTURE PANDA DE 12 34140" or "PRESENTOIR 36 PCS 81216")
+  // Check designation (e.g. "PEINTURE PANDA DE 12 34140" or "PRESENTOIR 36 PCS 81216" or "STYLO CARTON 50 BTE DE 50")
   if (designation && typeof designation === 'string') {
     const d = designation.trim();
 
-    // 1. Explicit pieces / units suffix: "36 PCS", "24 PIÈCES", "100 UNITÉS"
+    // 1. Nested container pattern in designation (e.g. "50 BTE DE 50" or "50 POTS DE 50")
+    const nestedDesigMatch = d.match(/(\d+)\s*(?:bte|btes|boite|boites|pot|pots|btl|bouteille|bouteilles|présentoir|presentoir|pack|packs)\s*(?:de|x|\*|\/)\s*(\d+)/i);
+    if (nestedDesigMatch) {
+      const afterNum = d.slice(nestedDesigMatch.index! + nestedDesigMatch[0].length).trim();
+      if (!MEASUREMENT_UNIT_PATTERN.test(afterNum)) {
+        const a = parseInt(nestedDesigMatch[1], 10);
+        const b = parseInt(nestedDesigMatch[2], 10);
+        if (a > 0 && b > 0 && a <= 500 && b <= 2000) {
+          outer = a * b;
+          inner = b;
+          return { outerPackSize: outer > 1 ? outer : null, innerPackSize: inner > 1 ? inner : null };
+        }
+      }
+    }
+
+    // 2. Multiplier in parentheses in designation: e.g. "(50x50)" or "(50*50)"
+    const multInParens = d.match(/\((\d+)\s*[x*×]\s*(\d+)\)/i);
+    if (multInParens) {
+      const a = parseInt(multInParens[1], 10);
+      const b = parseInt(multInParens[2], 10);
+      if (a > 0 && b > 0 && a <= 500 && b <= 2000) {
+        outer = a * b;
+        inner = b;
+        return { outerPackSize: outer > 1 ? outer : null, innerPackSize: inner > 1 ? inner : null };
+      }
+    }
+
+    // 3. Explicit pieces / units suffix: "36 PCS", "24 PIÈCES", "100 UNITÉS"
     const pcsMatch = d.match(/\b(\d+)\s*(?:pcs|pièces|pieces|unités|unites)\b/i);
     if (pcsMatch) {
       const n = parseInt(pcsMatch[1], 10);
@@ -549,7 +601,7 @@ export function parsePackagingString(
       }
     }
 
-    // 2. Packaging container keywords: "PACK DE 12", "BOITE DE 24", "LOT DE 6", "PRESENTOIR DE 36", "SACHET DE 50", etc.
+    // 4. Packaging container keywords: "PACK DE 12", "BOITE DE 24", "LOT DE 6", "PRESENTOIR DE 36", "SACHET DE 50", etc.
     if (!inner) {
       const packKeywordMatch = d.match(
         /\b(?:pack|boite|bte|bt|présentoir|presentoir|carton|ct|sachet|sac|paquet|pqt|blister|blist|lot|set)\s*(?:de)?\s*(\d+)\b/i
@@ -566,7 +618,7 @@ export function parsePackagingString(
       }
     }
 
-    // 3. Fallback generic "DE (\d+)" (e.g. "PEINTURE PANDA DE 12 34140")
+    // 5. Fallback generic "DE (\d+)" (e.g. "PEINTURE PANDA DE 12 34140")
     // STRICT REQUIREMENT: MUST NOT be followed by a unit of measurement (e.g. "REGLE DE 30 CM")!
     if (!inner) {
       const deMatch = d.match(/\bde\s*(\d+)\b/i);
@@ -586,6 +638,130 @@ export function parsePackagingString(
     outerPackSize: outer && outer > 1 ? outer : null,
     innerPackSize: inner && inner > 1 ? inner : null,
   };
+}
+
+/**
+ * Calculate nested master carton size from container count and units per container.
+ * e.g. 50 pots of 50 pens = 2500 pens.
+ */
+export function calcNestedPackOuter(containerCount: number, unitsPerContainer: number): number {
+  if (containerCount <= 0 || unitsPerContainer <= 0) return 0;
+  return containerCount * unitsPerContainer;
+}
+
+/**
+ * Format human-readable packaging equivalence breakdown from smallest units into cartons, boxes/pots, and loose pieces.
+ * Wholesale rule: ordered quantities are ALWAYS in the smallest unit (pièces).
+ * e.g. 2500 with outer=2500, inner=50 -> "1 Carton complet (50 boîtes × 50 pcs)"
+ * e.g. 5000 with outer=2500, inner=50 -> "2 Cartons complets (100 boîtes × 50 pcs)"
+ * e.g. 2600 with outer=2500, inner=50 -> "1 Carton + 2 boîtes (2 600 pcs)"
+ * e.g. 150 with outer=2500, inner=50 -> "3 boîtes de 50 pcs"
+ * e.g. 2520 with outer=2500, inner=50 -> "1 Carton + 20 pcs"
+ */
+export function formatPackagingEquivalence(
+  qty: number,
+  outerPack: number | null | undefined,
+  innerPack: number | null | undefined
+): string {
+  if (qty <= 0 || isNaN(qty)) return '0 pc';
+
+  const validOuter = outerPack && outerPack > 1 ? outerPack : null;
+  const validInner = innerPack && innerPack > 1 ? innerPack : null;
+
+  if (!validOuter && !validInner) {
+    return `${qty.toLocaleString('fr-FR')} pcs`;
+  }
+
+  // Both Outer and Inner available
+  if (validOuter && validInner && validOuter > validInner) {
+    const containersPerCarton = Math.floor(validOuter / validInner);
+    const isExactNest = validOuter % validInner === 0;
+
+    const cartons = Math.floor(qty / validOuter);
+    const remAfterCartons = qty % validOuter;
+    const inners = Math.floor(remAfterCartons / validInner);
+    const loose = remAfterCartons % validInner;
+
+    const parts: string[] = [];
+
+    if (cartons > 0) {
+      if (inners === 0 && loose === 0) {
+        return `${cartons} Carton${cartons > 1 ? 's' : ''} complet${cartons > 1 ? 's' : ''}${
+          isExactNest ? ` (${cartons * containersPerCarton} boîtes × ${validInner} pcs)` : ''
+        }`;
+      }
+      parts.push(`${cartons} Carton${cartons > 1 ? 's' : ''}`);
+    }
+
+    if (inners > 0) {
+      parts.push(`${inners} boîte${inners > 1 ? 's' : ''}${cartons === 0 && loose === 0 ? ` de ${validInner} pcs` : ''}`);
+    }
+
+    if (loose > 0) {
+      parts.push(`${loose} pc${loose > 1 ? 's' : ''}`);
+    }
+
+    return parts.join(' + ');
+  }
+
+  // Only Outer Carton available
+  if (validOuter) {
+    const cartons = Math.floor(qty / validOuter);
+    const loose = qty % validOuter;
+
+    if (cartons > 0 && loose === 0) {
+      return `${cartons} Carton${cartons > 1 ? 's' : ''} complet${cartons > 1 ? 's' : ''} (${validOuter} pcs)`;
+    }
+    if (cartons > 0 && loose > 0) {
+      return `${cartons} Carton${cartons > 1 ? 's' : ''} + ${loose} pc${loose > 1 ? 's' : ''}`;
+    }
+    return `${loose} pc${loose > 1 ? 's' : ''}`;
+  }
+
+  // Only Inner Box / Sub-pack available
+  if (validInner) {
+    const inners = Math.floor(qty / validInner);
+    const loose = qty % validInner;
+
+    if (inners > 0 && loose === 0) {
+      return `${inners} boîte${inners > 1 ? 's' : ''} (${validInner} pcs)`;
+    }
+    if (inners > 0 && loose > 0) {
+      return `${inners} boîte${inners > 1 ? 's' : ''} + ${loose} pc${loose > 1 ? 's' : ''}`;
+    }
+    return `${loose} pc${loose > 1 ? 's' : ''}`;
+  }
+
+  return `${qty.toLocaleString('fr-FR')} pcs`;
+}
+
+/**
+ * Get description of packaging hierarchy (e.g. "1 Carton = 50 boîtes de 50 pcs = 2 500 pcs")
+ */
+export function getPackHierarchyDescription(
+  outerPack: number | null | undefined,
+  innerPack: number | null | undefined
+): string | null {
+  const validOuter = outerPack && outerPack > 1 ? outerPack : null;
+  const validInner = innerPack && innerPack > 1 ? innerPack : null;
+
+  if (validOuter && validInner && validOuter >= validInner) {
+    if (validOuter % validInner === 0) {
+      const n = validOuter / validInner;
+      return `1 Carton = ${n} boîte${n > 1 ? 's' : ''}/pot${n > 1 ? 's' : ''} de ${validInner} pcs (${validOuter.toLocaleString('fr-FR')} pcs au total)`;
+    }
+    return `1 Carton = ${validOuter.toLocaleString('fr-FR')} pcs • 1 Sous-pack = ${validInner.toLocaleString('fr-FR')} pcs`;
+  }
+
+  if (validOuter) {
+    return `1 Carton = ${validOuter.toLocaleString('fr-FR')} pièces`;
+  }
+
+  if (validInner) {
+    return `1 Boîte / Pot = ${validInner.toLocaleString('fr-FR')} pièces`;
+  }
+
+  return null;
 }
 
 // ============================================================

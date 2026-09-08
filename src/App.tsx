@@ -55,6 +55,9 @@ import {
   isDimensionInDesignation,
   getStageProblemLines,
   parsePackagingString,
+  formatPackagingEquivalence,
+  getPackHierarchyDescription,
+  calcNestedPackOuter,
   serializeCountsForQR,
   parseQRSyncPayload,
   planQRMerge,
@@ -4560,7 +4563,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
 
                   <div className="line-qty-row">
                     <span className="qty-label">Attendu</span>
-                    <span className="qty-value">{showQuantities ? line.orderedQty : '•••'}</span>
+                    <span className="qty-value">{showQuantities ? `${line.orderedQty} pcs` : '•••'}</span>
                     <span className="qty-label">
                       {stage === 'preparation' ? 'Préparé' : stage === 'chargement' ? 'Chargé' : 'Pointé'}
                     </span>
@@ -4569,9 +4572,28 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                              disc.isOver ? 'var(--over)' :
                              disc.isShort ? 'var(--warning)' : 'var(--text)'
                     }}>
-                      {stageTotal}
+                      {stageTotal} pcs
                     </span>
                   </div>
+
+                  {/* Packaging breakdown equivalent (e.g. 1 carton, 3 boîtes) */}
+                  {showQuantities && (() => {
+                    const outer = line.outerPackSize || (line.reference ? profileMap.get(line.reference)?.outerPackSize : null);
+                    const inner = line.innerPackSize || (line.reference ? profileMap.get(line.reference)?.innerPackSize : null);
+                    if (!outer && !inner) return null;
+                    const equiv = formatPackagingEquivalence(line.orderedQty, outer, inner);
+                    if (!equiv || equiv === `${line.orderedQty.toLocaleString('fr-FR')} pcs`) return null;
+                    return (
+                      <div
+                        className="text-[11px] font-semibold flex items-center gap-1 mt-1"
+                        style={{ color: 'var(--accent)' }}
+                        title={`Équivalence colisage : ${equiv}`}
+                      >
+                        <IconBox size={11} style={{ flexShrink: 0 }} />
+                        <span>{equiv}</span>
+                      </div>
+                    );
+                  })()}
 
                   {/* Visual Progress Micro-Gauge Bar */}
                   <div
@@ -4998,6 +5020,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const [activeField, setActiveField] = useState<'outer' | 'inner' | 'unit'>('unit');
   const [directTotal, setDirectTotal] = useState('');
   const [useDirectEntry, setUseDirectEntry] = useState(false);
+  const [showMultiTierCalc, setShowMultiTierCalc] = useState(false);
+  const [calcContainersCount, setCalcContainersCount] = useState<string>('50');
+  const [calcUnitsPerContainer, setCalcUnitsPerContainer] = useState<string>('50');
   const [selectedContainer, setSelectedContainer] = useState<number | null>(null);
   const [outcome, setOutcome] = useState<PointageOutcome>('accepted');
   const [refusalNote, setRefusalNote] = useState('');
@@ -5586,9 +5611,36 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             </div>
           </div>
 
-          <div className="qty-big qty-expected" style={{ fontSize: '2.4rem', lineHeight: 1.1, marginBottom: 8 }}>
+          <div className="qty-big qty-expected" style={{ fontSize: '2.4rem', lineHeight: 1.1, marginBottom: 4 }}>
             {showQuantities ? `${line.orderedQty} pcs` : '•••'}
           </div>
+
+          <div className="text-xs text-muted font-medium mb-1">
+            Quantité facturée en pièces individuelles (la plus petite unité)
+          </div>
+
+          {showQuantities && (outerPack || innerPack) && (() => {
+            const equiv = formatPackagingEquivalence(line.orderedQty, outerPack, innerPack);
+            if (!equiv || equiv === `${line.orderedQty.toLocaleString('fr-FR')} pcs`) return null;
+            return (
+              <div
+                className="badge my-1.5 flex items-center gap-1.5"
+                style={{
+                  fontSize: '0.78rem',
+                  padding: '4px 10px',
+                  borderRadius: '9999px',
+                  background: 'rgba(16, 185, 129, 0.12)',
+                  color: 'var(--accent)',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  fontWeight: 700,
+                  width: 'fit-content',
+                }}
+              >
+                <IconBox size={13} style={{ flexShrink: 0 }} />
+                <span>Équivaut à : {equiv}</span>
+              </div>
+            );
+          })()}
 
           <div className="divider" style={{ margin: '8px 0 12px 0' }} />
 
@@ -6080,6 +6132,141 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               </button>
             )}
           </div>
+
+          {/* Wholesale smallest-unit guideline notice */}
+          <div
+            className="mb-2.5 p-2.5"
+            style={{
+              background: 'rgba(56, 189, 248, 0.08)',
+              border: '1px solid rgba(56, 189, 248, 0.25)',
+              borderRadius: '16px',
+            }}
+          >
+            <div className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--accent-light)' }}>
+              <IconInfo size={14} style={{ flexShrink: 0 }} />
+              <span>Règle d'or : Facturation toujours en pièces individuelles</span>
+            </div>
+            <div className="text-[11px] text-muted mt-1 leading-relaxed">
+              La quantité demandée est <strong>toujours la plus petite unité</strong> (stylos, pièces).
+              <br />
+              <em>Attention au carton :</em> La mention « 50 pcs » sur un carton désigne souvent <strong>50 pots/boîtes</strong> (soit 50 × 50 = 2 500 stylos) et non 50 stylos au total.
+            </div>
+          </div>
+
+          {/* Description formula if packaging is configured */}
+          {(() => {
+            const desc = getPackHierarchyDescription(outerPack, innerPack);
+            if (!desc) return null;
+            return (
+              <div
+                className="mb-2.5 px-2.5 py-1.5 font-mono text-xs"
+                style={{
+                  background: 'var(--bg-surface)',
+                  borderRadius: '12px',
+                  border: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
+                  color: 'var(--accent)',
+                  fontWeight: 700,
+                }}
+              >
+                {desc}
+              </div>
+            );
+          })()}
+
+          {/* Multi-Tier Nested Packaging Calculator Toggle */}
+          <div className="mb-2.5">
+            <button
+              type="button"
+              className={`btn btn-xs ${showMultiTierCalc ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
+              style={{ fontSize: '0.72rem', borderRadius: '9999px', padding: '3px 10px' }}
+              onClick={() => {
+                const next = !showMultiTierCalc;
+                setShowMultiTierCalc(next);
+                if (innerPack && innerPack > 1) {
+                  setCalcUnitsPerContainer(String(innerPack));
+                }
+                if (outerPack && innerPack && outerPack > innerPack && outerPack % innerPack === 0) {
+                  setCalcContainersCount(String(outerPack / innerPack));
+                }
+              }}
+            >
+              <IconLayers size={12} />
+              <span>Calculateur Carton Composé (pots × pièces)</span>
+            </button>
+          </div>
+
+          {showMultiTierCalc && (
+            <div
+              className="p-3 mb-3"
+              style={{
+                background: 'var(--bg-surface)',
+                borderRadius: '16px',
+                border: '1px solid var(--border)',
+              }}
+            >
+              <div className="text-xs font-bold text-muted mb-2 uppercase tracking-wider">
+                Carton Composé (ex: 50 pots de 50 stylos)
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted">Boîtes / Pots dans le carton :</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    className="input input-sm"
+                    style={{ maxWidth: 90, textAlign: 'center', fontFamily: 'var(--font-mono)' }}
+                    placeholder="ex: 50"
+                    value={calcContainersCount}
+                    onChange={(e) => setCalcContainersCount(e.target.value)}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted">Pièces par boîte / pot :</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    className="input input-sm"
+                    style={{ maxWidth: 90, textAlign: 'center', fontFamily: 'var(--font-mono)' }}
+                    placeholder="ex: 50"
+                    value={calcUnitsPerContainer}
+                    onChange={(e) => setCalcUnitsPerContainer(e.target.value)}
+                  />
+                </div>
+                {(() => {
+                  const cnt = parseInt(calcContainersCount, 10) || 0;
+                  const per = parseInt(calcUnitsPerContainer, 10) || 0;
+                  const total = cnt * per;
+                  return (
+                    <div className="mt-1 pt-2 flex items-center justify-between" style={{ borderTop: '1px solid var(--border-subtle, rgba(255,255,255,0.08))' }}>
+                      <div className="text-xs">
+                        <span className="text-muted">Total calculé : </span>
+                        <strong style={{ color: 'var(--accent)', fontSize: '0.95rem' }}>
+                          {total > 0 ? `${total.toLocaleString('fr-FR')} pcs` : '—'}
+                        </strong>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={total <= 0}
+                        className="btn btn-xs btn-primary font-bold"
+                        style={{ borderRadius: '9999px', padding: '4px 12px' }}
+                        onClick={() => {
+                          if (total > 0) {
+                            setOuterPack(total);
+                            setInnerPack(per > 1 ? per : null);
+                            setShowMultiTierCalc(false);
+                            showToast(`Colisage appliqué : 1 carton = ${total} pcs (${cnt} boîtes × ${per} pcs)`, setToast);
+                          }
+                        }}
+                      >
+                        Appliquer
+                      </button>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+
           {profile && (profile.innerPackSize || profile.outerPackSize) && !line.innerPackSize && !line.outerPackSize && (
             <div className="mb-2 p-2" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)' }}>
               <div className="text-xs text-muted">Mémorisé:</div>
@@ -6093,7 +6280,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           )}
 
           <div className="flex gap-2 items-center mb-2">
-            <span className="text-sm" style={{ minWidth: 80 }}>Carton:</span>
+            <span className="text-sm font-medium" style={{ minWidth: 90 }}>Carton :</span>
             <input
               id="input-outer-pack"
               name="outerPackSize"
@@ -6101,7 +6288,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               className="input"
               type="number"
               inputMode="numeric"
-              placeholder="—"
+              placeholder="ex: 2500"
               value={outerPack ?? ''}
               onChange={(e) => {
                 const val = e.target.value.trim();
@@ -6109,12 +6296,12 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 const v = parseInt(val, 10);
                 setOuterPack(!isNaN(v) && v > 0 ? v : null);
               }}
-              style={{ maxWidth: 100 }}
+              style={{ maxWidth: 110, fontFamily: 'var(--font-mono)' }}
             />
-            <span className="text-xs text-muted">unités</span>
+            <span className="text-xs text-muted">pcs / carton</span>
           </div>
           <div className="flex gap-2 items-center">
-            <span className="text-sm" style={{ minWidth: 80 }}>Sous-pack:</span>
+            <span className="text-sm font-medium" style={{ minWidth: 90 }}>Sous-pack :</span>
             <input
               id="input-inner-pack"
               name="innerPackSize"
@@ -6122,7 +6309,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               className="input"
               type="number"
               inputMode="numeric"
-              placeholder="—"
+              placeholder="ex: 50"
               value={innerPack ?? ''}
               onChange={(e) => {
                 const val = e.target.value.trim();
@@ -6130,9 +6317,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 const v = parseInt(val, 10);
                 setInnerPack(!isNaN(v) && v > 0 ? v : null);
               }}
-              style={{ maxWidth: 100 }}
+              style={{ maxWidth: 110, fontFamily: 'var(--font-mono)' }}
             />
-            <span className="text-xs text-muted">unités</span>
+            <span className="text-xs text-muted">pcs / boîte ou pot</span>
           </div>
         </div>
 
@@ -6316,9 +6503,16 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   }}
                   onClick={() => setActiveField('outer')}
                 >
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-semibold">EXT (×{outerPack})</span>
-                    {activeField === 'outer' && <span className="badge badge-exact" style={{ fontSize: '0.62rem', padding: '1px 5px' }}>Cible</span>}
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-bold">CARTON (×{outerPack.toLocaleString('fr-FR')} pcs)</span>
+                      {activeField === 'outer' && <span className="badge badge-exact" style={{ fontSize: '0.62rem', padding: '1px 5px' }}>Cible</span>}
+                    </div>
+                    {innerPack && outerPack > innerPack && outerPack % innerPack === 0 && (
+                      <span className="text-[11px] text-muted">
+                        {outerPack / innerPack} boîtes de {innerPack} pcs
+                      </span>
+                    )}
                   </div>
                   <Stepper
                     value={outerCount}
@@ -6340,7 +6534,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   onClick={() => setActiveField('inner')}
                 >
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-semibold">INT (×{innerPack})</span>
+                    <span className="text-sm font-bold">BOÎTE / POT (×{innerPack.toLocaleString('fr-FR')} pcs)</span>
                     {activeField === 'inner' && <span className="badge badge-exact" style={{ fontSize: '0.62rem', padding: '1px 5px' }}>Cible</span>}
                   </div>
                   <Stepper
@@ -6362,7 +6556,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 onClick={() => setActiveField('unit')}
               >
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-semibold">UNITÉS</span>
+                  <span className="text-sm font-bold">UNITÉS (PIÈCES)</span>
                   {activeField === 'unit' && <span className="badge badge-exact" style={{ fontSize: '0.62rem', padding: '1px 5px' }}>Cible</span>}
                 </div>
                 <Stepper
@@ -6374,12 +6568,12 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   }}
                 />
               </div>
-              {((outerCount > 0 && outerPack) || (innerCount > 0 && innerPack)) && (
-                <div className="text-xs font-mono text-muted mt-2 px-2 py-1" style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)' }}>
-                  {outerCount > 0 && outerPack ? `${outerCount} ext × ${outerPack} = ${outerCount * outerPack} pcs ` : ''}
-                  {innerCount > 0 && innerPack ? `${outerCount > 0 ? '+ ' : ''}${innerCount} int × ${innerPack} = ${innerCount * innerPack} pcs ` : ''}
-                  {loose > 0 ? `+ ${loose} unités ` : ''}
-                  = <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{batchQty} pièces</span>
+              {((outerCount > 0 && outerPack) || (innerCount > 0 && innerPack) || loose > 0) && (
+                <div className="text-xs font-mono text-muted mt-2 px-2.5 py-1.5" style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '12px' }}>
+                  {outerCount > 0 && outerPack ? `${outerCount} carton${outerCount > 1 ? 's' : ''} (${(outerCount * outerPack).toLocaleString('fr-FR')} pcs) ` : ''}
+                  {innerCount > 0 && innerPack ? `${outerCount > 0 ? '+ ' : ''}${innerCount} boîte${innerCount > 1 ? 's' : ''} (${(innerCount * innerPack).toLocaleString('fr-FR')} pcs) ` : ''}
+                  {loose > 0 ? `${(outerCount > 0 || innerCount > 0) ? '+ ' : ''}${loose} pièce${loose > 1 ? 's' : ''} ` : ''}
+                  = <span style={{ color: 'var(--accent)', fontWeight: 800 }}>{batchQty.toLocaleString('fr-FR')} pcs</span>
                 </div>
               )}
             </div>
@@ -6389,7 +6583,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           <div className="mt-3">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[11px] text-muted font-bold uppercase tracking-wider">
-                Raccourcis ({activeField === 'outer' ? `Carton EXT ×${outerPack}` : activeField === 'inner' ? `Sous-pack INT ×${innerPack}` : 'Unités'}) :
+                Raccourcis ({activeField === 'outer' ? `Carton ×${outerPack}` : activeField === 'inner' ? `Boîte/Pot ×${innerPack}` : 'Unités (pièces)'}) :
               </span>
               {(outerPack || innerPack) && (
                 <div className="flex gap-1">
@@ -6397,36 +6591,38 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                     <button
                       type="button"
                       className={`btn btn-xs ${activeField === 'outer' ? 'btn-primary' : 'btn-ghost'}`}
-                      style={{ fontSize: '0.68rem', padding: '1px 6px' }}
+                      style={{ fontSize: '0.68rem', padding: '2px 7px', borderRadius: '9999px' }}
                       onClick={() => setActiveField('outer')}
                     >
-                      EXT
+                      Carton
                     </button>
                   )}
                   {innerPack && (
                     <button
                       type="button"
                       className={`btn btn-xs ${activeField === 'inner' ? 'btn-primary' : 'btn-ghost'}`}
-                      style={{ fontSize: '0.68rem', padding: '1px 6px' }}
+                      style={{ fontSize: '0.68rem', padding: '2px 7px', borderRadius: '9999px' }}
                       onClick={() => setActiveField('inner')}
                     >
-                      INT
+                      Boîte/Pot
                     </button>
                   )}
                   <button
                     type="button"
                     className={`btn btn-xs ${activeField === 'unit' ? 'btn-primary' : 'btn-ghost'}`}
-                    style={{ fontSize: '0.68rem', padding: '1px 6px' }}
+                    style={{ fontSize: '0.68rem', padding: '2px 7px', borderRadius: '9999px' }}
                     onClick={() => setActiveField('unit')}
                   >
-                    UNITÉS
+                    Pièces
                   </button>
                 </div>
               )}
             </div>
 
             <div className="flex gap-1 flex-wrap items-center">
-              <button type="button" className="btn btn-xs btn-secondary" onClick={() => stepTarget(1)}>+1</button>
+              <button type="button" className="btn btn-xs btn-secondary" onClick={() => stepTarget(1)}>
+                {activeField === 'outer' ? '+1 Carton' : activeField === 'inner' ? '+1 Boîte' : '+1 Pc'}
+              </button>
               <button type="button" className="btn btn-xs btn-secondary" onClick={() => stepTarget(activeField === 'unit' ? 5 : 2)}>
                 +{activeField === 'unit' ? 5 : 2}
               </button>
@@ -6438,10 +6634,14 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               </button>
 
               {activeField === 'unit' && innerPack && innerPack > 1 && innerPack !== 5 && innerPack !== 10 && innerPack !== 12 && (
-                <button type="button" className="btn btn-xs btn-secondary" onClick={() => stepTarget(innerPack)}>+{innerPack}</button>
+                <button type="button" className="btn btn-xs btn-secondary" onClick={() => stepTarget(innerPack)} title={`Ajouter 1 boîte (${innerPack} pcs)`}>
+                  +{innerPack} (1 bte)
+                </button>
               )}
               {activeField === 'unit' && outerPack && outerPack > 1 && (
-                <button type="button" className="btn btn-xs btn-secondary" onClick={() => stepTarget(outerPack)}>+{outerPack}</button>
+                <button type="button" className="btn btn-xs btn-secondary" onClick={() => stepTarget(outerPack)} title={`Ajouter 1 carton (${outerPack} pcs)`}>
+                  +{outerPack} (1 ct)
+                </button>
               )}
 
               {/* Minus buttons to correct accidental taps */}

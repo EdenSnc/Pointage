@@ -17,7 +17,15 @@ import {
   getWarehouseCircuitDescription,
 } from './warehouseZones';
 import { searchLines } from './hooks';
-import { sumStageEvents, calcDiscrepancy } from './logic';
+import {
+  sumStageEvents,
+  calcDiscrepancy,
+  parsePackagingString,
+  calcNestedPackOuter,
+  formatPackagingEquivalence,
+  getPackHierarchyDescription,
+  calcBatchQty,
+} from './logic';
 import type { OrderLine, CountEvent } from './types';
 
 function makeLine(overrides: Partial<OrderLine> = {}): OrderLine {
@@ -262,3 +270,126 @@ describe('Preparation Sign-Off Auto-Introuvable', () => {
     expect(updatedLine3?.status).toBe('not_found'); // Automatically marked as not_found (introuvable)
   });
 });
+
+describe('Multi-Tier Packaging Hierarchy & Smallest Unit Rule', () => {
+  it('parses nested multi-tier packaging from raw strings and designations', () => {
+    // 50 boxes of 50 pens
+    expect(parsePackagingString('50 BTE DE 50')).toEqual({
+      outerPackSize: 2500,
+      innerPackSize: 50,
+    });
+
+    // 50 pots/bottles of 50 pens (user explicit case: "styler vert grip carton of 50 containers of 50")
+    expect(parsePackagingString('50 POTS DE 50')).toEqual({
+      outerPackSize: 2500,
+      innerPackSize: 50,
+    });
+
+    // 50 bottles of 40 pens
+    expect(parsePackagingString('50 BTL DE 40')).toEqual({
+      outerPackSize: 2000,
+      innerPackSize: 40,
+    });
+
+    // Carton prefix with sub-packs
+    expect(parsePackagingString('CARTON 50 BTE DE 50 PCS')).toEqual({
+      outerPackSize: 2500,
+      innerPackSize: 50,
+    });
+
+    // Standard multiplier with pcs suffix
+    expect(parsePackagingString('50x50 pcs')).toEqual({
+      outerPackSize: 2500,
+      innerPackSize: 50,
+    });
+
+    // Multi-tier slash format
+    expect(parsePackagingString('1CT/50/50')).toEqual({
+      outerPackSize: 2500,
+      innerPackSize: 50,
+    });
+
+    // Extracted from designation
+    expect(parsePackagingString(null, 'STYLER VERT GRIP CARTON 50 BTE DE 50')).toEqual({
+      outerPackSize: 2500,
+      innerPackSize: 50,
+    });
+
+    expect(parsePackagingString(null, 'STYLO BILLE VERT GRIP (50X50)')).toEqual({
+      outerPackSize: 2500,
+      innerPackSize: 50,
+    });
+  });
+
+  it('calculates master carton size from nested container count and units per container', () => {
+    // 50 containers of 50 pens
+    expect(calcNestedPackOuter(50, 50)).toBe(2500);
+    // 20 boxes of 50
+    expect(calcNestedPackOuter(20, 50)).toBe(1000);
+    // 50 bottles of 40
+    expect(calcNestedPackOuter(50, 40)).toBe(2000);
+    // Edge cases
+    expect(calcNestedPackOuter(0, 50)).toBe(0);
+    expect(calcNestedPackOuter(50, 0)).toBe(0);
+  });
+
+  it('formats packaging equivalence correctly from smallest unit quantities', () => {
+    const outer = 2500;
+    const inner = 50;
+
+    // Exact master cartons
+    expect(formatPackagingEquivalence(2500, outer, inner)).toBe(
+      '1 Carton complet (50 boîtes × 50 pcs)'
+    );
+    expect(formatPackagingEquivalence(5000, outer, inner)).toBe(
+      '2 Cartons complets (100 boîtes × 50 pcs)'
+    );
+
+    // Carton + inner containers
+    expect(formatPackagingEquivalence(2600, outer, inner)).toBe(
+      '1 Carton + 2 boîtes'
+    );
+
+    // Only inner containers
+    expect(formatPackagingEquivalence(150, outer, inner)).toBe(
+      '3 boîtes de 50 pcs'
+    );
+
+    // Carton + loose units
+    expect(formatPackagingEquivalence(2520, outer, inner)).toBe(
+      '1 Carton + 20 pcs'
+    );
+
+    // Carton + inner containers + loose units
+    expect(formatPackagingEquivalence(2615, outer, inner)).toBe(
+      '1 Carton + 2 boîtes + 15 pcs'
+    );
+
+    // Without packaging: stays formatted as pieces
+    expect(formatPackagingEquivalence(2500, null, null)).toBe('2\u202f500 pcs');
+  });
+
+  it('generates clear packaging hierarchy descriptions', () => {
+    expect(getPackHierarchyDescription(2500, 50)).toBe(
+      '1 Carton = 50 boîtes/pots de 50 pcs (2\u202f500 pcs au total)'
+    );
+    expect(getPackHierarchyDescription(24, null)).toBe('1 Carton = 24 pièces');
+    expect(getPackHierarchyDescription(null, 50)).toBe('1 Boîte / Pot = 50 pièces');
+    expect(getPackHierarchyDescription(null, null)).toBeNull();
+  });
+
+  it('computes batch quantities accurately with master cartons and inner containers', () => {
+    const outerPack = 2500; // 1 carton = 50 x 50
+    const innerPack = 50;   // 1 pot = 50
+
+    // 1 master carton added
+    expect(calcBatchQty(1, 0, 0, outerPack, innerPack)).toBe(2500);
+
+    // 1 master carton + 2 pots of 50
+    expect(calcBatchQty(1, 2, 0, outerPack, innerPack)).toBe(2600);
+
+    // 3 pots of 50 + 5 loose pens
+    expect(calcBatchQty(0, 3, 5, outerPack, innerPack)).toBe(155);
+  });
+});
+
