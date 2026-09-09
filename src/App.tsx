@@ -30,6 +30,7 @@ import {
   undoLastCount,
   undoLastBillCount,
   resetLineStageCount,
+  resetBillStageCounts,
   setLineStageTotalCount,
   transferLineStageCounts,
   transferBatchStageCounts,
@@ -157,6 +158,7 @@ import { CrossBillReallocationModal } from './CrossBillReallocationModal';
 import { TripDispatchModal } from './TripDispatchModal';
 import { WarehouseZoneModal } from './WarehouseZoneModal';
 import { LegacyCodeModal } from './LegacyCodeModal';
+import { ResetPhaseModal } from './ResetPhaseModal';
 import {
   getZoneLabel,
   getZoneShortLabel,
@@ -3248,6 +3250,31 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
     return res;
   }, [events]);
 
+  const [showResetPhaseModal, setShowResetPhaseModal] = useState(false);
+
+  // Distinct lines with active counts in current stage
+  const currentStageLinesCount = React.useMemo(() => {
+    const lineIdSet = new Set<number>();
+    for (const e of events || []) {
+      if (!e.undone && e.stage === stage && e.quantity > 0) {
+        lineIdSet.add(e.orderLineId);
+      }
+    }
+    return lineIdSet.size;
+  }, [events, stage]);
+
+  const handleResetPhaseConfirm = async () => {
+    const result = await resetBillStageCounts(billId, stage);
+    playUndoBeep();
+    hapticTap('heavy');
+    const stageName =
+      stage === 'preparation' ? 'Préparation' : stage === 'chargement' ? 'Chargement' : 'Pointage';
+    showToast(
+      `Étape ${stageName} réinitialisée : ${result.resetUnitsCount} pièces (${result.affectedLinesCount} articles) remises à zéro`,
+      setToast
+    );
+  };
+
   const billEventsByLine = React.useMemo(() => {
     const map = new Map<number, CountEvent[]>();
     for (const e of events || []) {
@@ -4043,6 +4070,90 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             )}
           </div>
         )}
+
+        {/* Active Phase Status & Reset Strip */}
+        <div
+          className="card p-2.5 mb-2.5 flex items-center justify-between"
+          style={{
+            background: 'var(--bg-card)',
+            borderRadius: 20,
+            border: '1px solid var(--glass-border-subtle)',
+            boxShadow: 'var(--glass-shadow)',
+          }}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(16, 185, 129, 0.12)',
+                color: 'var(--accent)',
+                flexShrink: 0,
+              }}
+            >
+              {stage === 'preparation' ? <IconBox size={18} /> : stage === 'chargement' ? <IconTruck size={18} /> : <IconClipboard size={18} />}
+            </div>
+            <div className="truncate">
+              <div className="text-xs font-bold flex items-center gap-2">
+                <span>Phase : {stage === 'preparation' ? 'Préparation' : stage === 'chargement' ? 'Chargement' : 'Pointage'}</span>
+                <span
+                  style={{
+                    fontSize: '0.66rem',
+                    fontWeight: 800,
+                    padding: '1px 7px',
+                    borderRadius: 9999,
+                    background:
+                      (stage === 'preparation' ? prepMetric.percent : stage === 'chargement' ? loadMetric.percent : pointMetric.percent) === 100
+                        ? 'rgba(16, 185, 129, 0.2)'
+                        : 'rgba(255, 255, 255, 0.08)',
+                    color:
+                      (stage === 'preparation' ? prepMetric.percent : stage === 'chargement' ? loadMetric.percent : pointMetric.percent) === 100
+                        ? 'var(--accent)'
+                        : 'var(--text-secondary)',
+                  }}
+                >
+                  {stage === 'preparation' ? prepMetric.percent : stage === 'chargement' ? loadMetric.percent : pointMetric.percent}%
+                </span>
+              </div>
+              <div className="text-xs text-muted truncate">
+                {billStageUnitTotals[stage] > 0 ? (
+                  <span>{billStageUnitTotals[stage]} pièces comptées • {currentStageLinesCount} articles traités</span>
+                ) : (
+                  <span>Aucun comptage dans cette phase</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {billStageUnitTotals[stage] > 0 && (
+            <button
+              type="button"
+              className="btn btn-xs flex items-center gap-1.5"
+              style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                color: 'var(--danger)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: 9999,
+                padding: '4px 10px',
+                fontWeight: 700,
+                fontSize: '0.72rem',
+                flexShrink: 0,
+              }}
+              onClick={() => {
+                hapticTap('medium');
+                setShowResetPhaseModal(true);
+              }}
+              title={`Remettre à zéro tous les comptages de l'étape "${stage === 'preparation' ? 'Préparation' : stage === 'chargement' ? 'Chargement' : 'Pointage'}"`}
+            >
+              <IconUndo size={13} />
+              <span>Réinitialiser</span>
+            </button>
+          )}
+        </div>
 
         {/* Search mode */}
         <div className="seg-control mb-2">
@@ -4990,6 +5101,17 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         onClose={() => setShowQRSync(false)}
         billId={billId}
         setToast={setToast}
+      />
+
+      <ResetPhaseModal
+        isOpen={showResetPhaseModal}
+        onClose={() => setShowResetPhaseModal(false)}
+        onConfirm={handleResetPhaseConfirm}
+        stage={stage}
+        stageUnitsCount={billStageUnitTotals[stage]}
+        stageLinesCount={currentStageLinesCount}
+        clientName={bill.client}
+        billNumber={bill.billNumber}
       />
 
       {/* Assistive Recovery Modal when Hardware Laser scans an uncataloged barcode */}
@@ -8471,6 +8593,36 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   const [priceSearchQuery, setPriceSearchQuery] = useState('');
   const [exportDocFormat, setExportDocFormat] = useState<DocumentExportType>('auto');
   const [showExportOptions, setShowExportOptions] = useState(false);
+  const [showSummaryResetModal, setShowSummaryResetModal] = useState(false);
+
+  const summaryStageEvents = React.useMemo(
+    () => (events || []).filter((e) => !e.undone && e.stage === stageScope),
+    [events, stageScope]
+  );
+  const summaryStageUnitsCount = React.useMemo(
+    () => summaryStageEvents.reduce((sum, e) => sum + e.quantity, 0),
+    [summaryStageEvents]
+  );
+  const summaryStageLinesCount = React.useMemo(() => {
+    const lineIdSet = new Set<number>();
+    for (const e of summaryStageEvents) {
+      if (e.quantity > 0) lineIdSet.add(e.orderLineId);
+    }
+    return lineIdSet.size;
+  }, [summaryStageEvents]);
+
+  const handleSummaryResetConfirm = async () => {
+    const result = await resetBillStageCounts(billId, stageScope);
+    playUndoBeep();
+    hapticTap('heavy');
+    const stageName =
+      stageScope === 'preparation' ? 'Préparation' : stageScope === 'chargement' ? 'Chargement' : 'Pointage';
+    if (setToast) {
+      setToast(
+        `Étape ${stageName} réinitialisée : ${result.resetUnitsCount} pièces (${result.affectedLinesCount} articles) remises à zéro`
+      );
+    }
+  };
 
   const [activeOperator, setActiveOperatorState] = useState(() => getActiveOperator());
   const [operators, setOperators] = useState(() => loadOperatorsRoster());
@@ -9016,35 +9168,61 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
 
         {/* Stage Scope Selector for Problem Detection (subtle inline pill filter) */}
         {summaryTab === 'problems' && isMultiStage && (
-          <div className="flex items-center justify-between px-2 py-1.5 mb-2.5 text-xs text-muted" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+          <div className="flex items-center justify-between px-2 py-1.5 mb-2.5 text-xs text-muted" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', flexWrap: 'wrap', gap: 6 }}>
             <span className="font-semibold">Étape analysée :</span>
-            <div className="flex gap-1">
-              <button
-                type="button"
-                className={`btn btn-xs ${stageScope === 'preparation' ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ fontSize: '0.72rem', padding: '2px 8px' }}
-                onClick={() => setStageScope('preparation')}
-              >
-                Préparation ({getStageProblemLines(lines, eventsByLine, 'preparation').length})
-              </button>
-              {hasLoadEvents && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex gap-1">
                 <button
                   type="button"
-                  className={`btn btn-xs ${stageScope === 'chargement' ? 'btn-primary' : 'btn-ghost'}`}
+                  className={`btn btn-xs ${stageScope === 'preparation' ? 'btn-primary' : 'btn-ghost'}`}
                   style={{ fontSize: '0.72rem', padding: '2px 8px' }}
-                  onClick={() => setStageScope('chargement')}
+                  onClick={() => setStageScope('preparation')}
                 >
-                  Chargement ({getStageProblemLines(lines, eventsByLine, 'chargement').length})
+                  Préparation ({getStageProblemLines(lines, eventsByLine, 'preparation').length})
                 </button>
-              )}
-              {(hasPointEvents || stageScope === 'pointage') && (
+                {hasLoadEvents && (
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${stageScope === 'chargement' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+                    onClick={() => setStageScope('chargement')}
+                  >
+                    Chargement ({getStageProblemLines(lines, eventsByLine, 'chargement').length})
+                  </button>
+                )}
+                {(hasPointEvents || stageScope === 'pointage') && (
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${stageScope === 'pointage' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+                    onClick={() => setStageScope('pointage')}
+                  >
+                    Pointage ({getStageProblemLines(lines, eventsByLine, 'pointage').length})
+                  </button>
+                )}
+              </div>
+
+              {summaryStageUnitsCount > 0 && (
                 <button
                   type="button"
-                  className={`btn btn-xs ${stageScope === 'pointage' ? 'btn-primary' : 'btn-ghost'}`}
-                  style={{ fontSize: '0.72rem', padding: '2px 8px' }}
-                  onClick={() => setStageScope('pointage')}
+                  className="btn btn-xs flex items-center gap-1"
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.12)',
+                    color: 'var(--danger)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: 9999,
+                    padding: '2px 8px',
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                  }}
+                  onClick={() => {
+                    hapticTap('medium');
+                    setShowSummaryResetModal(true);
+                  }}
+                  title={`Remettre à zéro tous les comptages de l'étape "${stageScope}"`}
                 >
-                  Pointage ({getStageProblemLines(lines, eventsByLine, 'pointage').length})
+                  <IconUndo size={11} />
+                  <span>Réinitialiser</span>
                 </button>
               )}
             </div>
@@ -9683,6 +9861,17 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           }}
         />
       )}
+
+      <ResetPhaseModal
+        isOpen={showSummaryResetModal}
+        onClose={() => setShowSummaryResetModal(false)}
+        onConfirm={handleSummaryResetConfirm}
+        stage={stageScope}
+        stageUnitsCount={summaryStageUnitsCount}
+        stageLinesCount={summaryStageLinesCount}
+        clientName={bill.client}
+        billNumber={bill.billNumber}
+      />
     </>
   );
 }

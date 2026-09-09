@@ -5,6 +5,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
 import type {
+  Bill,
   OrderLine,
   TransportContainer,
   Stage,
@@ -414,6 +415,77 @@ export async function resetLineStageCount(
   });
 
   return totalReset;
+}
+
+/**
+ * Resets all active count events for an entire bill and stage back to 0.
+ * Useful when a major counting error occurs (e.g. wrong pallet, inverted stage)
+ * and the operator or supervisor wishes to restart the phase from scratch.
+ * Also clears stage operator sign-offs and logs a complete audit event.
+ */
+export async function resetBillStageCounts(
+  billId: number,
+  stage: Stage
+): Promise<{ resetEventsCount: number; resetUnitsCount: number; affectedLinesCount: number }> {
+  // Query all active count events for this bill in the given stage
+  const billEvents = await db.countEvents
+    .where('billId')
+    .equals(billId)
+    .toArray();
+
+  // Also collect lines of the bill to ensure any events recorded with matching orderLineId are captured
+  const billLines = await db.orderLines
+    .where('billId')
+    .equals(billId)
+    .toArray();
+  const lineIds = new Set(billLines.map((l) => l.id!));
+
+  const activeStageEvents = billEvents.filter(
+    (e) => (e.stage === stage || (e.orderLineId && lineIds.has(e.orderLineId) && e.stage === stage)) && !e.undone
+  );
+
+  if (activeStageEvents.length === 0) {
+    return { resetEventsCount: 0, resetUnitsCount: 0, affectedLinesCount: 0 };
+  }
+
+  const resetEventsCount = activeStageEvents.length;
+  const resetUnitsCount = activeStageEvents.reduce((sum, e) => sum + e.quantity, 0);
+  const distinctLineIds = new Set(activeStageEvents.map((e) => e.orderLineId));
+  const affectedLinesCount = distinctLineIds.size;
+
+  // Execute updates in a Dexie transaction
+  await db.transaction('rw', [db.countEvents, db.bills, db.auditEvents], async () => {
+    for (const ev of activeStageEvents) {
+      await db.countEvents.update(ev.id!, { undone: true });
+    }
+
+    // Reset stage operator and timestamp fields on the bill
+    const stageUpdate: Partial<Bill> = {};
+    if (stage === 'preparation') {
+      stageUpdate.preparedBy = null;
+      stageUpdate.preparedAt = null;
+    } else if (stage === 'chargement') {
+      stageUpdate.loadedBy = null;
+      stageUpdate.loadedAt = null;
+    } else if (stage === 'pointage') {
+      stageUpdate.checkedBy = null;
+      stageUpdate.checkedAt = null;
+    }
+    await db.bills.update(billId, stageUpdate);
+
+    // Audit trail logging
+    await db.auditEvents.add({
+      billId,
+      stage,
+      type: 'count_event_undone',
+      oldValue: `${resetUnitsCount} pièces (${affectedLinesCount} articles)`,
+      newValue: '0',
+      reason: 'reset_entire_phase',
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  return { resetEventsCount, resetUnitsCount, affectedLinesCount };
 }
 
 /**
