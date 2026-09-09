@@ -74,7 +74,7 @@ export function ResetPhaseModal({
               <IconWarning size={18} />
             </div>
             <div className="modal-title" style={{ margin: 0, fontSize: '0.95rem', color: 'var(--danger)' }}>
-              RÉINITIALISER L'ÉTAPE
+              Réinitialiser l'étape
             </div>
           </div>
           <button
@@ -226,7 +226,7 @@ export function ResetPhaseModal({
             disabled={isResetting}
           >
             <IconUndo size={16} />
-            <span>{isResetting ? 'Réinitialisation en cours...' : `Confirmer la réinitialisation (0 pièce)`}</span>
+            <span>{isResetting ? 'Réinitialisation en cours...' : `Confirmer la réinitialisation (${stageUnitsCount} pièce${stageUnitsCount > 1 ? 's' : ''})`}</span>
           </button>
 
           <button

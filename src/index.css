@@ -2891,25 +2891,73 @@ select,
   --glass-blur: none;
 }
 
-[data-battery-saver="true"] .app-header,
-[data-device="samsung-a54"] .app-header {
+/* Super AMOLED Pitch-Black Headers & Modals — DARK THEME ONLY */
+[data-theme="dark"][data-battery-saver="true"] .app-header,
+[data-theme="dark"][data-device="samsung-a54"] .app-header,
+[data-theme="dark"][data-screen="amoled"] .app-header {
   background: #000000 !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
 
-[data-battery-saver="true"] .modal-backdrop,
-[data-device="samsung-a54"] .modal-backdrop {
+[data-theme="dark"][data-battery-saver="true"] .modal-backdrop,
+[data-theme="dark"][data-device="samsung-a54"] .modal-backdrop,
+[data-theme="dark"][data-screen="amoled"] .modal-backdrop {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   background: rgba(0, 0, 0, 0.88) !important;
 }
 
-[data-battery-saver="true"] .modal-content,
-[data-device="samsung-a54"] .modal-content {
+[data-theme="dark"][data-battery-saver="true"] .modal-content,
+[data-theme="dark"][data-device="samsung-a54"] .modal-content,
+[data-theme="dark"][data-screen="amoled"] .modal-content {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   background: #0d0e12 !important;
+}
+
+/* Light Theme High-Contrast WCAG AAA Absolute Protection — Overrides all device profiles */
+[data-theme="light"] .app-header {
+  background: #ffffff !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-theme="light"] .app-header .brand-title,
+[data-theme="light"] .app-header h1,
+[data-theme="light"] .app-header .font-semibold,
+[data-theme="light"] .app-header .font-bold {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .app-header .text-muted,
+[data-theme="light"] .app-header .text-secondary {
+  color: #64748b !important;
+}
+
+[data-theme="light"] .app-header .header-icon-btn,
+[data-theme="light"] .app-header .back-btn {
+  background: #f1f5f9 !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+[data-theme="light"] .app-header .header-icon-btn:hover,
+[data-theme="light"] .app-header .back-btn:hover {
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .modal-backdrop {
+  background: rgba(15, 23, 42, 0.5) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+[data-theme="light"] .modal-content {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.12) !important;
 }
 
 /* Responsive CSS Grid Utilities */

@@ -3921,7 +3921,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         </div>
 
         {showOverviewDiagrams && (
-          <>
+          <div className="mb-3">
             {/* Visual Interactive Process Flow Pipeline (Apple Glass & Less-is-More) */}
             <WarehouseProcessFlow
               currentStage={stage}
@@ -3933,11 +3933,72 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               }}
             />
 
+            {/* Stage Reset & Quick Audit Action inside expanded overview */}
+            {billStageUnitTotals[stage] > 0 && (
+              <div
+                className="flex items-center justify-between p-3 mt-2"
+                style={{
+                  background: 'var(--bg-card)',
+                  borderRadius: 20,
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  boxShadow: 'var(--glass-shadow)',
+                }}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      background: 'rgba(239, 68, 68, 0.12)',
+                      color: 'var(--danger)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <IconUndo size={15} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                      Remise à zéro : {stage === 'preparation' ? 'Préparation' : stage === 'chargement' ? 'Chargement' : 'Pointage'}
+                    </div>
+                    <div className="text-[11px] text-muted truncate">
+                      {billStageUnitTotals[stage]} pièces comptées • {currentStageLinesCount} articles traités
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn-xs flex items-center gap-1.5 font-bold"
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    color: 'var(--danger)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    borderRadius: 9999,
+                    padding: '5px 12px',
+                    fontSize: '0.74rem',
+                    flexShrink: 0,
+                  }}
+                  onClick={() => {
+                    hapticTap('medium');
+                    setShowResetPhaseModal(true);
+                  }}
+                  title={`Remettre à zéro tous les comptages de l'étape "${stage === 'preparation' ? 'Préparation' : stage === 'chargement' ? 'Chargement' : 'Pointage'}"`}
+                >
+                  <IconUndo size={13} />
+                  <span>Réinitialiser</span>
+                </button>
+              </div>
+            )}
+
             {/* Visual Truck Loading & Dock Staging Diagram */}
             {(stage === 'chargement' || (trips && trips.length > 0)) && (
               <TruckLoadingDiagram {...truckDiagramMetrics} />
             )}
-          </>
+          </div>
         )}
 
 
@@ -4071,96 +4132,25 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         )}
 
-        {/* Active Phase Status & Reset Strip */}
+        {/* Search mode — Compact Pill Control */}
         <div
-          className="card p-2.5 mb-2.5 flex items-center justify-between"
+          className="seg-control-fit mb-2"
           style={{
-            background: 'var(--bg-card)',
-            borderRadius: 20,
-            border: '1px solid var(--glass-border-subtle)',
-            boxShadow: 'var(--glass-shadow)',
+            borderRadius: 9999,
+            padding: '2px 3px',
+            gap: 2,
           }}
         >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'rgba(16, 185, 129, 0.12)',
-                color: 'var(--accent)',
-                flexShrink: 0,
-              }}
-            >
-              {stage === 'preparation' ? <IconBox size={18} /> : stage === 'chargement' ? <IconTruck size={18} /> : <IconClipboard size={18} />}
-            </div>
-            <div className="truncate">
-              <div className="text-xs font-bold flex items-center gap-2">
-                <span>Phase : {stage === 'preparation' ? 'Préparation' : stage === 'chargement' ? 'Chargement' : 'Pointage'}</span>
-                <span
-                  style={{
-                    fontSize: '0.66rem',
-                    fontWeight: 800,
-                    padding: '1px 7px',
-                    borderRadius: 9999,
-                    background:
-                      (stage === 'preparation' ? prepMetric.percent : stage === 'chargement' ? loadMetric.percent : pointMetric.percent) === 100
-                        ? 'rgba(16, 185, 129, 0.2)'
-                        : 'rgba(255, 255, 255, 0.08)',
-                    color:
-                      (stage === 'preparation' ? prepMetric.percent : stage === 'chargement' ? loadMetric.percent : pointMetric.percent) === 100
-                        ? 'var(--accent)'
-                        : 'var(--text-secondary)',
-                  }}
-                >
-                  {stage === 'preparation' ? prepMetric.percent : stage === 'chargement' ? loadMetric.percent : pointMetric.percent}%
-                </span>
-              </div>
-              <div className="text-xs text-muted truncate">
-                {billStageUnitTotals[stage] > 0 ? (
-                  <span>{billStageUnitTotals[stage]} pièces comptées • {currentStageLinesCount} articles traités</span>
-                ) : (
-                  <span>Aucun comptage dans cette phase</span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {billStageUnitTotals[stage] > 0 && (
-            <button
-              type="button"
-              className="btn btn-xs flex items-center gap-1.5"
-              style={{
-                background: 'rgba(239, 68, 68, 0.12)',
-                color: 'var(--danger)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                borderRadius: 9999,
-                padding: '4px 10px',
-                fontWeight: 700,
-                fontSize: '0.72rem',
-                flexShrink: 0,
-              }}
-              onClick={() => {
-                hapticTap('medium');
-                setShowResetPhaseModal(true);
-              }}
-              title={`Remettre à zéro tous les comptages de l'étape "${stage === 'preparation' ? 'Préparation' : stage === 'chargement' ? 'Chargement' : 'Pointage'}"`}
-            >
-              <IconUndo size={13} />
-              <span>Réinitialiser</span>
-            </button>
-          )}
-        </div>
-
-        {/* Search mode */}
-        <div className="seg-control mb-2">
           {(['smart', 'no', 'ref', 'ean', 'name'] as SearchMode[]).map((m) => (
             <button
               key={m}
               className={`seg-btn ${searchMode === m ? 'active' : ''}`}
+              style={{
+                borderRadius: 9999,
+                padding: '4px 6px',
+                fontSize: '0.72rem',
+                fontWeight: searchMode === m ? 700 : 500,
+              }}
               onClick={() => {
                 hapticTap('light');
                 setSearchMode(m);
@@ -4460,87 +4450,97 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </button>
         </div>
 
-        {/* Sort & Controls Toolbar */}
-        <div className="flex justify-between items-center mb-2 flex-wrap gap-2">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Sort Selector Segmented Buttons */}
-            <div
-              className="flex items-center p-0.5"
-              style={{
-                background: 'var(--bg-surface)',
-                borderRadius: 9999,
-                border: '1px solid var(--glass-border-subtle)',
-              }}
-            >
-              <button
-                type="button"
-                className={`btn btn-xs ${sortMode === 'bl' ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 9px' }}
-                onClick={() => {
-                  hapticTap('light');
-                  handleSetSortMode('bl');
-                }}
-                title="Trier selon l'ordre initial du BL papier"
-              >
-                Ordre BL
-              </button>
-              <button
-                type="button"
-                className={`btn btn-xs ${sortMode === 'circuit' ? 'btn-primary' : 'btn-ghost'} flex items-center gap-1`}
-                style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 9px' }}
-                onClick={() => {
-                  hapticTap('light');
-                  handleSetSortMode('circuit');
-                }}
-                title="Trier par parcours entrepôt (Chambre NW➔SE puis Couloir 1➔4)"
-              >
-                <IconCompass size={12} />
-                <span>Parcours</span>
-              </button>
-              <button
-                type="button"
-                className={`btn btn-xs ${sortMode === 'recent' ? 'btn-primary' : 'btn-ghost'} flex items-center gap-1`}
-                style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 9px' }}
-                onClick={() => {
-                  hapticTap('light');
-                  handleSetSortMode('recent');
-                }}
-                title="Trier par récence de validation (plus récent en premier)"
-              >
-                <IconClock size={12} />
-                <span>Récents</span>
-              </button>
-              <button
-                type="button"
-                className={`btn btn-xs ${sortMode === 'family' ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 9px' }}
-                onClick={() => {
-                  hapticTap('light');
-                  handleSetSortMode('family');
-                }}
-                title="Trier par désignation (A-Z)"
-              >
-                Famille
-              </button>
-            </div>
-
+        {/* Sort & Lines Metric Row */}
+        <div className="flex items-center justify-between mb-2">
+          {/* Sort Selector Segmented Buttons */}
+          <div
+            className="flex items-center p-0.5"
+            style={{
+              background: 'var(--bg-surface)',
+              borderRadius: 9999,
+              border: '1px solid var(--glass-border-subtle)',
+            }}
+          >
             <button
-              className={`btn btn-xs ${showQuantities ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
-              style={{ borderRadius: 9999, padding: '4px 10px' }}
+              type="button"
+              className={`btn btn-xs ${sortMode === 'bl' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 10px' }}
+              onClick={() => {
+                hapticTap('light');
+                handleSetSortMode('bl');
+              }}
+              title="Trier selon l'ordre initial du BL papier"
+            >
+              Ordre BL
+            </button>
+            <button
+              type="button"
+              className={`btn btn-xs ${sortMode === 'circuit' ? 'btn-primary' : 'btn-ghost'} flex items-center gap-1`}
+              style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 10px' }}
+              onClick={() => {
+                hapticTap('light');
+                handleSetSortMode('circuit');
+              }}
+              title="Trier par parcours entrepôt (Chambre puis Couloirs)"
+            >
+              <IconCompass size={12} />
+              <span>Parcours</span>
+            </button>
+            <button
+              type="button"
+              className={`btn btn-xs ${sortMode === 'recent' ? 'btn-primary' : 'btn-ghost'} flex items-center gap-1`}
+              style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 10px' }}
+              onClick={() => {
+                hapticTap('light');
+                handleSetSortMode('recent');
+              }}
+              title="Trier par récence de validation"
+            >
+              <IconClock size={12} />
+              <span>Récents</span>
+            </button>
+            <button
+              type="button"
+              className={`btn btn-xs ${sortMode === 'family' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 10px' }}
+              onClick={() => {
+                hapticTap('light');
+                handleSetSortMode('family');
+              }}
+              title="Trier par désignation (A-Z)"
+            >
+              A-Z
+            </button>
+          </div>
+
+          <span className="text-xs text-muted font-mono font-semibold" style={{ alignSelf: 'center' }}>
+            {searchScope === 'all'
+              ? `${displayLines.length}/${entityLines?.length || displayLines.length} lignes`
+              : `${displayLines.length}/${lines.length} lignes`}
+          </span>
+        </div>
+
+        {/* Action Controls Row */}
+        <div className="flex items-center justify-between mb-2.5 gap-2">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              className={`btn btn-xs ${showQuantities ? 'btn-ghost' : 'btn-secondary'} flex items-center gap-1`}
+              style={{ borderRadius: 9999, padding: '4px 10px', fontSize: '0.72rem' }}
               onClick={() => {
                 hapticTap('light');
                 toggleShowQuantities();
               }}
-              title={showQuantities ? 'Masquer les quantités' : 'Afficher les quantités'}
+              title={showQuantities ? 'Masquer les quantités attendues' : 'Afficher les quantités attendues'}
             >
-              {showQuantities ? <IconEye size={13} /> : <IconEyeOff size={13} />}
+              {showQuantities ? <IconEye size={13} style={{ color: 'var(--accent)' }} /> : <IconEyeOff size={13} />}
               <span>{showQuantities ? 'Visibles' : 'Masquées'}</span>
             </button>
 
             <button
               type="button"
               className={`btn btn-xs ${isSelectionMode ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
-              style={{ borderRadius: 9999, padding: '4px 10px' }}
+              style={{ borderRadius: 9999, padding: '4px 10px', fontSize: '0.72rem' }}
               onClick={() => {
                 hapticTap('medium');
                 if (isSelectionMode) {
@@ -4552,15 +4552,40 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               }}
               title="Sélection multiple d'articles"
             >
-              <IconCheck size={13} />
+              <IconCheck size={12} />
               <span>{isSelectionMode ? 'Terminer' : 'Sélectionner'}</span>
             </button>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {billStageUnitTotals[stage] > 0 && (
+              <button
+                type="button"
+                className="btn btn-xs flex items-center gap-1 font-bold"
+                style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  color: 'var(--danger)',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  borderRadius: 9999,
+                  padding: '4px 10px',
+                  fontSize: '0.72rem',
+                }}
+                onClick={() => {
+                  hapticTap('medium');
+                  setShowResetPhaseModal(true);
+                }}
+                title={`Remettre à zéro tous les comptages de l'étape "${stage === 'preparation' ? 'Préparation' : stage === 'chargement' ? 'Chargement' : 'Pointage'}"`}
+              >
+                <IconUndo size={12} />
+                <span>Réinit</span>
+              </button>
+            )}
 
             {stage === 'preparation' && (
               <button
                 type="button"
                 className="btn btn-xs btn-primary flex items-center gap-1 font-bold"
-                style={{ borderRadius: 9999, padding: '4px 12px' }}
+                style={{ borderRadius: 9999, padding: '4px 12px', fontSize: '0.74rem' }}
                 onClick={() => {
                   hapticTap('medium');
                   setShowStageSignOffModal(true);
@@ -4572,12 +4597,6 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               </button>
             )}
           </div>
-
-          <span className="text-xs text-muted font-bold" style={{ alignSelf: 'center' }}>
-            {searchScope === 'all'
-              ? `${displayLines.length} / ${entityLines?.length || displayLines.length} lignes`
-              : `${displayLines.length} / ${lines.length} lignes`}
-          </span>
         </div>
 
         {/* Picking Circuit Order Banner when sortMode === 'circuit' */}
