@@ -256,22 +256,18 @@ export default function App() {
     return 'light';
   });
 
-  // Auto-engage fullscreen on first user gesture (touch / click) by default
+  // Always enforce fullscreen by default on user gestures (zero-toggle, always-on)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const shouldAutoFullscreen = () => {
-      try {
-        return localStorage.getItem('pointage_fullscreen_default') !== 'false';
-      } catch {
-        return true;
-      }
-    };
+    try {
+      localStorage.setItem('pointage_fullscreen_default', 'true');
+    } catch {}
 
-    if (!shouldAutoFullscreen()) return;
-
+    let lastAttempt = 0;
     const engageFullscreen = () => {
-      if (!shouldAutoFullscreen()) return;
+      const now = Date.now();
+      if (now - lastAttempt < 1000) return; // avoid rapid repeated calls
 
       const doc = document as any;
       const isCurrentlyFullscreen = !!(
@@ -282,6 +278,7 @@ export default function App() {
       );
 
       if (!isCurrentlyFullscreen) {
+        lastAttempt = now;
         const elem = document.documentElement as any;
         const req =
           elem.requestFullscreen ||
@@ -292,10 +289,6 @@ export default function App() {
           req.call(elem).catch(() => {});
         }
       }
-
-      window.removeEventListener('pointerdown', engageFullscreen, true);
-      window.removeEventListener('touchstart', engageFullscreen, true);
-      window.removeEventListener('click', engageFullscreen, true);
     };
 
     window.addEventListener('pointerdown', engageFullscreen, true);
@@ -1227,7 +1220,6 @@ function HomeScreen({
             activeOperator={activeOperator}
             onClick={() => setShowOperatorModal(true)}
           />
-          <FullscreenButton className="header-icon-btn" />
           <button
             type="button"
             className="header-icon-btn"
@@ -1275,7 +1267,7 @@ function HomeScreen({
                 id="home-global-search-input"
                 className="search-input"
                 style={{ height: 38, fontSize: '0.84rem', paddingLeft: 14 }}
-                placeholder="Rechercher un article, réf, code-barres ou N° BL..."
+                placeholder="Rechercher..."
                 value={homeSearch}
                 onChange={(e) => setHomeSearch(e.target.value)}
                 onKeyDown={(e) => {
@@ -1988,8 +1980,10 @@ function BillCard({
       <div className="card-header" style={{ alignItems: 'flex-start', gap: 14 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="card-client" style={{ fontSize: '1.08rem', fontWeight: 800 }}>{bill.client}</div>
-          <div className="card-bill-number flex items-center gap-1.5 flex-wrap mt-1">
-            <span>{bill.billNumber === 'NOTE-MANUSCRITE' ? 'Note manuscrite (Sans N°)' : bill.billNumber}</span>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="font-bold text-xs" style={{ color: 'var(--text-secondary)' }}>
+              {bill.billNumber === 'NOTE-MANUSCRITE' ? 'Note manuscrite (Sans N°)' : bill.billNumber}
+            </span>
             {bill.documentType && (
               <span
                 style={{
@@ -2011,6 +2005,8 @@ function BillCard({
                   : 'BC'}
               </span>
             )}
+          </div>
+          <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto no-scrollbar mt-1.5 py-0.5">
             {bill.bcNumber && (
               <span
                 style={{
@@ -2020,6 +2016,7 @@ function BillCard({
                   borderRadius: '9999px',
                   background: 'rgba(59, 130, 246, 0.15)',
                   color: '#3b82f6',
+                  flexShrink: 0,
                 }}
                 title="Numéro Bon de Commande"
               >
@@ -2038,6 +2035,7 @@ function BillCard({
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 3,
+                  flexShrink: 0,
                 }}
                 title={`Wilaya : ${bill.wilaya}`}
               >
@@ -2053,6 +2051,7 @@ function BillCard({
                   borderRadius: '9999px',
                   background: 'var(--bg-surface)',
                   color: 'var(--text-muted)',
+                  flexShrink: 0,
                 }}
               >
                 {bill.date}
@@ -2076,6 +2075,7 @@ function BillCard({
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 3,
+                  flexShrink: 0,
                 }}
               >
                 <IconTruck size={10} />
@@ -3876,7 +3876,6 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             activeOperator={activeOperator}
             onClick={() => setShowOperatorModal(true)}
           />
-          <FullscreenButton className="header-icon-btn" />
           <button
             type="button"
             className="header-icon-btn"
@@ -4118,7 +4117,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             style={{ paddingLeft: 4 }}
             placeholder={
               searchMode === 'smart'
-                ? 'Recherche (Réf, scan, N°, désignation)...'
+                ? 'Réf, scan, désignation...'
                 : searchMode === 'no'
                 ? 'Numéro de ligne...'
                 : searchMode === 'ref'
@@ -4183,64 +4182,17 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         )}
 
-        {/* Transport Containers Filter Pills (Chouala, Carton & Vrac) */}
-        {activeContainers.length > 0 && (
-          <div className="colis-filter-bar">
-            <button
-              type="button"
-              className={`colis-filter-pill ${selectedContainerFilter === 'all' ? 'active' : ''}`}
-              onClick={() => setSelectedContainerFilter('all')}
-            >
-              <span>Tous</span>
-              <span className="colis-pill-badge">{activeLinesPool.length}</span>
-            </button>
-
-            {activeContainers.map((c) => {
-              const st = containerStats.get(c.id!) || { linesCount: 0, totalUnits: 0 };
-              const isChouala = c.type === 'chouala';
-              const isSelected = selectedContainerFilter === c.id;
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  className={`colis-filter-pill ${isChouala ? 'chouala' : ''} ${isSelected ? 'active' : ''}`}
-                  onClick={() => setSelectedContainerFilter(isSelected ? 'all' : c.id!)}
-                >
-                  <span className="flex items-center gap-1">
-                    {isChouala ? <IconBag size={12} /> : <IconBox size={12} />}
-                    <span>{c.label}</span>
-                  </span>
-                  <span className="colis-pill-badge">{st.linesCount}</span>
-                </button>
-              );
-            })}
-
-            {activeContainers.length > 0 && (
-              <button
-                type="button"
-                className={`colis-filter-pill loose ${selectedContainerFilter === 'loose' ? 'active' : ''}`}
-                onClick={() => setSelectedContainerFilter(selectedContainerFilter === 'loose' ? 'all' : 'loose')}
-              >
-                <span className="flex items-center gap-1">
-                  <IconTag size={12} />
-                  <span>Hors Colis (Fraq)</span>
-                </span>
-                <span className="colis-pill-badge">{containerStats.get('loose')?.linesCount || 0}</span>
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Dernière Saisie Quick Jump Banner */}
+        {/* Dernière Saisie Quick Jump Ticker */}
         {lastValidatedLineInfo && (
           <div
-            className="flex items-center justify-between cursor-pointer mb-2.5 transition-all"
+            className="flex items-center justify-between cursor-pointer mb-2 transition-all"
             style={{
-              padding: '7px 14px',
+              padding: '4px 12px',
               borderRadius: 9999,
               background: 'rgba(16, 185, 129, 0.12)',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
+              border: '1px solid rgba(16, 185, 129, 0.28)',
               color: 'var(--text-primary)',
+              fontSize: '0.72rem',
             }}
             onClick={() => {
               hapticTap('light');
@@ -4262,48 +4214,45 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             }}
             title="Cliquer pour aller directement au dernier article validé"
           >
-            <div className="flex items-center gap-2 truncate text-xs min-w-0">
+            <div className="flex items-center gap-1.5 truncate min-w-0">
               <span
                 style={{
                   background: 'var(--accent)',
                   color: '#fff',
                   fontWeight: 800,
-                  fontSize: '0.66rem',
-                  padding: '2px 8px',
+                  fontSize: '0.62rem',
+                  padding: '1px 6px',
                   borderRadius: 9999,
                   letterSpacing: '0.03em',
                   flexShrink: 0,
                 }}
               >
-                DERNIÈRE SAISIE
+                DERNIER
               </span>
               <span className="font-bold flex-shrink-0">N°{lastValidatedLineInfo.line.no}</span>
               <span className="truncate text-muted">• {lastValidatedLineInfo.line.designation}</span>
             </div>
-            <div className="flex items-center gap-1.5 flex-shrink-0 text-xs pl-2">
-              <IconClock size={13} style={{ color: 'var(--accent)' }} />
-              <span className="font-mono font-bold text-accent">
-                {formatValidationTime(lastValidatedLineInfo.time)}
-              </span>
-              <span style={{ color: 'var(--accent)', fontWeight: 800 }}>→</span>
+            <div className="flex items-center gap-1 flex-shrink-0 font-mono font-bold text-accent pl-1.5">
+              <IconClock size={11} />
+              <span>{formatValidationTime(lastValidatedLineInfo.time)}</span>
+              <span style={{ fontWeight: 800 }}>→</span>
             </div>
           </div>
         )}
 
         {/* Status Filter Segmented Pills (Tous, À faire, Validés, Problèmes) */}
         <div
-          className="flex items-center gap-1.5 mb-2.5 p-1"
+          className="flex items-center gap-1 mb-2.5 p-1"
           style={{
             background: 'var(--bg-surface)',
             borderRadius: 9999,
             border: '1px solid var(--glass-border-subtle)',
-            overflowX: 'auto',
           }}
         >
           <button
             type="button"
             className={`btn btn-xs flex-1 ${filterStatus === 'all' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.75rem', padding: '5px 10px', whiteSpace: 'nowrap' }}
+            style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '5px 8px', whiteSpace: 'nowrap' }}
             onClick={() => {
               hapticTap('light');
               setFilterStatus('all');
@@ -4328,7 +4277,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <button
             type="button"
             className={`btn btn-xs flex-1 ${filterStatus === 'todo' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.75rem', padding: '5px 10px', whiteSpace: 'nowrap' }}
+            style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '5px 8px', whiteSpace: 'nowrap' }}
             onClick={() => {
               hapticTap('light');
               setFilterStatus('todo');
@@ -4353,15 +4302,15 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <button
             type="button"
             className={`btn btn-xs flex-1 ${filterStatus === 'done' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.75rem', padding: '5px 10px', whiteSpace: 'nowrap' }}
+            style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '5px 8px', whiteSpace: 'nowrap' }}
             onClick={() => {
               hapticTap('light');
               setFilterStatus('done');
               setShowProblemsOnly(false);
             }}
           >
-            <span className="flex items-center gap-1">
-              <IconCheck size={12} />
+            <span className="flex items-center justify-center gap-1">
+              <IconCheck size={11} />
               <span>Validés</span>
             </span>
             <span
@@ -4381,15 +4330,15 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <button
             type="button"
             className={`btn btn-xs flex-1 ${filterStatus === 'problems' ? 'btn-warning' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.75rem', padding: '5px 10px', whiteSpace: 'nowrap' }}
+            style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '5px 8px', whiteSpace: 'nowrap' }}
             onClick={() => {
               hapticTap('light');
               setFilterStatus(filterStatus === 'problems' ? 'all' : 'problems');
               setShowProblemsOnly(filterStatus !== 'problems');
             }}
           >
-            <span className="flex items-center gap-1">
-              <IconWarning size={12} />
+            <span className="flex items-center justify-center gap-1">
+              <IconWarning size={11} />
               <span>Problèmes</span>
             </span>
             {filterCounts.problems > 0 && (
@@ -4410,111 +4359,162 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </button>
         </div>
 
-        {/* Consolidated Ergonomic Controls Row (Miller's Law 7±2 & Hicks Law) */}
-        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-          {/* Left Group: Quick Sort Cycle, Visibility & Selection */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              type="button"
-              className="btn btn-xs btn-secondary flex items-center gap-1 font-semibold"
-              style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '4px 10px' }}
-              onClick={() => {
-                hapticTap('light');
-                const modes: LineSortMode[] = ['bl', 'circuit', 'recent', 'family'];
-                const next = modes[(modes.indexOf(sortMode) + 1) % modes.length];
-                handleSetSortMode(next);
-              }}
-              title="Cliquer pour changer l'ordre de tri (BL, Parcours, Récents, A-Z)"
-            >
-              {sortMode === 'bl' ? <IconLayers size={12} /> :
-               sortMode === 'circuit' ? <IconCompass size={12} /> :
-               sortMode === 'recent' ? <IconClock size={12} /> :
-               <IconTag size={12} />}
-              <span>{sortMode === 'bl' ? 'Ordre BL' : sortMode === 'circuit' ? 'Parcours' : sortMode === 'recent' ? 'Récents' : 'A-Z'}</span>
-              <span style={{ fontSize: '0.65rem', opacity: 0.6 }}>▾</span>
-            </button>
+        {/* Consolidated Ergonomic Controls Row (Strictly 1 Row, Zero Wrapping Clutter) */}
+        <div
+          className="flex items-center gap-1.5 mb-2.5 overflow-x-auto no-scrollbar flex-nowrap"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
+          {/* Sort Mode Button */}
+          <button
+            type="button"
+            className="btn btn-xs btn-secondary flex items-center gap-1 font-semibold flex-shrink-0"
+            style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '4px 9px' }}
+            onClick={() => {
+              hapticTap('light');
+              const modes: LineSortMode[] = ['bl', 'circuit', 'recent', 'family'];
+              const next = modes[(modes.indexOf(sortMode) + 1) % modes.length];
+              handleSetSortMode(next);
+            }}
+            title="Cliquer pour changer l'ordre de tri (BL, Parcours, Récents, A-Z)"
+          >
+            {sortMode === 'bl' ? <IconLayers size={12} /> :
+             sortMode === 'circuit' ? <IconCompass size={12} /> :
+             sortMode === 'recent' ? <IconClock size={12} /> :
+             <IconTag size={12} />}
+            <span>{sortMode === 'bl' ? 'BL' : sortMode === 'circuit' ? 'Parcours' : sortMode === 'recent' ? 'Récents' : 'A-Z'}</span>
+            <span style={{ fontSize: '0.62rem', opacity: 0.6 }}>▾</span>
+          </button>
 
-            <button
-              type="button"
-              className={`btn btn-xs ${showQuantities ? 'btn-ghost' : 'btn-secondary'} flex items-center gap-1`}
-              style={{ borderRadius: 9999, padding: '4px 9px', fontSize: '0.72rem' }}
-              onClick={() => {
-                hapticTap('light');
-                toggleShowQuantities();
-              }}
-              title={showQuantities ? 'Masquer les quantités attendues' : 'Afficher les quantités attendues'}
-            >
-              {showQuantities ? <IconEye size={13} style={{ color: 'var(--accent)' }} /> : <IconEyeOff size={13} />}
-              <span className="text-[11px]">{showQuantities ? 'Visibles' : 'Masquées'}</span>
-            </button>
+          {/* Integrated Colis Filter Dropdown (Zero duplicate 'Tous', zero extra rows) */}
+          {activeContainers.length > 0 && (
+            <div className="relative flex-shrink-0">
+              <button
+                type="button"
+                className={`btn btn-xs ${selectedContainerFilter !== 'all' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1 font-semibold`}
+                style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '4px 9px' }}
+              >
+                <IconBox size={12} />
+                <span>
+                  {selectedContainerFilter === 'all'
+                    ? 'Colis'
+                    : selectedContainerFilter === 'loose'
+                    ? 'Hors colis'
+                    : (activeContainers.find((c) => c.id === selectedContainerFilter)?.label || 'Colis')}
+                </span>
+                <span style={{ fontSize: '0.62rem', opacity: 0.6 }}>▾</span>
+              </button>
+              <select
+                aria-label="Filtrer par colis"
+                value={String(selectedContainerFilter)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setSelectedContainerFilter(v === 'all' ? 'all' : v === 'loose' ? 'loose' : Number(v));
+                }}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  opacity: 0,
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="all">Tous les colis ({activeLinesPool.length})</option>
+                {activeContainers.map((c) => {
+                  const st = containerStats.get(c.id!) || { linesCount: 0 };
+                  return (
+                    <option key={c.id} value={c.id}>
+                      {c.type === 'chouala' ? 'Sac' : 'Carton'}: {c.label} ({st.linesCount})
+                    </option>
+                  );
+                })}
+                <option value="loose">Hors Colis (Fraq) ({containerStats.get('loose')?.linesCount || 0})</option>
+              </select>
+            </div>
+          )}
 
+          {/* Show/Hide Expected Quantities Toggle */}
+          <button
+            type="button"
+            className={`btn btn-xs ${showQuantities ? 'btn-ghost' : 'btn-secondary'} flex items-center gap-1 flex-shrink-0`}
+            style={{ borderRadius: 9999, padding: '4px 8px', fontSize: '0.72rem' }}
+            onClick={() => {
+              hapticTap('light');
+              toggleShowQuantities();
+            }}
+            title={showQuantities ? 'Masquer les quantités attendues' : 'Afficher les quantités attendues'}
+          >
+            {showQuantities ? <IconEye size={12} style={{ color: 'var(--accent)' }} /> : <IconEyeOff size={12} />}
+          </button>
+
+          {/* Selection Mode Toggle */}
+          <button
+            type="button"
+            className={`btn btn-xs ${isSelectionMode ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1 flex-shrink-0`}
+            style={{ borderRadius: 9999, padding: '4px 8px', fontSize: '0.72rem' }}
+            onClick={() => {
+              hapticTap('medium');
+              if (isSelectionMode) {
+                setIsSelectionMode(false);
+                setSelectedLineIds(new Set());
+              } else {
+                setIsSelectionMode(true);
+              }
+            }}
+            title="Sélection multiple d'articles"
+          >
+            <IconCheck size={11} />
+            <span>{isSelectionMode ? 'Terminer' : 'Sélec'}</span>
+          </button>
+
+          {/* Line Counter */}
+          <span className="text-xs text-muted font-mono font-bold whitespace-nowrap ml-auto flex-shrink-0">
+            {searchScope === 'all'
+              ? `${displayLines.length}/${entityLines?.length || displayLines.length} lig.`
+              : `${displayLines.length}/${lines.length} lig.`}
+          </span>
+
+          {/* Stage Reset Button */}
+          {billStageUnitTotals[stage] > 0 && (
             <button
               type="button"
-              className={`btn btn-xs ${isSelectionMode ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
-              style={{ borderRadius: 9999, padding: '4px 9px', fontSize: '0.72rem' }}
+              className="btn btn-xs flex items-center gap-1 font-bold flex-shrink-0"
+              style={{
+                background: 'rgba(239, 68, 68, 0.1)',
+                color: 'var(--danger)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                borderRadius: 9999,
+                padding: '4px 8px',
+                fontSize: '0.72rem',
+              }}
               onClick={() => {
                 hapticTap('medium');
-                if (isSelectionMode) {
-                  setIsSelectionMode(false);
-                  setSelectedLineIds(new Set());
-                } else {
-                  setIsSelectionMode(true);
-                }
+                setShowResetPhaseModal(true);
               }}
-              title="Sélection multiple d'articles"
+              title={`Remettre à zéro les comptages de l'étape active`}
+            >
+              <IconUndo size={11} />
+              <span>Réinit</span>
+            </button>
+          )}
+
+          {/* Stage Sign-off / Valider Button */}
+          {stage === 'preparation' && (
+            <button
+              type="button"
+              className="btn btn-xs btn-primary flex items-center gap-1 font-bold flex-shrink-0"
+              style={{ borderRadius: 9999, padding: '4px 10px', fontSize: '0.74rem' }}
+              onClick={() => {
+                hapticTap('medium');
+                setShowStageSignOffModal(true);
+              }}
+              title="Valider et signer la préparation"
             >
               <IconCheck size={12} />
-              <span className="text-[11px]">{isSelectionMode ? 'Terminer' : 'Sélectionner'}</span>
+              <span>Valider</span>
             </button>
-          </div>
-
-          {/* Right Group: Line Counter, Reset & Primary Validation */}
-          <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
-            <span className="text-xs text-muted font-mono font-bold mr-1">
-              {searchScope === 'all'
-                ? `${displayLines.length}/${entityLines?.length || displayLines.length} lig.`
-                : `${displayLines.length}/${lines.length} lig.`}
-            </span>
-
-            {billStageUnitTotals[stage] > 0 && (
-              <button
-                type="button"
-                className="btn btn-xs flex items-center gap-1 font-bold"
-                style={{
-                  background: 'rgba(239, 68, 68, 0.1)',
-                  color: 'var(--danger)',
-                  border: '1px solid rgba(239, 68, 68, 0.25)',
-                  borderRadius: 9999,
-                  padding: '4px 9px',
-                  fontSize: '0.72rem',
-                }}
-                onClick={() => {
-                  hapticTap('medium');
-                  setShowResetPhaseModal(true);
-                }}
-                title={`Remettre à zéro les comptages de l'étape active`}
-              >
-                <IconUndo size={12} />
-                <span>Réinit</span>
-              </button>
-            )}
-
-            {stage === 'preparation' && (
-              <button
-                type="button"
-                className="btn btn-xs btn-primary flex items-center gap-1 font-bold"
-                style={{ borderRadius: 9999, padding: '4px 12px', fontSize: '0.74rem' }}
-                onClick={() => {
-                  hapticTap('medium');
-                  setShowStageSignOffModal(true);
-                }}
-                title="Valider et signer la préparation"
-              >
-                <IconCheck size={13} />
-                <span>Valider</span>
-              </button>
-            )}
-          </div>
+          )}
         </div>
 
         {/* Picking Circuit Order Banner when sortMode === 'circuit' */}
@@ -5683,11 +5683,10 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             activeOperator={activeOperator}
             onClick={() => setShowOperatorModal(true)}
           />
-          <FullscreenButton className="header-icon-btn" />
         </div>
       </header>
 
-      <div className="app-content" style={{ paddingBottom: 160 }}>
+      <div className="app-content" style={{ paddingBottom: 'max(210px, calc(180px + env(safe-area-inset-bottom, 20px)))' }}>
         {/* Product card */}
         <div className="card">
           <div className="flex items-start gap-3">
@@ -5758,10 +5757,22 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                         Ancien code: {line.historicalReference}
                       </span>
                     )}
+                    {line.packagesRaw && (
+                      <span
+                        style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 600,
+                          padding: '2px 8px',
+                          borderRadius: '9999px',
+                          background: 'var(--bg-surface)',
+                          border: '1px solid var(--glass-border-subtle)',
+                          color: 'var(--text-muted)',
+                        }}
+                      >
+                        Colisage doc: {line.packagesRaw}
+                      </span>
+                    )}
                   </div>
-                  {line.packagesRaw && (
-                    <div className="text-xs text-muted mt-1">Colisage document: {line.packagesRaw}</div>
-                  )}
                 </div>
                 <button
                   className="btn btn-xs btn-ghost flex items-center gap-1 flex-shrink-0"
@@ -5774,42 +5785,41 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             </div>
           </div>
           <div
-            className="flex items-center gap-1.5 mt-2.5 pt-2 flex-wrap"
+            className="flex items-center gap-1.5 mt-2.5 pt-2 overflow-x-auto no-scrollbar flex-nowrap"
             style={{ borderTop: '1px solid var(--glass-border-subtle)' }}
           >
-            <span className="text-[10px] font-bold text-muted uppercase tracking-wider mr-1">Édition :</span>
             <button
               type="button"
-              className="btn btn-xs btn-secondary flex items-center gap-1"
-              style={{ borderRadius: 'var(--radius-pill)', padding: '2px 8px', fontSize: '0.7rem' }}
+              className="btn btn-xs btn-secondary flex items-center gap-1 flex-shrink-0"
+              style={{ borderRadius: 'var(--radius-pill)', padding: '3px 9px', fontSize: '0.72rem' }}
               onClick={() => { setEditingField('reference'); setEditFieldVal(line.reference || ''); }}
             >
-              <IconPencil size={10} /> Réf
+              <IconPencil size={11} /> Réf
             </button>
             <button
               type="button"
-              className="btn btn-xs btn-secondary flex items-center gap-1"
-              style={{ borderRadius: 'var(--radius-pill)', padding: '2px 8px', fontSize: '0.7rem' }}
+              className="btn btn-xs btn-secondary flex items-center gap-1 flex-shrink-0"
+              style={{ borderRadius: 'var(--radius-pill)', padding: '3px 9px', fontSize: '0.72rem' }}
               onClick={() => { setEditingField('ean'); setEditFieldVal(line.ean || ''); }}
             >
-              <IconPencil size={10} /> EAN
+              <IconPencil size={11} /> EAN
             </button>
             <button
               type="button"
-              className="btn btn-xs btn-secondary flex items-center gap-1"
-              style={{ borderRadius: 'var(--radius-pill)', padding: '2px 8px', fontSize: '0.7rem' }}
+              className="btn btn-xs btn-secondary flex items-center gap-1 flex-shrink-0"
+              style={{ borderRadius: 'var(--radius-pill)', padding: '3px 9px', fontSize: '0.72rem' }}
               onClick={() => { setEditingField('page'); setEditFieldVal(line.page != null ? String(line.page) : ''); }}
             >
-              <IconPencil size={10} /> Page
+              <IconPencil size={11} /> Page
             </button>
             <button
               type="button"
-              className="btn btn-xs btn-secondary flex items-center gap-1"
-              style={{ borderRadius: 'var(--radius-pill)', padding: '2px 8px', fontSize: '0.7rem' }}
+              className="btn btn-xs btn-secondary flex items-center gap-1 flex-shrink-0"
+              style={{ borderRadius: 'var(--radius-pill)', padding: '3px 9px', fontSize: '0.72rem' }}
               onClick={() => setShowLegacyModal(true)}
               title="Gérer ou associer un ancien code"
             >
-              <IconTag size={10} /> Ancien code
+              <IconTag size={11} /> Ancien code
             </button>
           </div>
           {disc.isModified && (
@@ -6109,30 +6119,56 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
 
           {/* Stage Progress Mini-Row */}
           <div
-            className="flex items-center justify-between pt-2.5 mt-1 text-xs"
+            className="flex items-center justify-between pt-2.5 mt-1 text-xs gap-2 flex-wrap"
             style={{ borderTop: '1px solid var(--glass-border-subtle)' }}
           >
-            <div className="flex items-center gap-3">
-              <div>
-                <span className="text-muted text-[10px] uppercase font-bold block">Prépa</span>
-                <span className="font-mono font-bold">{showQuantities ? stageTotals.preparation : '•••'}</span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <div
+                className="flex items-center gap-1 px-2 py-0.5"
+                style={{
+                  background: 'var(--bg-surface-elevated)',
+                  borderRadius: 8,
+                  border: '1px solid var(--glass-border-subtle)',
+                }}
+              >
+                <span className="text-muted text-[10px] uppercase font-bold">Prépa:</span>
+                <span className="font-mono font-bold text-xs">{showQuantities ? stageTotals.preparation : '•••'}</span>
               </div>
-              <div style={{ color: 'var(--text-muted)' }}>•</div>
-              <div>
-                <span className="text-muted text-[10px] uppercase font-bold block">Chargé</span>
-                <span className="font-mono font-bold">{showQuantities ? stageTotals.chargement : '•••'}</span>
+              <div
+                className="flex items-center gap-1 px-2 py-0.5"
+                style={{
+                  background: 'var(--bg-surface-elevated)',
+                  borderRadius: 8,
+                  border: '1px solid var(--glass-border-subtle)',
+                }}
+              >
+                <span className="text-muted text-[10px] uppercase font-bold">Chargé:</span>
+                <span className="font-mono font-bold text-xs">{showQuantities ? stageTotals.chargement : '•••'}</span>
               </div>
-              <div style={{ color: 'var(--text-muted)' }}>•</div>
-              <div>
-                <span className="text-muted text-[10px] uppercase font-bold block">Pointé</span>
-                <span className="font-mono font-bold">{showQuantities ? stageTotals.pointage : '•••'}</span>
+              <div
+                className="flex items-center gap-1 px-2 py-0.5"
+                style={{
+                  background: 'var(--bg-surface-elevated)',
+                  borderRadius: 8,
+                  border: '1px solid var(--glass-border-subtle)',
+                }}
+              >
+                <span className="text-muted text-[10px] uppercase font-bold">Pointé:</span>
+                <span className="font-mono font-bold text-xs">{showQuantities ? stageTotals.pointage : '•••'}</span>
               </div>
             </div>
 
             {disc.remaining > 0 && showQuantities && (
-              <div className="text-right">
-                <span className="text-muted text-[10px] uppercase font-bold block">Reste à faire</span>
-                <span className="font-mono font-bold text-warning">{disc.remaining} pcs</span>
+              <div
+                className="flex items-center gap-1 px-2.5 py-0.5 ml-auto"
+                style={{
+                  background: 'rgba(245, 158, 11, 0.12)',
+                  border: '1px solid rgba(245, 158, 11, 0.28)',
+                  borderRadius: 8,
+                }}
+              >
+                <span className="text-warning text-[10px] uppercase font-bold">Reste:</span>
+                <span className="font-mono font-bold text-xs text-warning">{disc.remaining} pcs</span>
               </div>
             )}
           </div>
@@ -6671,47 +6707,96 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             </div>
           )}
 
-          <div className="flex gap-2 items-center mb-2">
-            <span className="text-sm font-medium" style={{ minWidth: 90 }}>Carton :</span>
-            <input
-              id="input-outer-pack"
-              name="outerPackSize"
-              aria-label="Taille colis extérieur"
-              className="input"
-              type="number"
-              inputMode="numeric"
-              placeholder="ex: 2500"
-              value={outerPack ?? ''}
-              onChange={(e) => {
-                const val = e.target.value.trim();
-                if (!val) { setOuterPack(null); return; }
-                const v = parseInt(val, 10);
-                setOuterPack(!isNaN(v) && v > 0 ? v : null);
-              }}
-              style={{ maxWidth: 110, fontFamily: 'var(--font-mono)' }}
-            />
-            <span className="text-xs text-muted">pcs / carton</span>
-          </div>
-          <div className="flex gap-2 items-center">
-            <span className="text-sm font-medium" style={{ minWidth: 90 }}>Sous-pack :</span>
-            <input
-              id="input-inner-pack"
-              name="innerPackSize"
-              aria-label="Taille colis intérieur"
-              className="input"
-              type="number"
-              inputMode="numeric"
-              placeholder="ex: 50"
-              value={innerPack ?? ''}
-              onChange={(e) => {
-                const val = e.target.value.trim();
-                if (!val) { setInnerPack(null); return; }
-                const v = parseInt(val, 10);
-                setInnerPack(!isNaN(v) && v > 0 ? v : null);
-              }}
-              style={{ maxWidth: 110, fontFamily: 'var(--font-mono)' }}
-            />
-            <span className="text-xs text-muted">pcs / boîte ou pot</span>
+          <div
+            className="flex flex-col gap-2.5 p-3.5 mb-2.5"
+            style={{
+              background: 'var(--bg-surface)',
+              borderRadius: 16,
+              border: '1px solid var(--glass-border-subtle)',
+            }}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div
+                  className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(16, 185, 129, 0.12)', color: 'var(--accent)' }}
+                >
+                  <IconBox size={16} />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-bold text-primary truncate">Carton complet</span>
+                  <span className="text-[10px] text-muted truncate">pcs / carton</span>
+                </div>
+              </div>
+              <input
+                id="input-outer-pack"
+                name="outerPackSize"
+                aria-label="Taille colis extérieur"
+                className="input flex-shrink-0"
+                type="number"
+                inputMode="numeric"
+                placeholder="ex: 2500"
+                value={outerPack ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value.trim();
+                  if (!val) { setOuterPack(null); return; }
+                  const v = parseInt(val, 10);
+                  setOuterPack(!isNaN(v) && v > 0 ? v : null);
+                }}
+                style={{
+                  width: 100,
+                  height: 38,
+                  borderRadius: 12,
+                  textAlign: 'center',
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 700,
+                  fontSize: '0.92rem',
+                }}
+              />
+            </div>
+
+            <div
+              className="flex items-center justify-between gap-3 pt-2.5"
+              style={{ borderTop: '1px solid var(--glass-border-subtle)' }}
+            >
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div
+                  className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(59, 130, 246, 0.12)', color: '#3b82f6' }}
+                >
+                  <IconLayers size={16} />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-bold text-primary truncate">Sous-pack / Boîte</span>
+                  <span className="text-[10px] text-muted truncate">pcs / paquet ou pot</span>
+                </div>
+              </div>
+              <input
+                id="input-inner-pack"
+                name="innerPackSize"
+                aria-label="Taille colis intérieur"
+                className="input flex-shrink-0"
+                type="number"
+                inputMode="numeric"
+                placeholder="ex: 50"
+                value={innerPack ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value.trim();
+                  if (!val) { setInnerPack(null); return; }
+                  const v = parseInt(val, 10);
+                  setInnerPack(!isNaN(v) && v > 0 ? v : null);
+                }}
+                style={{
+                  width: 100,
+                  height: 38,
+                  borderRadius: 12,
+                  textAlign: 'center',
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 700,
+                  fontSize: '0.92rem',
+                }}
+              />
+            </div>
           </div>
         </div>
 
@@ -7750,8 +7835,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               {isSubmitting
                 ? 'Enregistré !'
                 : effectiveBatch > 0
-                ? `+${effectiveBatch} pcs • Valider & Retourner`
-                : 'Valider & Retourner'}
+                ? `+${effectiveBatch} pcs • Valider`
+                : 'Valider'}
             </span>
           </button>
 
@@ -9203,17 +9288,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
             className={`seg-btn ${summaryTab === 'cartons' ? 'active' : ''}`}
             onClick={() => setSummaryTab('cartons')}
           >
-            {(() => {
-              const hasLooseUnits = lines.some((l) =>
-                (eventsByLine.get(l.id!) || []).some(
-                  (e) => e.stage === 'preparation' && !e.undone && !e.containerId && e.quantity > 0
-                )
-              );
-              if (containers.length === 0) {
-                return hasLooseUnits ? 'Colis & Fraq (1)' : 'Colis (0)';
-              }
-              return `Colis (${containers.length}${hasLooseUnits ? ' + Fraq' : ''})`;
-            })()}
+            Colis ({containers.length})
           </button>
           <button
             type="button"
@@ -9233,64 +9308,72 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
 
         {/* Stage Scope Selector for Problem Detection (subtle inline pill filter) */}
         {summaryTab === 'problems' && isMultiStage && (
-          <div className="flex items-center justify-between px-2 py-1.5 mb-2.5 text-xs text-muted" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', flexWrap: 'wrap', gap: 6 }}>
-            <span className="font-semibold">Étape analysée :</span>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <div className="flex gap-1">
+          <div
+            className="flex items-center justify-between p-3 mb-3 text-xs"
+            style={{
+              background: 'var(--bg-surface)',
+              borderRadius: 16,
+              border: '1px solid var(--glass-border-subtle)',
+              flexWrap: 'wrap',
+              gap: 8,
+            }}
+          >
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-primary">Étape analysée :</span>
+              <div className="flex gap-1.5 flex-wrap">
                 <button
                   type="button"
                   className={`btn btn-xs ${stageScope === 'preparation' ? 'btn-primary' : 'btn-ghost'}`}
-                  style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+                  style={{ fontSize: '0.72rem', padding: '4px 10px', borderRadius: 9999 }}
                   onClick={() => setStageScope('preparation')}
                 >
-                  Préparation ({getStageProblemLines(lines, eventsByLine, 'preparation').length})
+                  Prépa ({getStageProblemLines(lines, eventsByLine, 'preparation').length})
                 </button>
                 {hasLoadEvents && (
                   <button
                     type="button"
                     className={`btn btn-xs ${stageScope === 'chargement' ? 'btn-primary' : 'btn-ghost'}`}
-                    style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+                    style={{ fontSize: '0.72rem', padding: '4px 10px', borderRadius: 9999 }}
                     onClick={() => setStageScope('chargement')}
                   >
-                    Chargement ({getStageProblemLines(lines, eventsByLine, 'chargement').length})
+                    Charge ({getStageProblemLines(lines, eventsByLine, 'chargement').length})
                   </button>
                 )}
                 {(hasPointEvents || stageScope === 'pointage') && (
                   <button
                     type="button"
                     className={`btn btn-xs ${stageScope === 'pointage' ? 'btn-primary' : 'btn-ghost'}`}
-                    style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+                    style={{ fontSize: '0.72rem', padding: '4px 10px', borderRadius: 9999 }}
                     onClick={() => setStageScope('pointage')}
                   >
                     Pointage ({getStageProblemLines(lines, eventsByLine, 'pointage').length})
                   </button>
                 )}
               </div>
-
-              {summaryStageUnitsCount > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-xs flex items-center gap-1"
-                  style={{
-                    background: 'rgba(239, 68, 68, 0.12)',
-                    color: 'var(--danger)',
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                    borderRadius: 9999,
-                    padding: '2px 8px',
-                    fontSize: '0.68rem',
-                    fontWeight: 700,
-                  }}
-                  onClick={() => {
-                    hapticTap('medium');
-                    setShowSummaryResetModal(true);
-                  }}
-                  title={`Remettre à zéro tous les comptages de l'étape "${stageScope}"`}
-                >
-                  <IconUndo size={11} />
-                  <span>Réinitialiser</span>
-                </button>
-              )}
             </div>
+
+            {summaryStageUnitsCount > 0 && (
+              <button
+                type="button"
+                className="btn btn-xs flex items-center gap-1 font-bold ml-auto"
+                style={{
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  color: 'var(--danger)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: 9999,
+                  padding: '4px 10px',
+                  fontSize: '0.72rem',
+                }}
+                onClick={() => {
+                  hapticTap('medium');
+                  setShowSummaryResetModal(true);
+                }}
+                title={`Remettre à zéro tous les comptages de l'étape "${stageScope}"`}
+              >
+                <IconUndo size={11} />
+                <span>Réinit</span>
+              </button>
+            )}
           </div>
         )}
 

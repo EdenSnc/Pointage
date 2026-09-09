@@ -39,9 +39,6 @@ export function SettingsModal({
   const [autoReturn, setAutoReturn] = useState(
     () => localStorage.getItem('pointage_auto_return_after_add') !== 'false'
   );
-  const [fullscreenDefault, setFullscreenDefault] = useState(
-    () => localStorage.getItem('pointage_fullscreen_default') !== 'false'
-  );
   const [profile, setProfile] = useState(() => detectDeviceProfile());
   const [isA54Active, setIsA54Active] = useState(() => profile.isSamsungA54);
 
@@ -94,28 +91,7 @@ export function SettingsModal({
 
         {/* Ergonomie & Navigation */}
         <div className="card mb-3" style={{ background: 'var(--bg-surface)' }}>
-          <div className="flex justify-between items-center mb-3">
-            <div style={{ flex: 1, paddingRight: 12 }}>
-              <div className="font-bold text-sm">Plein écran au premier contact</div>
-              <div className="text-xs text-muted">
-                Engage automatiquement le mode plein écran dès le premier toucher
-              </div>
-            </div>
-            <button
-              type="button"
-              className={`btn btn-sm ${fullscreenDefault ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => {
-                const next = !fullscreenDefault;
-                setFullscreenDefault(next);
-                localStorage.setItem('pointage_fullscreen_default', String(next));
-              }}
-              style={{ minWidth: 80, fontWeight: 700 }}
-            >
-              {fullscreenDefault ? 'Activé' : 'Désactivé'}
-            </button>
-          </div>
-
-          <div className="flex justify-between items-center pt-2" style={{ borderTop: '1px solid var(--border-subtle, rgba(255,255,255,0.06))' }}>
+          <div className="flex justify-between items-center">
             <div style={{ flex: 1, paddingRight: 12 }}>
               <div className="font-bold text-sm">Retour auto après ajout</div>
               <div className="text-xs text-muted">
