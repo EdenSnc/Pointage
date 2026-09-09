@@ -4091,11 +4091,22 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         )}
 
         {/* Integrated Smart Search with Inline Mode Switcher */}
-        <div className="search-wrapper mb-2.5">
+        {/* Integrated Smart Search with Inline Mode Switcher (Apple Liquid Glass Pill) */}
+        <div className="search-wrapper mb-3">
           <button
             type="button"
-            className="btn btn-xs btn-ghost text-muted"
-            style={{ padding: '0 8px', fontSize: '0.72rem', borderRadius: 9999, flexShrink: 0 }}
+            className="btn btn-xs flex items-center gap-1 flex-shrink-0"
+            style={{
+              padding: '4px 10px',
+              fontSize: '0.76rem',
+              borderRadius: 9999,
+              background: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+              color: 'var(--accent)',
+              fontWeight: 700,
+              minHeight: 32,
+              whiteSpace: 'nowrap',
+            }}
             onClick={() => {
               hapticTap('light');
               const modes: SearchMode[] = ['smart', 'no', 'ref', 'ean', 'name'];
@@ -4104,17 +4115,16 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             }}
             title="Mode de recherche (cliquer pour basculer : Smart, N°, Réf, EAN, Nom)"
           >
-            <span style={{ fontWeight: 700, color: 'var(--accent)' }}>
+            <span>
               {searchMode === 'smart' ? 'Smart' : searchMode === 'no' ? 'N°' : searchMode === 'ref' ? 'Réf' : searchMode === 'name' ? 'Nom' : 'EAN'}
             </span>
-            <span style={{ fontSize: '0.65rem', marginLeft: 2, opacity: 0.7 }}>▾</span>
+            <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>▾</span>
           </button>
           <input
             id="bill-search-input"
             name="searchQuery"
             aria-label="Rechercher"
             className="search-input"
-            style={{ paddingLeft: 4 }}
             placeholder={
               searchMode === 'smart'
                 ? 'Réf, scan, désignation...'
@@ -4157,13 +4167,13 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           )}
         </div>
 
-        {/* Scope Toggle when client has multiple bills — Compact Pill Group */}
+        {/* Scope Toggle when client has multiple bills — Apple Capsule Pills */}
         {entityBills && entityBills.length > 1 && (
-          <div className="flex items-center gap-2 mb-2.5">
+          <div className="flex items-center gap-2 mb-3">
             <button
               type="button"
               className={`btn btn-xs flex-1 ${searchScope === 'current' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '4px 10px' }}
+              style={{ borderRadius: 9999, fontSize: '0.76rem', padding: '6px 14px', whiteSpace: 'nowrap' }}
               onClick={() => setSearchScope('current')}
             >
               <span>Ce bon</span>
@@ -4172,27 +4182,27 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             <button
               type="button"
               className={`btn btn-xs flex-1 ${searchScope === 'all' ? 'btn-primary' : 'btn-secondary'} flex items-center justify-center gap-1`}
-              style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '4px 10px' }}
+              style={{ borderRadius: 9999, fontSize: '0.76rem', padding: '6px 14px', whiteSpace: 'nowrap' }}
               onClick={() => setSearchScope('all')}
             >
               <IconBuilding size={13} />
-              <span>Tous les {entityBills.length} bons</span>
+              <span>Tous ({entityBills.length} BLs)</span>
               <span className="scope-count-badge ml-1.5">{entityLines?.length || 0}</span>
             </button>
           </div>
         )}
 
-        {/* Dernière Saisie Quick Jump Ticker */}
+        {/* Dernière Saisie Quick Jump Ticker — Apple Floating Capsule */}
         {lastValidatedLineInfo && (
           <div
-            className="flex items-center justify-between cursor-pointer mb-2 transition-all"
+            className="flex items-center justify-between cursor-pointer mb-3 transition-all"
             style={{
-              padding: '4px 12px',
+              padding: '6px 14px',
               borderRadius: 9999,
               background: 'rgba(16, 185, 129, 0.12)',
               border: '1px solid rgba(16, 185, 129, 0.28)',
               color: 'var(--text-primary)',
-              fontSize: '0.72rem',
+              fontSize: '0.74rem',
             }}
             onClick={() => {
               hapticTap('light');
@@ -4221,9 +4231,9 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                   color: '#fff',
                   fontWeight: 800,
                   fontSize: '0.62rem',
-                  padding: '1px 6px',
+                  padding: '2px 7px',
                   borderRadius: 9999,
-                  letterSpacing: '0.03em',
+                  letterSpacing: '0.04em',
                   flexShrink: 0,
                 }}
               >
@@ -4232,7 +4242,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               <span className="font-bold flex-shrink-0">N°{lastValidatedLineInfo.line.no}</span>
               <span className="truncate text-muted">• {lastValidatedLineInfo.line.designation}</span>
             </div>
-            <div className="flex items-center gap-1 flex-shrink-0 font-mono font-bold text-accent pl-1.5">
+            <div className="flex items-center gap-1 flex-shrink-0 font-mono font-bold text-accent pl-2">
               <IconClock size={11} />
               <span>{formatValidationTime(lastValidatedLineInfo.time)}</span>
               <span style={{ fontWeight: 800 }}>→</span>
@@ -4240,9 +4250,9 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         )}
 
-        {/* Status Filter Segmented Pills (Tous, À faire, Validés, Problèmes) */}
+        {/* Status Filter Segmented Pills (Tous, À faire, Validés, Problèmes) — Apple Glass Control */}
         <div
-          className="flex items-center gap-1 mb-2.5 p-1"
+          className="flex items-center gap-1 mb-3.5 p-1"
           style={{
             background: 'var(--bg-surface)',
             borderRadius: 9999,
@@ -4252,7 +4262,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <button
             type="button"
             className={`btn btn-xs flex-1 ${filterStatus === 'all' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '5px 8px', whiteSpace: 'nowrap' }}
+            style={{ borderRadius: 9999, fontSize: '0.76rem', padding: '6px 8px', whiteSpace: 'nowrap', minHeight: 34 }}
             onClick={() => {
               hapticTap('light');
               setFilterStatus('all');
@@ -4277,7 +4287,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <button
             type="button"
             className={`btn btn-xs flex-1 ${filterStatus === 'todo' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '5px 8px', whiteSpace: 'nowrap' }}
+            style={{ borderRadius: 9999, fontSize: '0.76rem', padding: '6px 8px', whiteSpace: 'nowrap', minHeight: 34 }}
             onClick={() => {
               hapticTap('light');
               setFilterStatus('todo');
@@ -4302,7 +4312,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <button
             type="button"
             className={`btn btn-xs flex-1 ${filterStatus === 'done' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '5px 8px', whiteSpace: 'nowrap' }}
+            style={{ borderRadius: 9999, fontSize: '0.76rem', padding: '6px 8px', whiteSpace: 'nowrap', minHeight: 34 }}
             onClick={() => {
               hapticTap('light');
               setFilterStatus('done');
@@ -4330,7 +4340,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <button
             type="button"
             className={`btn btn-xs flex-1 ${filterStatus === 'problems' ? 'btn-warning' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '5px 8px', whiteSpace: 'nowrap' }}
+            style={{ borderRadius: 9999, fontSize: '0.76rem', padding: '6px 8px', whiteSpace: 'nowrap', minHeight: 34 }}
             onClick={() => {
               hapticTap('light');
               setFilterStatus(filterStatus === 'problems' ? 'all' : 'problems');
@@ -4359,162 +4369,169 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </button>
         </div>
 
-        {/* Consolidated Ergonomic Controls Row (Strictly 1 Row, Zero Wrapping Clutter) */}
+        {/* Apple Ergonomic Utility Toolbar: Clean Hierarchy & Zero Cognitive Overload */}
         <div
-          className="flex items-center gap-1.5 mb-2.5 overflow-x-auto no-scrollbar flex-nowrap"
+          className="flex items-center justify-between gap-2 mb-3.5 px-0.5 overflow-x-auto no-scrollbar flex-nowrap"
           style={{ WebkitOverflowScrolling: 'touch' }}
         >
-          {/* Sort Mode Button */}
-          <button
-            type="button"
-            className="btn btn-xs btn-secondary flex items-center gap-1 font-semibold flex-shrink-0"
-            style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '4px 9px' }}
-            onClick={() => {
-              hapticTap('light');
-              const modes: LineSortMode[] = ['bl', 'circuit', 'recent', 'family'];
-              const next = modes[(modes.indexOf(sortMode) + 1) % modes.length];
-              handleSetSortMode(next);
-            }}
-            title="Cliquer pour changer l'ordre de tri (BL, Parcours, Récents, A-Z)"
-          >
-            {sortMode === 'bl' ? <IconLayers size={12} /> :
-             sortMode === 'circuit' ? <IconCompass size={12} /> :
-             sortMode === 'recent' ? <IconClock size={12} /> :
-             <IconTag size={12} />}
-            <span>{sortMode === 'bl' ? 'BL' : sortMode === 'circuit' ? 'Parcours' : sortMode === 'recent' ? 'Récents' : 'A-Z'}</span>
-            <span style={{ fontSize: '0.62rem', opacity: 0.6 }}>▾</span>
-          </button>
+          {/* Left Group: Display & View Preferences */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* Sort Mode Button */}
+            <button
+              type="button"
+              className="btn btn-xs btn-secondary flex items-center gap-1 font-semibold flex-shrink-0"
+              style={{ borderRadius: 9999, fontSize: '0.75rem', padding: '5px 11px', height: 32 }}
+              onClick={() => {
+                hapticTap('light');
+                const modes: LineSortMode[] = ['bl', 'circuit', 'recent', 'family'];
+                const next = modes[(modes.indexOf(sortMode) + 1) % modes.length];
+                handleSetSortMode(next);
+              }}
+              title="Changer l'ordre de tri (BL, Parcours, Récents, A-Z)"
+            >
+              {sortMode === 'bl' ? <IconLayers size={12} /> :
+               sortMode === 'circuit' ? <IconCompass size={12} /> :
+               sortMode === 'recent' ? <IconClock size={12} /> :
+               <IconTag size={12} />}
+              <span>{sortMode === 'bl' ? 'BL' : sortMode === 'circuit' ? 'Parcours' : sortMode === 'recent' ? 'Récents' : 'A-Z'}</span>
+              <span style={{ fontSize: '0.62rem', opacity: 0.6 }}>▾</span>
+            </button>
 
-          {/* Integrated Colis Filter Dropdown (Zero duplicate 'Tous', zero extra rows) */}
-          {activeContainers.length > 0 && (
-            <div className="relative flex-shrink-0">
+            {/* Integrated Colis Filter Dropdown */}
+            {activeContainers.length > 0 && (
+              <div className="relative flex-shrink-0">
+                <button
+                  type="button"
+                  className={`btn btn-xs ${selectedContainerFilter !== 'all' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1 font-semibold`}
+                  style={{ borderRadius: 9999, fontSize: '0.75rem', padding: '5px 11px', height: 32 }}
+                >
+                  <IconBox size={12} />
+                  <span>
+                    {selectedContainerFilter === 'all'
+                      ? 'Colis'
+                      : selectedContainerFilter === 'loose'
+                      ? 'Hors colis'
+                      : (activeContainers.find((c) => c.id === selectedContainerFilter)?.label || 'Colis')}
+                  </span>
+                  <span style={{ fontSize: '0.62rem', opacity: 0.6 }}>▾</span>
+                </button>
+                <select
+                  aria-label="Filtrer par colis"
+                  value={String(selectedContainerFilter)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSelectedContainerFilter(v === 'all' ? 'all' : v === 'loose' ? 'loose' : Number(v));
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    opacity: 0,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="all">Tous les colis ({activeLinesPool.length})</option>
+                  {activeContainers.map((c) => {
+                    const st = containerStats.get(c.id!) || { linesCount: 0 };
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {c.type === 'chouala' ? 'Sac' : 'Carton'}: {c.label} ({st.linesCount})
+                      </option>
+                    );
+                  })}
+                  <option value="loose">Hors Colis (Fraq) ({containerStats.get('loose')?.linesCount || 0})</option>
+                </select>
+              </div>
+            )}
+
+            {/* Show/Hide Expected Quantities Toggle */}
+            <button
+              type="button"
+              className={`btn btn-xs ${showQuantities ? 'btn-ghost' : 'btn-secondary'} flex items-center justify-center flex-shrink-0`}
+              style={{ borderRadius: 9999, width: 32, height: 32, padding: 0 }}
+              onClick={() => {
+                hapticTap('light');
+                toggleShowQuantities();
+              }}
+              title={showQuantities ? 'Masquer les quantités attendues' : 'Afficher les quantités attendues'}
+            >
+              {showQuantities ? <IconEye size={13} style={{ color: 'var(--accent)' }} /> : <IconEyeOff size={13} />}
+            </button>
+          </div>
+
+          {/* Right Group: Counter & Primary Actions */}
+          <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
+            {/* Line Counter */}
+            <span className="text-xs text-muted font-mono font-bold whitespace-nowrap px-1">
+              {searchScope === 'all'
+                ? `${displayLines.length}/${entityLines?.length || displayLines.length} lig.`
+                : `${displayLines.length}/${lines.length} lig.`}
+            </span>
+
+            {/* Selection Mode Toggle */}
+            <button
+              type="button"
+              className={`btn btn-xs ${isSelectionMode ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1 flex-shrink-0`}
+              style={{ borderRadius: 9999, padding: '5px 11px', fontSize: '0.74rem', height: 32 }}
+              onClick={() => {
+                hapticTap('medium');
+                if (isSelectionMode) {
+                  setIsSelectionMode(false);
+                  setSelectedLineIds(new Set());
+                } else {
+                  setIsSelectionMode(true);
+                }
+              }}
+              title="Sélection multiple d'articles"
+            >
+              <IconCheck size={11} />
+              <span>{isSelectionMode ? 'Terminer' : 'Sélec'}</span>
+            </button>
+
+            {/* Stage Reset Button */}
+            {billStageUnitTotals[stage] > 0 && (
               <button
                 type="button"
-                className={`btn btn-xs ${selectedContainerFilter !== 'all' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1 font-semibold`}
-                style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '4px 9px' }}
-              >
-                <IconBox size={12} />
-                <span>
-                  {selectedContainerFilter === 'all'
-                    ? 'Colis'
-                    : selectedContainerFilter === 'loose'
-                    ? 'Hors colis'
-                    : (activeContainers.find((c) => c.id === selectedContainerFilter)?.label || 'Colis')}
-                </span>
-                <span style={{ fontSize: '0.62rem', opacity: 0.6 }}>▾</span>
-              </button>
-              <select
-                aria-label="Filtrer par colis"
-                value={String(selectedContainerFilter)}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setSelectedContainerFilter(v === 'all' ? 'all' : v === 'loose' ? 'loose' : Number(v));
-                }}
+                className="btn btn-xs flex items-center gap-1 font-bold flex-shrink-0"
                 style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  opacity: 0,
-                  cursor: 'pointer',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  color: 'var(--danger)',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  borderRadius: 9999,
+                  padding: '5px 10px',
+                  fontSize: '0.72rem',
+                  height: 32,
                 }}
+                onClick={() => {
+                  hapticTap('medium');
+                  setShowResetPhaseModal(true);
+                }}
+                title="Remettre à zéro les comptages de l'étape active"
               >
-                <option value="all">Tous les colis ({activeLinesPool.length})</option>
-                {activeContainers.map((c) => {
-                  const st = containerStats.get(c.id!) || { linesCount: 0 };
-                  return (
-                    <option key={c.id} value={c.id}>
-                      {c.type === 'chouala' ? 'Sac' : 'Carton'}: {c.label} ({st.linesCount})
-                    </option>
-                  );
-                })}
-                <option value="loose">Hors Colis (Fraq) ({containerStats.get('loose')?.linesCount || 0})</option>
-              </select>
-            </div>
-          )}
+                <IconUndo size={11} />
+                <span>Réinit</span>
+              </button>
+            )}
 
-          {/* Show/Hide Expected Quantities Toggle */}
-          <button
-            type="button"
-            className={`btn btn-xs ${showQuantities ? 'btn-ghost' : 'btn-secondary'} flex items-center gap-1 flex-shrink-0`}
-            style={{ borderRadius: 9999, padding: '4px 8px', fontSize: '0.72rem' }}
-            onClick={() => {
-              hapticTap('light');
-              toggleShowQuantities();
-            }}
-            title={showQuantities ? 'Masquer les quantités attendues' : 'Afficher les quantités attendues'}
-          >
-            {showQuantities ? <IconEye size={12} style={{ color: 'var(--accent)' }} /> : <IconEyeOff size={12} />}
-          </button>
-
-          {/* Selection Mode Toggle */}
-          <button
-            type="button"
-            className={`btn btn-xs ${isSelectionMode ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1 flex-shrink-0`}
-            style={{ borderRadius: 9999, padding: '4px 8px', fontSize: '0.72rem' }}
-            onClick={() => {
-              hapticTap('medium');
-              if (isSelectionMode) {
-                setIsSelectionMode(false);
-                setSelectedLineIds(new Set());
-              } else {
-                setIsSelectionMode(true);
-              }
-            }}
-            title="Sélection multiple d'articles"
-          >
-            <IconCheck size={11} />
-            <span>{isSelectionMode ? 'Terminer' : 'Sélec'}</span>
-          </button>
-
-          {/* Line Counter */}
-          <span className="text-xs text-muted font-mono font-bold whitespace-nowrap ml-auto flex-shrink-0">
-            {searchScope === 'all'
-              ? `${displayLines.length}/${entityLines?.length || displayLines.length} lig.`
-              : `${displayLines.length}/${lines.length} lig.`}
-          </span>
-
-          {/* Stage Reset Button */}
-          {billStageUnitTotals[stage] > 0 && (
-            <button
-              type="button"
-              className="btn btn-xs flex items-center gap-1 font-bold flex-shrink-0"
-              style={{
-                background: 'rgba(239, 68, 68, 0.1)',
-                color: 'var(--danger)',
-                border: '1px solid rgba(239, 68, 68, 0.25)',
-                borderRadius: 9999,
-                padding: '4px 8px',
-                fontSize: '0.72rem',
-              }}
-              onClick={() => {
-                hapticTap('medium');
-                setShowResetPhaseModal(true);
-              }}
-              title={`Remettre à zéro les comptages de l'étape active`}
-            >
-              <IconUndo size={11} />
-              <span>Réinit</span>
-            </button>
-          )}
-
-          {/* Stage Sign-off / Valider Button */}
-          {stage === 'preparation' && (
-            <button
-              type="button"
-              className="btn btn-xs btn-primary flex items-center gap-1 font-bold flex-shrink-0"
-              style={{ borderRadius: 9999, padding: '4px 10px', fontSize: '0.74rem' }}
-              onClick={() => {
-                hapticTap('medium');
-                setShowStageSignOffModal(true);
-              }}
-              title="Valider et signer la préparation"
-            >
-              <IconCheck size={12} />
-              <span>Valider</span>
-            </button>
-          )}
+            {/* Stage Sign-off / Valider Button */}
+            {stage === 'preparation' && (
+              <button
+                type="button"
+                className="btn btn-xs btn-primary flex items-center gap-1 font-bold flex-shrink-0"
+                style={{ borderRadius: 9999, padding: '5px 14px', fontSize: '0.76rem', height: 32 }}
+                onClick={() => {
+                  hapticTap('medium');
+                  setShowStageSignOffModal(true);
+                }}
+                title="Valider et signer la préparation"
+              >
+                <IconCheck size={12} />
+                <span>Valider</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Picking Circuit Order Banner when sortMode === 'circuit' */}
@@ -5760,13 +5777,16 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                     {line.packagesRaw && (
                       <span
                         style={{
-                          fontSize: '0.72rem',
+                          fontSize: '0.74rem',
                           fontWeight: 600,
-                          padding: '2px 8px',
+                          padding: '4px 12px',
                           borderRadius: '9999px',
                           background: 'var(--bg-surface)',
                           border: '1px solid var(--glass-border-subtle)',
                           color: 'var(--text-muted)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          marginBottom: 4,
                         }}
                       >
                         Colisage doc: {line.packagesRaw}
@@ -5775,51 +5795,51 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   </div>
                 </div>
                 <button
-                  className="btn btn-xs btn-ghost flex items-center gap-1 flex-shrink-0"
-                  style={{ alignSelf: 'flex-start', padding: '3px 8px', borderRadius: '9999px', whiteSpace: 'nowrap' }}
+                  className="btn btn-xs btn-ghost flex items-center gap-1 flex-shrink-0 font-medium"
+                  style={{ alignSelf: 'flex-start', padding: '4px 10px', borderRadius: '9999px', whiteSpace: 'nowrap', height: 30 }}
                   onClick={() => { setEditingField('designation'); setEditFieldVal(line.designation); }}
                 >
-                  <IconPencil size={11} /> Modifier
+                  <IconPencil size={11} /> <span>Modifier</span>
                 </button>
               </div>
             </div>
           </div>
           <div
-            className="flex items-center gap-1.5 mt-2.5 pt-2 overflow-x-auto no-scrollbar flex-nowrap"
+            className="flex items-center gap-2 mt-3.5 pt-3 mb-2 overflow-x-auto no-scrollbar flex-nowrap"
             style={{ borderTop: '1px solid var(--glass-border-subtle)' }}
           >
             <button
               type="button"
-              className="btn btn-xs btn-secondary flex items-center gap-1 flex-shrink-0"
-              style={{ borderRadius: 'var(--radius-pill)', padding: '3px 9px', fontSize: '0.72rem' }}
+              className="btn btn-xs btn-secondary flex items-center gap-1 flex-shrink-0 font-semibold"
+              style={{ borderRadius: 9999, padding: '5px 12px', fontSize: '0.76rem', height: 32 }}
               onClick={() => { setEditingField('reference'); setEditFieldVal(line.reference || ''); }}
             >
-              <IconPencil size={11} /> Réf
+              <IconPencil size={11} /> <span>Réf</span>
             </button>
             <button
               type="button"
-              className="btn btn-xs btn-secondary flex items-center gap-1 flex-shrink-0"
-              style={{ borderRadius: 'var(--radius-pill)', padding: '3px 9px', fontSize: '0.72rem' }}
+              className="btn btn-xs btn-secondary flex items-center gap-1 flex-shrink-0 font-semibold"
+              style={{ borderRadius: 9999, padding: '5px 12px', fontSize: '0.76rem', height: 32 }}
               onClick={() => { setEditingField('ean'); setEditFieldVal(line.ean || ''); }}
             >
-              <IconPencil size={11} /> EAN
+              <IconPencil size={11} /> <span>EAN</span>
             </button>
             <button
               type="button"
-              className="btn btn-xs btn-secondary flex items-center gap-1 flex-shrink-0"
-              style={{ borderRadius: 'var(--radius-pill)', padding: '3px 9px', fontSize: '0.72rem' }}
+              className="btn btn-xs btn-secondary flex items-center gap-1 flex-shrink-0 font-semibold"
+              style={{ borderRadius: 9999, padding: '5px 12px', fontSize: '0.76rem', height: 32 }}
               onClick={() => { setEditingField('page'); setEditFieldVal(line.page != null ? String(line.page) : ''); }}
             >
-              <IconPencil size={11} /> Page
+              <IconPencil size={11} /> <span>Page</span>
             </button>
             <button
               type="button"
-              className="btn btn-xs btn-secondary flex items-center gap-1 flex-shrink-0"
-              style={{ borderRadius: 'var(--radius-pill)', padding: '3px 9px', fontSize: '0.72rem' }}
+              className="btn btn-xs btn-secondary flex items-center gap-1 flex-shrink-0 font-semibold"
+              style={{ borderRadius: 9999, padding: '5px 12px', fontSize: '0.76rem', height: 32 }}
               onClick={() => setShowLegacyModal(true)}
               title="Gérer ou associer un ancien code"
             >
-              <IconTag size={11} /> Ancien code
+              <IconTag size={11} /> <span>Ancien code</span>
             </button>
           </div>
           {disc.isModified && (
@@ -5841,20 +5861,20 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             </div>
           )}
 
-          {/* Warehouse Location Zone (Hidden in pointage, read-only in chargement, editable in preparation) */}
+          {/* Warehouse Location Zone (Hidden in pointage, clean display in chargement, editable in preparation) */}
           {stage !== 'pointage' && (() => {
             const currentZone = line.warehouseZone || profile?.warehouseZone || null;
             return (
               <div
-                className="flex items-center justify-between mt-3 pt-2.5"
+                className="flex items-center justify-between mt-3.5 pt-3"
                 style={{ borderTop: '1px solid var(--glass-border-subtle)' }}
               >
-                <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
+                <div className="flex items-center gap-2.5" style={{ minWidth: 0 }}>
                   <div
                     style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 10,
+                      width: 32,
+                      height: 32,
+                      borderRadius: 12,
                       background: currentZone ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.05)',
                       display: 'flex',
                       alignItems: 'center',
@@ -5863,7 +5883,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                       flexShrink: 0,
                     }}
                   >
-                    <IconMapPin size={15} />
+                    <IconMapPin size={16} />
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div className="text-[10px] font-bold text-muted uppercase tracking-wider">
@@ -5877,23 +5897,16 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                     </div>
                   </div>
                 </div>
-                {stage === 'preparation' ? (
+                {stage === 'preparation' && (
                   <button
                     type="button"
-                    className="btn btn-xs btn-secondary flex items-center gap-1 flex-shrink-0"
-                    style={{ borderRadius: 9999, padding: '4px 10px' }}
+                    className="btn btn-xs btn-secondary flex items-center gap-1 flex-shrink-0 font-semibold"
+                    style={{ borderRadius: 9999, padding: '5px 12px', fontSize: '0.75rem', height: 32 }}
                     onClick={() => setShowZoneModal(true)}
                   >
                     <IconCompass size={12} />
                     <span>{currentZone ? 'Modifier' : 'Définir'}</span>
                   </button>
-                ) : (
-                  <span
-                    className="badge badge-secondary text-[10px] font-bold"
-                    style={{ borderRadius: 9999, padding: '2px 8px' }}
-                  >
-                    Lecture seule
-                  </span>
                 )}
               </div>
             );
@@ -6117,43 +6130,46 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             );
           })()}
 
-          {/* Stage Progress Mini-Row */}
+          {/* Stage Progress Mini-Row (Apple Liquid Glass Capsules - Generous Padding & Zero Cramping) */}
           <div
-            className="flex items-center justify-between pt-2.5 mt-1 text-xs gap-2 flex-wrap"
+            className="flex items-center justify-between pt-3.5 mt-2 text-xs gap-2 flex-wrap"
             style={{ borderTop: '1px solid var(--glass-border-subtle)' }}
           >
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               <div
-                className="flex items-center gap-1 px-2 py-0.5"
+                className="flex items-center gap-1.5"
                 style={{
-                  background: 'var(--bg-surface-elevated)',
-                  borderRadius: 8,
+                  background: 'var(--bg-surface)',
+                  borderRadius: 12,
                   border: '1px solid var(--glass-border-subtle)',
+                  padding: '6px 14px',
                 }}
               >
-                <span className="text-muted text-[10px] uppercase font-bold">Prépa:</span>
+                <span className="text-muted text-[11px] uppercase font-bold tracking-wider">Prépa:</span>
                 <span className="font-mono font-bold text-xs">{showQuantities ? stageTotals.preparation : '•••'}</span>
               </div>
               <div
-                className="flex items-center gap-1 px-2 py-0.5"
+                className="flex items-center gap-1.5"
                 style={{
-                  background: 'var(--bg-surface-elevated)',
-                  borderRadius: 8,
+                  background: 'var(--bg-surface)',
+                  borderRadius: 12,
                   border: '1px solid var(--glass-border-subtle)',
+                  padding: '6px 14px',
                 }}
               >
-                <span className="text-muted text-[10px] uppercase font-bold">Chargé:</span>
+                <span className="text-muted text-[11px] uppercase font-bold tracking-wider">Chargé:</span>
                 <span className="font-mono font-bold text-xs">{showQuantities ? stageTotals.chargement : '•••'}</span>
               </div>
               <div
-                className="flex items-center gap-1 px-2 py-0.5"
+                className="flex items-center gap-1.5"
                 style={{
-                  background: 'var(--bg-surface-elevated)',
-                  borderRadius: 8,
+                  background: 'var(--bg-surface)',
+                  borderRadius: 12,
                   border: '1px solid var(--glass-border-subtle)',
+                  padding: '6px 14px',
                 }}
               >
-                <span className="text-muted text-[10px] uppercase font-bold">Pointé:</span>
+                <span className="text-muted text-[11px] uppercase font-bold tracking-wider">Pointé:</span>
                 <span className="font-mono font-bold text-xs">{showQuantities ? stageTotals.pointage : '•••'}</span>
               </div>
             </div>
@@ -6533,8 +6549,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
         </div>
 
         {/* Packaging setup */}
-        <div className="card">
-          <div className="flex items-center justify-between" style={{ marginTop: 0, marginBottom: 8 }}>
+        <div className="card" style={{ padding: '22px 22px', borderRadius: 24, marginBottom: 20 }}>
+          <div className="flex items-center justify-between" style={{ marginTop: 0, marginBottom: 12 }}>
             <div className="flex items-center gap-2">
               <div className="section-title" style={{ margin: 0 }}>EMBALLAGES</div>
               <button
@@ -6562,7 +6578,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           {/* Wholesale smallest-unit guideline notice (Collapsible) */}
           {showPackagingHelp && (
             <div
-              className="mb-2.5 p-2.5 animate-fade-in"
+              className="mb-3 p-3 animate-fade-in"
               style={{
                 background: 'rgba(56, 189, 248, 0.08)',
                 border: '1px solid rgba(56, 189, 248, 0.25)',
@@ -6587,7 +6603,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             if (!desc) return null;
             return (
               <div
-                className="mb-2.5 px-2.5 py-1.5 font-mono text-xs"
+                className="mb-3 px-3 py-2 font-mono text-xs"
                 style={{
                   background: 'var(--bg-surface)',
                   borderRadius: '12px',
@@ -6602,11 +6618,18 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           })()}
 
           {/* Multi-Tier Nested Packaging Calculator Toggle */}
-          <div className="mb-2.5">
+          <div className="mb-3.5">
             <button
               type="button"
               className={`btn btn-xs ${showMultiTierCalc ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1.5`}
-              style={{ fontSize: '0.72rem', borderRadius: '9999px', padding: '3px 10px', maxWidth: '100%', whiteSpace: 'normal', textAlign: 'left' }}
+              style={{
+                fontSize: '0.76rem',
+                borderRadius: 9999,
+                padding: '6px 14px',
+                maxWidth: '100%',
+                whiteSpace: 'nowrap',
+                height: 34,
+              }}
               onClick={() => {
                 const next = !showMultiTierCalc;
                 setShowMultiTierCalc(next);
@@ -6618,24 +6641,24 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 }
               }}
             >
-              <IconLayers size={12} style={{ flexShrink: 0 }} />
+              <IconLayers size={13} style={{ flexShrink: 0 }} />
               <span>Carton Composé (pots × pièces)</span>
             </button>
           </div>
 
           {showMultiTierCalc && (
             <div
-              className="p-3 mb-3"
+              className="p-3.5 mb-3.5"
               style={{
                 background: 'var(--bg-surface)',
-                borderRadius: '16px',
+                borderRadius: '18px',
                 border: '1px solid var(--border)',
               }}
             >
-              <div className="text-xs font-bold text-muted mb-2 uppercase tracking-wider">
+              <div className="text-xs font-bold text-muted mb-2.5 uppercase tracking-wider">
                 Carton Composé (ex: 50 pots de 50 stylos)
               </div>
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs text-muted">Boîtes / Pots dans le carton :</span>
                   <input
@@ -6696,7 +6719,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           )}
 
           {profile && (profile.innerPackSize || profile.outerPackSize) && !line.innerPackSize && !line.outerPackSize && (
-            <div className="mb-2 p-2" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)' }}>
+            <div className="mb-3 p-2.5" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)' }}>
               <div className="text-xs text-muted">Mémorisé:</div>
               {profile.outerPackSize && <div className="text-sm">Carton = {profile.outerPackSize} unités</div>}
               {profile.innerPackSize && <div className="text-sm">Sous-pack = {profile.innerPackSize} unités</div>}
@@ -6708,24 +6731,25 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           )}
 
           <div
-            className="flex flex-col gap-2.5 p-3.5 mb-2.5"
+            className="flex flex-col gap-3.5 mb-3.5"
             style={{
               background: 'var(--bg-surface)',
-              borderRadius: 16,
+              borderRadius: 20,
               border: '1px solid var(--glass-border-subtle)',
+              padding: '18px 18px',
             }}
           >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-3 py-1">
+              <div className="flex items-center gap-2.5 flex-1 min-w-0">
                 <div
-                  className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                  className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                   style={{ background: 'rgba(16, 185, 129, 0.12)', color: 'var(--accent)' }}
                 >
-                  <IconBox size={16} />
+                  <IconBox size={18} />
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-bold text-primary truncate">Carton complet</span>
-                  <span className="text-[10px] text-muted truncate">pcs / carton</span>
+                  <span className="text-sm font-bold text-primary truncate">Carton complet</span>
+                  <span className="text-xs text-muted truncate">pcs / carton</span>
                 </div>
               </div>
               <input
@@ -6744,31 +6768,31 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   setOuterPack(!isNaN(v) && v > 0 ? v : null);
                 }}
                 style={{
-                  width: 100,
-                  height: 38,
-                  borderRadius: 12,
+                  width: 104,
+                  height: 42,
+                  borderRadius: 14,
                   textAlign: 'center',
                   fontFamily: 'var(--font-mono)',
                   fontWeight: 700,
-                  fontSize: '0.92rem',
+                  fontSize: '0.96rem',
                 }}
               />
             </div>
 
             <div
-              className="flex items-center justify-between gap-3 pt-2.5"
+              className="flex items-center justify-between gap-3 pt-3.5 py-1"
               style={{ borderTop: '1px solid var(--glass-border-subtle)' }}
             >
-              <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="flex items-center gap-2.5 flex-1 min-w-0">
                 <div
-                  className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                  className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                   style={{ background: 'rgba(59, 130, 246, 0.12)', color: '#3b82f6' }}
                 >
-                  <IconLayers size={16} />
+                  <IconLayers size={18} />
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-bold text-primary truncate">Sous-pack / Boîte</span>
-                  <span className="text-[10px] text-muted truncate">pcs / paquet ou pot</span>
+                  <span className="text-sm font-bold text-primary truncate">Sous-pack / Boîte</span>
+                  <span className="text-xs text-muted truncate">pcs / paquet ou pot</span>
                 </div>
               </div>
               <input
@@ -6787,13 +6811,13 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   setInnerPack(!isNaN(v) && v > 0 ? v : null);
                 }}
                 style={{
-                  width: 100,
-                  height: 38,
-                  borderRadius: 12,
+                  width: 104,
+                  height: 42,
+                  borderRadius: 14,
                   textAlign: 'center',
                   fontFamily: 'var(--font-mono)',
                   fontWeight: 700,
-                  fontSize: '0.92rem',
+                  fontSize: '0.96rem',
                 }}
               />
             </div>
