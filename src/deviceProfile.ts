@@ -115,6 +115,24 @@ export function applyDeviceOptimizations(): DeviceProfile {
     root.setAttribute('data-ram', '8gb');
   }
 
+  // Adaptive Battery Status API: enforce power saving if discharging or low battery
+  if (typeof navigator !== 'undefined' && 'getBattery' in navigator) {
+    try {
+      (navigator as any).getBattery().then((battery: any) => {
+        const updateBatteryState = () => {
+          if (typeof document !== 'undefined' && document.documentElement) {
+            if (!battery.charging && battery.level <= 0.30) {
+              document.documentElement.setAttribute('data-battery-saver', 'true');
+            }
+          }
+        };
+        updateBatteryState();
+        battery.addEventListener('levelchange', updateBatteryState);
+        battery.addEventListener('chargingchange', updateBatteryState);
+      }).catch(() => {});
+    } catch {}
+  }
+
   return profile;
 }
 

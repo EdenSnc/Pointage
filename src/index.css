@@ -2960,7 +2960,8 @@ select,
    Eliminates GPU blur shader convolutions for all-day 8-12h shift endurance */
 [data-screen="amoled"][data-theme="dark"],
 [data-battery-saver="true"][data-theme="dark"],
-[data-device="samsung-a54"][data-theme="dark"] {
+[data-device="samsung-a54"][data-theme="dark"],
+[data-device*="samsung"][data-theme="dark"] {
   --bg-deep: #000000;
   --bg-canvas: #000000;
   --bg-card: rgba(10, 11, 14, 0.98);
@@ -2971,6 +2972,29 @@ select,
   --glass-blur: none;
 }
 
+[data-screen="amoled"][data-theme="dark"] body,
+[data-battery-saver="true"][data-theme="dark"] body,
+[data-device="samsung-a54"][data-theme="dark"] body,
+[data-device*="samsung"][data-theme="dark"] body {
+  background-color: #000000 !important;
+  background-image: none !important;
+  background-attachment: scroll !important;
+}
+
+[data-screen="amoled"][data-theme="dark"] #root,
+[data-battery-saver="true"][data-theme="dark"] #root,
+[data-device="samsung-a54"][data-theme="dark"] #root,
+[data-device*="samsung"][data-theme="dark"] #root {
+  background-color: #000000 !important;
+}
+
+[data-screen="amoled"][data-theme="dark"] #root::before,
+[data-battery-saver="true"][data-theme="dark"] #root::before,
+[data-device="samsung-a54"][data-theme="dark"] #root::before,
+[data-device*="samsung"][data-theme="dark"] #root::before {
+  display: none !important;
+}
+
 /* Super AMOLED Pitch-Black Headers & Modals — DARK THEME ONLY */
 [data-theme="dark"][data-battery-saver="true"] .app-header,
 [data-theme="dark"][data-device="samsung-a54"] .app-header,
@@ -2978,6 +3002,16 @@ select,
   background: #000000 !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+}
+
+/* Eliminate costly Gaussian blur passes on bottom dock in AMOLED/battery saver */
+[data-theme="dark"][data-battery-saver="true"] .bottom-bar,
+[data-theme="dark"][data-device="samsung-a54"] .bottom-bar,
+[data-theme="dark"][data-screen="amoled"] .bottom-bar {
+  background: rgba(10, 11, 14, 0.96) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
 }
 
 [data-theme="dark"][data-battery-saver="true"] .modal-backdrop,

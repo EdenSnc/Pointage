@@ -28,9 +28,9 @@ const updateSW = registerSW({
       // 1. Check for update immediately on launch
       registration.update().catch(() => {});
 
-      // 2. Passive 15-minute background check (only when app is actively visible) to conserve all-day battery
+      // 2. Passive 15-minute background check (only when app is actively visible and online) to conserve all-day battery
       setInterval(() => {
-        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible' && navigator.onLine) {
           registration.update().catch(() => {});
         }
       }, 15 * 60 * 1000);

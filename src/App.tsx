@@ -806,8 +806,23 @@ function QRSyncModal({
 
     startScanner();
 
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        if (cameraStreamRef.current) {
+          cameraStreamRef.current.getTracks().forEach(t => t.stop());
+          cameraStreamRef.current = null;
+        }
+      } else {
+        if (!cancelled && isCameraScanning) {
+          startScanner();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (cameraStreamRef.current) {
         cameraStreamRef.current.getTracks().forEach(t => t.stop());
         cameraStreamRef.current = null;
@@ -8180,8 +8195,24 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
 
     startScanning();
 
+    // Auto-release camera stream when phone is pocketed/locked to conserve battery
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(t => t.stop());
+          streamRef.current = null;
+        }
+      } else {
+        if (!cancelled && scanning) {
+          startScanning();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
         streamRef.current = null;
