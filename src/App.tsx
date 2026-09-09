@@ -108,6 +108,7 @@ import {
   IconLayers,
   IconHash,
   IconHelp,
+  IconInfo,
   IconCamera,
   IconKey,
   IconEye,
@@ -5739,12 +5740,12 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               title="Quantité déjà comptée pour cette étape"
             >
               {stageTotal === 0
-                ? `0 / ${line.orderedQty} pcs`
+                ? `0 / ${line.orderedQty ?? 0} pcs`
                 : disc.isExact
-                ? `${stageTotal} / ${line.orderedQty} pcs`
+                ? `${stageTotal} / ${line.orderedQty ?? 0} pcs`
                 : disc.isOver
-                ? `+${disc.over} excédent (${stageTotal}/${line.orderedQty})`
-                : `${stageTotal} / ${line.orderedQty} pcs`}
+                ? `+${disc.over} excédent (${stageTotal}/${line.orderedQty ?? 0})`
+                : `${stageTotal} / ${line.orderedQty ?? 0} pcs`}
             </span>
           </div>
           <div className="text-xs text-muted truncate flex items-center gap-1.5">
@@ -7517,7 +7518,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 <div key={e.id} className={`flex justify-between text-sm ${e.undone ? 'text-muted' : ''}`}
                   style={{ textDecoration: e.undone ? 'line-through' : 'none', padding: '3px 0' }}>
                   <span>
-                    {new Date(e.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    {e.createdAt && !isNaN(new Date(e.createdAt).getTime())
+                      ? new Date(e.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                      : ''}
                     {e.outcome && ` (${e.outcome})`}
                   </span>
                   <span className="font-bold">{e.undone ? '-' : '+'}{e.quantity}</span>
