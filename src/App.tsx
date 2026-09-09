@@ -1254,33 +1254,47 @@ function HomeScreen({
 
         {/* Global Search across all bills and products */}
         {bills.length > 0 && (
-          <div className="search-wrapper mb-3" style={{ position: 'relative' }}>
-            <input
-              id="home-global-search-input"
-              className="search-input"
-              style={{ height: 40, fontSize: '0.84rem', paddingLeft: 14 }}
-              placeholder="Rechercher un article, réf, code-barres ou N° BL..."
-              value={homeSearch}
-              onChange={(e) => setHomeSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.currentTarget.blur();
-                }
-              }}
-            />
-            {homeSearch ? (
+          <div className="flex items-center gap-2 mb-3">
+            <div className="search-wrapper flex-1" style={{ position: 'relative', minWidth: 0 }}>
+              <input
+                id="home-global-search-input"
+                className="search-input"
+                style={{ height: 38, fontSize: '0.84rem', paddingLeft: 14 }}
+                placeholder="Rechercher un article, réf, code-barres ou N° BL..."
+                value={homeSearch}
+                onChange={(e) => setHomeSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur();
+                  }
+                }}
+              />
+              {homeSearch ? (
+                <button
+                  type="button"
+                  className="search-clear-btn"
+                  onClick={() => setHomeSearch('')}
+                  aria-label="Effacer"
+                >
+                  <IconX size={15} />
+                </button>
+              ) : (
+                <span style={{ position: 'absolute', right: 12, top: 11, color: 'var(--text-muted)', pointerEvents: 'none' }}>
+                  <IconSearch size={16} />
+                </span>
+              )}
+            </div>
+            {billFilter === 'active' && !homeSearch && (
               <button
                 type="button"
-                className="search-clear-btn"
-                onClick={() => setHomeSearch('')}
-                aria-label="Effacer"
+                className="btn btn-sm btn-secondary flex items-center gap-1.5 flex-shrink-0"
+                style={{ height: 38, borderRadius: 'var(--radius-pill)', padding: '0 12px', fontSize: '0.78rem', fontWeight: 600 }}
+                onClick={() => setShowManualBillModal(true)}
+                title="Créer un nouveau bon manuellement"
               >
-                <IconX size={15} />
+                <IconPlus size={15} />
+                <span>Nouveau BL</span>
               </button>
-            ) : (
-              <span style={{ position: 'absolute', right: 12, top: 12, color: 'var(--text-muted)', pointerEvents: 'none' }}>
-                <IconSearch size={16} />
-              </span>
             )}
           </div>
         )}
@@ -1427,18 +1441,6 @@ function HomeScreen({
           </div>
         ) : (
           <>
-            {billFilter === 'active' && (
-              <div className="flex justify-end mb-2">
-                <button
-                  className="btn btn-xs btn-secondary flex items-center gap-1"
-                  onClick={() => setShowManualBillModal(true)}
-                  title="Créer un nouveau bon"
-                >
-                  <IconPlus size={14} /> Nouveau BL
-                </button>
-              </div>
-            )}
-
             {clientGroups.map(group => {
               if (group.bills.length === 1) {
                 return (
@@ -3934,66 +3936,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               }}
             />
 
-            {/* Stage Reset & Quick Audit Action inside expanded overview */}
-            {billStageUnitTotals[stage] > 0 && (
-              <div
-                className="flex items-center justify-between p-3 mt-2"
-                style={{
-                  background: 'var(--bg-card)',
-                  borderRadius: 20,
-                  border: '1px solid rgba(239, 68, 68, 0.25)',
-                  boxShadow: 'var(--glass-shadow)',
-                }}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: '50%',
-                      background: 'rgba(239, 68, 68, 0.12)',
-                      color: 'var(--danger)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <IconUndo size={15} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold truncate" style={{ color: 'var(--text-primary)' }}>
-                      Remise à zéro : {stage === 'preparation' ? 'Préparation' : stage === 'chargement' ? 'Chargement' : 'Pointage'}
-                    </div>
-                    <div className="text-[11px] text-muted truncate">
-                      {billStageUnitTotals[stage]} pièces comptées • {currentStageLinesCount} articles traités
-                    </div>
-                  </div>
-                </div>
 
-                <button
-                  type="button"
-                  className="btn btn-xs flex items-center gap-1.5 font-bold"
-                  style={{
-                    background: 'rgba(239, 68, 68, 0.15)',
-                    color: 'var(--danger)',
-                    border: '1px solid rgba(239, 68, 68, 0.35)',
-                    borderRadius: 9999,
-                    padding: '5px 12px',
-                    fontSize: '0.74rem',
-                    flexShrink: 0,
-                  }}
-                  onClick={() => {
-                    hapticTap('medium');
-                    setShowResetPhaseModal(true);
-                  }}
-                  title={`Remettre à zéro tous les comptages de l'étape "${stage === 'preparation' ? 'Préparation' : stage === 'chargement' ? 'Chargement' : 'Pointage'}"`}
-                >
-                  <IconUndo size={13} />
-                  <span>Réinitialiser</span>
-                </button>
-              </div>
-            )}
 
             {/* Visual Truck Loading & Dock Staging Diagram */}
             {(stage === 'chargement' || (trips && trips.length > 0)) && (
@@ -4133,43 +4076,42 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         )}
 
-        {/* Search mode — Compact Pill Control */}
-        <div
-          className="seg-control-fit mb-2"
-          style={{
-            borderRadius: 9999,
-            padding: '2px 3px',
-            gap: 2,
-          }}
-        >
-          {(['smart', 'no', 'ref', 'ean', 'name'] as SearchMode[]).map((m) => (
-            <button
-              key={m}
-              className={`seg-btn ${searchMode === m ? 'active' : ''}`}
-              style={{
-                borderRadius: 9999,
-                padding: '4px 6px',
-                fontSize: '0.72rem',
-                fontWeight: searchMode === m ? 700 : 500,
-              }}
-              onClick={() => {
-                hapticTap('light');
-                setSearchMode(m);
-              }}
-            >
-              {m === 'smart' ? 'Smart' : m === 'no' ? 'N°' : m === 'ref' ? 'Réf' : m === 'name' ? 'Nom' : 'EAN'}
-            </button>
-          ))}
-        </div>
-
-        {/* Search input with persistence and clear button */}
-        <div className="search-wrapper">
+        {/* Integrated Smart Search with Inline Mode Switcher */}
+        <div className="search-wrapper mb-2.5">
+          <button
+            type="button"
+            className="btn btn-xs btn-ghost text-muted"
+            style={{ padding: '0 8px', fontSize: '0.72rem', borderRadius: 9999, flexShrink: 0 }}
+            onClick={() => {
+              hapticTap('light');
+              const modes: SearchMode[] = ['smart', 'no', 'ref', 'ean', 'name'];
+              const next = modes[(modes.indexOf(searchMode) + 1) % modes.length];
+              setSearchMode(next);
+            }}
+            title="Mode de recherche (cliquer pour basculer : Smart, N°, Réf, EAN, Nom)"
+          >
+            <span style={{ fontWeight: 700, color: 'var(--accent)' }}>
+              {searchMode === 'smart' ? 'Smart' : searchMode === 'no' ? 'N°' : searchMode === 'ref' ? 'Réf' : searchMode === 'name' ? 'Nom' : 'EAN'}
+            </span>
+            <span style={{ fontSize: '0.65rem', marginLeft: 2, opacity: 0.7 }}>▾</span>
+          </button>
           <input
             id="bill-search-input"
             name="searchQuery"
             aria-label="Rechercher"
             className="search-input"
-            placeholder={searchMode === 'no' ? 'Entrer N°...' : 'Rechercher (réf, code-barres partiel)...'}
+            style={{ paddingLeft: 4 }}
+            placeholder={
+              searchMode === 'smart'
+                ? 'Recherche (Réf, scan, N°, désignation)...'
+                : searchMode === 'no'
+                ? 'Numéro de ligne...'
+                : searchMode === 'ref'
+                ? 'Référence...'
+                : searchMode === 'ean'
+                ? 'Code-barres EAN...'
+                : 'Désignation article...'
+            }
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
             onKeyDown={(e) => {
@@ -4201,25 +4143,27 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           )}
         </div>
 
-        {/* Scope Toggle when client has multiple bills */}
+        {/* Scope Toggle when client has multiple bills — Compact Pill Group */}
         {entityBills && entityBills.length > 1 && (
-          <div className="scope-segmented-bar">
+          <div className="flex items-center gap-2 mb-2.5">
             <button
               type="button"
-              className={`scope-seg-btn ${searchScope === 'current' ? 'active' : ''}`}
+              className={`btn btn-xs flex-1 ${searchScope === 'current' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '4px 10px' }}
               onClick={() => setSearchScope('current')}
             >
               <span>Ce bon</span>
-              <span className="scope-count-badge">{lines.length}</span>
+              <span className="scope-count-badge ml-1.5">{lines.length}</span>
             </button>
             <button
               type="button"
-              className={`scope-seg-btn ${searchScope === 'all' ? 'active' : ''}`}
+              className={`btn btn-xs flex-1 ${searchScope === 'all' ? 'btn-primary' : 'btn-secondary'} flex items-center justify-center gap-1`}
+              style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '4px 10px' }}
               onClick={() => setSearchScope('all')}
             >
-              <IconBuilding size={14} />
+              <IconBuilding size={13} />
               <span>Tous les {entityBills.length} bons</span>
-              <span className="scope-count-badge">{entityLines?.length || 0}</span>
+              <span className="scope-count-badge ml-1.5">{entityLines?.length || 0}</span>
             </button>
           </div>
         )}
@@ -4451,83 +4395,34 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </button>
         </div>
 
-        {/* Sort & Lines Metric Row */}
-        <div className="flex items-center justify-between mb-2">
-          {/* Sort Selector Segmented Buttons */}
-          <div
-            className="flex items-center p-0.5"
-            style={{
-              background: 'var(--bg-surface)',
-              borderRadius: 9999,
-              border: '1px solid var(--glass-border-subtle)',
-            }}
-          >
+        {/* Consolidated Ergonomic Controls Row (Miller's Law 7±2 & Hicks Law) */}
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          {/* Left Group: Quick Sort Cycle, Visibility & Selection */}
+          <div className="flex items-center gap-1.5 flex-wrap">
             <button
               type="button"
-              className={`btn btn-xs ${sortMode === 'bl' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 10px' }}
+              className="btn btn-xs btn-secondary flex items-center gap-1 font-semibold"
+              style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '4px 10px' }}
               onClick={() => {
                 hapticTap('light');
-                handleSetSortMode('bl');
+                const modes: LineSortMode[] = ['bl', 'circuit', 'recent', 'family'];
+                const next = modes[(modes.indexOf(sortMode) + 1) % modes.length];
+                handleSetSortMode(next);
               }}
-              title="Trier selon l'ordre initial du BL papier"
+              title="Cliquer pour changer l'ordre de tri (BL, Parcours, Récents, A-Z)"
             >
-              Ordre BL
+              {sortMode === 'bl' ? <IconLayers size={12} /> :
+               sortMode === 'circuit' ? <IconCompass size={12} /> :
+               sortMode === 'recent' ? <IconClock size={12} /> :
+               <IconTag size={12} />}
+              <span>{sortMode === 'bl' ? 'Ordre BL' : sortMode === 'circuit' ? 'Parcours' : sortMode === 'recent' ? 'Récents' : 'A-Z'}</span>
+              <span style={{ fontSize: '0.65rem', opacity: 0.6 }}>▾</span>
             </button>
-            <button
-              type="button"
-              className={`btn btn-xs ${sortMode === 'circuit' ? 'btn-primary' : 'btn-ghost'} flex items-center gap-1`}
-              style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 10px' }}
-              onClick={() => {
-                hapticTap('light');
-                handleSetSortMode('circuit');
-              }}
-              title="Trier par parcours entrepôt (Chambre puis Couloirs)"
-            >
-              <IconCompass size={12} />
-              <span>Parcours</span>
-            </button>
-            <button
-              type="button"
-              className={`btn btn-xs ${sortMode === 'recent' ? 'btn-primary' : 'btn-ghost'} flex items-center gap-1`}
-              style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 10px' }}
-              onClick={() => {
-                hapticTap('light');
-                handleSetSortMode('recent');
-              }}
-              title="Trier par récence de validation"
-            >
-              <IconClock size={12} />
-              <span>Récents</span>
-            </button>
-            <button
-              type="button"
-              className={`btn btn-xs ${sortMode === 'family' ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 10px' }}
-              onClick={() => {
-                hapticTap('light');
-                handleSetSortMode('family');
-              }}
-              title="Trier par désignation (A-Z)"
-            >
-              A-Z
-            </button>
-          </div>
 
-          <span className="text-xs text-muted font-mono font-semibold" style={{ alignSelf: 'center' }}>
-            {searchScope === 'all'
-              ? `${displayLines.length}/${entityLines?.length || displayLines.length} lignes`
-              : `${displayLines.length}/${lines.length} lignes`}
-          </span>
-        </div>
-
-        {/* Action Controls Row */}
-        <div className="flex items-center justify-between mb-2.5 gap-2">
-          <div className="flex items-center gap-1.5">
             <button
               type="button"
               className={`btn btn-xs ${showQuantities ? 'btn-ghost' : 'btn-secondary'} flex items-center gap-1`}
-              style={{ borderRadius: 9999, padding: '4px 10px', fontSize: '0.72rem' }}
+              style={{ borderRadius: 9999, padding: '4px 9px', fontSize: '0.72rem' }}
               onClick={() => {
                 hapticTap('light');
                 toggleShowQuantities();
@@ -4535,13 +4430,13 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               title={showQuantities ? 'Masquer les quantités attendues' : 'Afficher les quantités attendues'}
             >
               {showQuantities ? <IconEye size={13} style={{ color: 'var(--accent)' }} /> : <IconEyeOff size={13} />}
-              <span>{showQuantities ? 'Visibles' : 'Masquées'}</span>
+              <span className="text-[11px]">{showQuantities ? 'Visibles' : 'Masquées'}</span>
             </button>
 
             <button
               type="button"
               className={`btn btn-xs ${isSelectionMode ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
-              style={{ borderRadius: 9999, padding: '4px 10px', fontSize: '0.72rem' }}
+              style={{ borderRadius: 9999, padding: '4px 9px', fontSize: '0.72rem' }}
               onClick={() => {
                 hapticTap('medium');
                 if (isSelectionMode) {
@@ -4554,11 +4449,18 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               title="Sélection multiple d'articles"
             >
               <IconCheck size={12} />
-              <span>{isSelectionMode ? 'Terminer' : 'Sélectionner'}</span>
+              <span className="text-[11px]">{isSelectionMode ? 'Terminer' : 'Sélectionner'}</span>
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          {/* Right Group: Line Counter, Reset & Primary Validation */}
+          <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
+            <span className="text-xs text-muted font-mono font-bold mr-1">
+              {searchScope === 'all'
+                ? `${displayLines.length}/${entityLines?.length || displayLines.length} lig.`
+                : `${displayLines.length}/${lines.length} lig.`}
+            </span>
+
             {billStageUnitTotals[stage] > 0 && (
               <button
                 type="button"
@@ -4568,14 +4470,14 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                   color: 'var(--danger)',
                   border: '1px solid rgba(239, 68, 68, 0.25)',
                   borderRadius: 9999,
-                  padding: '4px 10px',
+                  padding: '4px 9px',
                   fontSize: '0.72rem',
                 }}
                 onClick={() => {
                   hapticTap('medium');
                   setShowResetPhaseModal(true);
                 }}
-                title={`Remettre à zéro tous les comptages de l'étape "${stage === 'preparation' ? 'Préparation' : stage === 'chargement' ? 'Chargement' : 'Pointage'}"`}
+                title={`Remettre à zéro les comptages de l'étape active`}
               >
                 <IconUndo size={12} />
                 <span>Réinit</span>
@@ -4594,7 +4496,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                 title="Valider et signer la préparation"
               >
                 <IconCheck size={13} />
-                <span>Valider Prépa</span>
+                <span>Valider</span>
               </button>
             )}
           </div>
@@ -5398,6 +5300,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const [showZoneModal, setShowZoneModal] = useState(false);
   const [showLegacyModal, setShowLegacyModal] = useState(false);
   const [replenishQtyInput, setReplenishQtyInput] = useState<number>(1);
+  const [showPackagingHelp, setShowPackagingHelp] = useState(false);
 
   const handleSelectOperator = (op: string) => {
     setActiveOperator(op);
@@ -5855,18 +5758,43 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               </div>
             </div>
           </div>
-          <div className="flex gap-2 mt-2 flex-wrap">
-            <button className="btn btn-xs btn-ghost flex items-center gap-1" onClick={() => { setEditingField('reference'); setEditFieldVal(line.reference || ''); }}>
-              <IconPencil size={11} /> Réf
+          <div
+            className="flex items-center gap-1.5 mt-2.5 pt-2 flex-wrap"
+            style={{ borderTop: '1px solid var(--glass-border-subtle)' }}
+          >
+            <span className="text-[10px] font-bold text-muted uppercase tracking-wider mr-1">Édition :</span>
+            <button
+              type="button"
+              className="btn btn-xs btn-secondary flex items-center gap-1"
+              style={{ borderRadius: 'var(--radius-pill)', padding: '2px 8px', fontSize: '0.7rem' }}
+              onClick={() => { setEditingField('reference'); setEditFieldVal(line.reference || ''); }}
+            >
+              <IconPencil size={10} /> Réf
             </button>
-            <button className="btn btn-xs btn-ghost flex items-center gap-1" onClick={() => { setEditingField('ean'); setEditFieldVal(line.ean || ''); }}>
-              <IconPencil size={11} /> EAN
+            <button
+              type="button"
+              className="btn btn-xs btn-secondary flex items-center gap-1"
+              style={{ borderRadius: 'var(--radius-pill)', padding: '2px 8px', fontSize: '0.7rem' }}
+              onClick={() => { setEditingField('ean'); setEditFieldVal(line.ean || ''); }}
+            >
+              <IconPencil size={10} /> EAN
             </button>
-            <button className="btn btn-xs btn-ghost flex items-center gap-1" onClick={() => { setEditingField('page'); setEditFieldVal(line.page != null ? String(line.page) : ''); }}>
-              <IconPencil size={11} /> Page
+            <button
+              type="button"
+              className="btn btn-xs btn-secondary flex items-center gap-1"
+              style={{ borderRadius: 'var(--radius-pill)', padding: '2px 8px', fontSize: '0.7rem' }}
+              onClick={() => { setEditingField('page'); setEditFieldVal(line.page != null ? String(line.page) : ''); }}
+            >
+              <IconPencil size={10} /> Page
             </button>
-            <button className="btn btn-xs btn-ghost flex items-center gap-1" onClick={() => setShowLegacyModal(true)} title="Gérer ou associer un ancien code">
-              <IconTag size={11} /> Ancien code
+            <button
+              type="button"
+              className="btn btn-xs btn-secondary flex items-center gap-1"
+              style={{ borderRadius: 'var(--radius-pill)', padding: '2px 8px', fontSize: '0.7rem' }}
+              onClick={() => setShowLegacyModal(true)}
+              title="Gérer ou associer un ancien code"
+            >
+              <IconTag size={10} /> Ancien code
             </button>
           </div>
           {disc.isModified && (
@@ -5947,53 +5875,210 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           })()}
         </div>
 
-        {/* Expected & Stage Totals */}
-        <div className="card">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-xs font-bold text-muted uppercase tracking-wider">Quantité Attendue</span>
+        {/* Master Counting Hero Card (Apple Glass, Minimalist & Anti-Cramming) */}
+        <div className="card" style={{ padding: '18px 20px', marginBottom: '16px' }}>
+          {/* Card Top Row: Stage & Status Badges */}
+          <div className="flex justify-between items-center mb-3 gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-muted uppercase tracking-wider">
+                {stage === 'preparation' ? 'Préparation' : stage === 'chargement' ? 'Chargement' : 'Pointage'}
+              </span>
+              {disc.isExact && stageTotal > 0 && (
+                <span className="badge badge-exact flex items-center gap-1 font-bold">
+                  <IconCheck size={11} /> EXACT
+                </span>
+              )}
+              {disc.isShort && stageTotal > 0 && (
+                <span className="badge badge-short font-bold">
+                  {showQuantities ? `${disc.remaining} MANQUANT${disc.remaining > 1 ? 'S' : ''}` : 'MANQUANTS'}
+                </span>
+              )}
+              {disc.isOver && (
+                <span className="badge badge-over font-bold">
+                  {showQuantities ? `+${disc.over} EXCÉDENT` : 'EXCÉDENT'}
+                </span>
+              )}
+              {stageTotal === 0 && (
+                <span className="badge text-[11px] font-bold" style={{ background: 'var(--bg-surface)' }}>
+                  Non compté
+                </span>
+              )}
+            </div>
+
             <div className="flex items-center gap-1.5">
+              {events.filter(e => e.stage === stage && !e.undone).length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-xs btn-ghost text-muted flex items-center gap-1"
+                  onClick={handleUndo}
+                  style={{ fontSize: '0.7rem', padding: '3px 8px' }}
+                  title="Annuler la toute dernière saisie"
+                >
+                  <IconUndo size={11} /> Annuler
+                </button>
+              )}
+              {stageTotal > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-xs btn-ghost text-danger flex items-center gap-1"
+                  onClick={handleResetCount}
+                  style={{ fontSize: '0.7rem', padding: '3px 8px' }}
+                  title="Remettre le comptage de cet article à zéro"
+                >
+                  <IconTrash size={11} /> Réinit
+                </button>
+              )}
               <button
                 type="button"
                 className={`btn btn-xs ${showQuantities ? 'btn-ghost' : 'btn-secondary'} flex items-center gap-1`}
                 onClick={toggleShowQuantities}
-                style={{ fontSize: '0.72rem', padding: '3px 8px', borderRadius: 'var(--radius-pill)' }}
+                style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: 9999 }}
                 title="Afficher/masquer les quantités attendues"
               >
-                {showQuantities ? <IconEye size={13} /> : <IconEyeOff size={13} />}
+                {showQuantities ? <IconEye size={12} /> : <IconEyeOff size={12} />}
                 <span>{showQuantities ? 'Visible' : 'Masqué'}</span>
-              </button>
-              <button
-                type="button"
-                className="btn btn-xs btn-secondary flex items-center gap-1"
-                style={{ fontSize: '0.72rem', padding: '3px 8px', borderRadius: 'var(--radius-pill)' }}
-                onClick={() => {
-                  setEditingQty(true);
-                  setEditQtyVal(String(line.orderedQty));
-                }}
-              >
-                <IconPencil size={12} /> Modifier
               </button>
             </div>
           </div>
 
-          <div className="qty-big qty-expected" style={{ fontSize: '2.4rem', lineHeight: 1.1, marginBottom: 4 }}>
-            {showQuantities ? `${line.orderedQty} pcs` : '•••'}
+          {/* Primary Numbers: Compté (Left) & Attendu (Right) */}
+          <div className="flex justify-between items-end mb-3">
+            <div>
+              <div className="text-xs text-muted flex items-center gap-1 font-bold">
+                <span>COMPTÉ</span>
+                <button
+                  type="button"
+                  className="btn btn-xs btn-ghost"
+                  style={{ padding: '0 4px', fontSize: '0.68rem', color: 'var(--accent)' }}
+                  onClick={() => {
+                    setEditCountVal(String(stageTotal));
+                    setEditingCount(true);
+                  }}
+                  title="Corriger directement la quantité comptée"
+                >
+                  <IconPencil size={11} /> Corriger
+                </button>
+              </div>
+              <div
+                className="qty-big"
+                style={{
+                  fontSize: '2.6rem',
+                  lineHeight: 1.1,
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 800,
+                  color: disc.isExact && stageTotal > 0 ? 'var(--success)' :
+                         disc.isOver ? 'var(--over)' :
+                         disc.isShort && stageTotal > 0 ? 'var(--warning)' : 'var(--accent)'
+                }}
+              >
+                {stageTotal} <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-muted)' }}>pcs</span>
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'right' }}>
+              <div className="text-xs text-muted flex items-center justify-end gap-1 font-bold">
+                <span>ATTENDU</span>
+                <button
+                  type="button"
+                  className="btn btn-xs btn-ghost text-muted"
+                  style={{ padding: '0 4px', fontSize: '0.68rem' }}
+                  onClick={() => {
+                    setEditingQty(true);
+                    setEditQtyVal(String(line.orderedQty));
+                  }}
+                  title="Modifier la quantité commandée officielle"
+                >
+                  <IconPencil size={11} /> Modifier
+                </button>
+              </div>
+              <div
+                className="qty-big"
+                style={{
+                  fontSize: '2.4rem',
+                  lineHeight: 1.1,
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 800,
+                  color: 'var(--text-secondary)'
+                }}
+              >
+                {showQuantities ? `${line.orderedQty}` : '•••'}{' '}
+                <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-muted)' }}>pcs</span>
+              </div>
+            </div>
           </div>
 
-          <div className="text-xs text-muted font-medium mb-1">
-            Quantité facturée en pièces individuelles (la plus petite unité)
-          </div>
+          {/* Inline Edit Count Form */}
+          {editingCount && (
+            <div className="mb-3 p-2.5" style={{ background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--glass-border-subtle)' }}>
+              <div className="text-xs font-bold text-muted mb-1.5">CORRIGER LA QUANTITÉ COMPTÉE :</div>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  className="input input-sm"
+                  style={{ maxWidth: 120, fontFamily: 'var(--font-mono)' }}
+                  value={editCountVal}
+                  onChange={(e) => setEditCountVal(e.target.value)}
+                  autoFocus
+                />
+                <button type="button" className="btn btn-sm btn-primary" onClick={handleSaveExactCount}>
+                  Valider
+                </button>
+                <button type="button" className="btn btn-sm btn-ghost" onClick={() => setEditingCount(false)}>
+                  Annuler
+                </button>
+              </div>
+            </div>
+          )}
 
+          {/* Inline Edit Ordered Qty Form */}
+          {editingQty && (
+            <div className="mb-3 p-2.5" style={{ background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--glass-border-subtle)' }}>
+              <div className="text-xs font-bold text-muted mb-1.5">MODIFIER QUANTITÉ ATTENDUE :</div>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  className="input input-sm"
+                  style={{ maxWidth: 120, fontFamily: 'var(--font-mono)' }}
+                  value={editQtyVal}
+                  onChange={(e) => setEditQtyVal(e.target.value)}
+                  autoFocus
+                />
+                <button type="button" className="btn btn-sm btn-primary" onClick={handleSaveQty}>
+                  Enregistrer
+                </button>
+                <button type="button" className="btn btn-sm btn-ghost" onClick={() => setEditingQty(false)}>
+                  Annuler
+                </button>
+              </div>
+              <div className="flex gap-1.5 flex-wrap">
+                {(['official_change', 'out_of_stock', 'client_requested', 'packing_adjustment'] as ChangeReason[]).map(r => (
+                  <button
+                    key={r}
+                    type="button"
+                    className={`btn btn-xs ${editReason === r ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ fontSize: '0.68rem', borderRadius: 9999 }}
+                    onClick={() => setEditReason(r)}
+                  >
+                    {r === 'official_change' ? 'Officiel' : r === 'out_of_stock' ? 'Rupture' : r === 'client_requested' ? 'Client' : 'Colisage'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Equivalence Pill */}
           {showQuantities && (outerPack || innerPack) && (() => {
             const equiv = formatPackagingEquivalence(line.orderedQty, outerPack, innerPack);
             if (!equiv || equiv === `${line.orderedQty.toLocaleString('fr-FR')} pcs`) return null;
             return (
               <div
-                className="badge my-1.5 flex items-center gap-1.5"
+                className="badge mb-2 flex items-center gap-1.5"
                 style={{
-                  fontSize: '0.78rem',
-                  padding: '4px 10px',
-                  borderRadius: '9999px',
+                  fontSize: '0.74rem',
+                  padding: '3px 10px',
+                  borderRadius: 9999,
                   background: 'rgba(16, 185, 129, 0.12)',
                   color: 'var(--accent)',
                   border: '1px solid rgba(16, 185, 129, 0.3)',
@@ -6001,27 +6086,40 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                   width: 'fit-content',
                 }}
               >
-                <IconBox size={13} style={{ flexShrink: 0 }} />
+                <IconBox size={12} style={{ flexShrink: 0 }} />
                 <span>Équivaut à : {equiv}</span>
               </div>
             );
           })()}
 
-          <div className="divider" style={{ margin: '8px 0 12px 0' }} />
+          {/* Stage Progress Mini-Row */}
+          <div
+            className="flex items-center justify-between pt-2.5 mt-1 text-xs"
+            style={{ borderTop: '1px solid var(--glass-border-subtle)' }}
+          >
+            <div className="flex items-center gap-3">
+              <div>
+                <span className="text-muted text-[10px] uppercase font-bold block">Prépa</span>
+                <span className="font-mono font-bold">{showQuantities ? stageTotals.preparation : '•••'}</span>
+              </div>
+              <div style={{ color: 'var(--text-muted)' }}>•</div>
+              <div>
+                <span className="text-muted text-[10px] uppercase font-bold block">Chargé</span>
+                <span className="font-mono font-bold">{showQuantities ? stageTotals.chargement : '•••'}</span>
+              </div>
+              <div style={{ color: 'var(--text-muted)' }}>•</div>
+              <div>
+                <span className="text-muted text-[10px] uppercase font-bold block">Pointé</span>
+                <span className="font-mono font-bold">{showQuantities ? stageTotals.pointage : '•••'}</span>
+              </div>
+            </div>
 
-          <div className="flex gap-4 flex-wrap">
-            <div>
-              <div className="text-xs text-muted font-bold">Préparé</div>
-              <div className="font-bold text-lg font-mono">{showQuantities ? stageTotals.preparation : '•••'}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted font-bold">Chargé</div>
-              <div className="font-bold text-lg font-mono">{showQuantities ? stageTotals.chargement : '•••'}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted font-bold">Pointé</div>
-              <div className="font-bold text-lg font-mono">{showQuantities ? stageTotals.pointage : '•••'}</div>
-            </div>
+            {disc.remaining > 0 && showQuantities && (
+              <div className="text-right">
+                <span className="text-muted text-[10px] uppercase font-bold block">Reste à faire</span>
+                <span className="font-mono font-bold text-warning">{disc.remaining} pcs</span>
+              </div>
+            )}
           </div>
 
           {stage === 'pointage' && stageTotals.pointage > 0 && showQuantities && (
@@ -6227,247 +6325,148 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         )}
 
-        {/* Discrepancy summary */}
-        <div className="card">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted font-bold">
-              {stage === 'preparation' ? 'PRÉPARATION' : stage === 'chargement' ? 'CHARGEMENT' : 'POINTAGE'}
-            </span>
-            <div className="flex items-center gap-1.5">
-              {events.filter(e => e.stage === stage && !e.undone).length > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-xs btn-ghost text-muted flex items-center gap-1"
-                  onClick={handleUndo}
-                  style={{ fontSize: '0.68rem', padding: '2px 6px' }}
-                  title="Annuler la toute dernière saisie de comptage"
-                >
-                  <IconUndo size={11} /> Annuler
-                </button>
-              )}
-              {stageTotal > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-xs btn-ghost text-danger flex items-center gap-1"
-                  onClick={handleResetCount}
-                  style={{ fontSize: '0.68rem', padding: '2px 6px' }}
-                  title="Remettre le comptage de cet article à zéro"
-                >
-                  <IconTrash size={12} /> Réinitialiser
-                </button>
-              )}
-              {disc.isExact && stageTotal > 0 && <span className="badge badge-exact flex items-center gap-1"><IconCheck size={11} /> EXACT</span>}
-              {disc.isShort && <span className="badge badge-short">{showQuantities ? `${disc.remaining} MANQUANTS` : 'MANQUANTS'}</span>}
-              {disc.isOver && <span className="badge badge-over">{showQuantities ? `${disc.over} EXCÉDENT` : 'EXCÉDENT'}</span>}
-            </div>
-          </div>
-          <div className="flex justify-between items-end mt-2">
-            <div>
-              <div className="text-xs text-muted flex items-center gap-1">
-                COMPTÉ
-                <button
-                  type="button"
-                  className="btn btn-xs btn-ghost"
-                  style={{ padding: '0 4px', fontSize: '0.68rem', color: 'var(--accent)' }}
-                  onClick={() => {
-                    setEditCountVal(String(stageTotal));
-                    setEditingCount(true);
+        {/* Nearest-Pack Recommendation if Discrepancy Exists */}
+        {(innerPack || outerPack) && showQuantities && disc.remaining > 0 && (() => {
+          const activePack = innerPack || outerPack;
+          if (!activePack || activePack <= 1) return null;
+          const rec = calcClosestPackRecommendation(disc.remaining, activePack);
+          if (!rec) return null;
+
+          return (
+            <div
+              className="card mb-3 p-3"
+              style={{
+                background: 'var(--bg-surface)',
+                borderRadius: '18px',
+                border: '1px solid var(--border)',
+              }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-bold text-muted flex items-center gap-1.5">
+                  <IconBox size={14} style={{ color: 'var(--accent)' }} />
+                  <span>COLISAGE DU RELIQUAT ({disc.remaining} pcs) :</span>
+                </div>
+                <span
+                  className="badge"
+                  style={{
+                    fontSize: '0.68rem',
+                    padding: '2px 6px',
+                    background: rec.isExactMultiple ? 'rgba(34, 197, 94, 0.15)' : 'rgba(37, 99, 235, 0.15)',
+                    color: rec.isExactMultiple ? 'var(--success)' : 'var(--accent)',
+                    border: `1px solid ${rec.isExactMultiple ? 'rgba(34, 197, 94, 0.3)' : 'rgba(37, 99, 235, 0.3)'}`,
+                    fontWeight: 700,
                   }}
-                  title="Corriger directement la quantité comptée"
                 >
-                  <IconPencil size={11} /> Corriger
-                </button>
+                  {rec.isExactMultiple ? 'Multiple exact' : 'Règle du plus proche'}
+                </span>
               </div>
-              <div className="qty-big" style={{
-                color: disc.isExact && stageTotal > 0 ? 'var(--success)' :
-                       disc.isOver ? 'var(--over)' :
-                       disc.isShort ? 'var(--warning)' : 'var(--accent)'
-              }}>
-                {stageTotal}
-              </div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div className="text-xs text-muted">RESTANT</div>
-              <div className="qty-big" style={{
-                color: disc.remaining > 0 ? 'var(--warning)' : 'var(--success)'
-              }}>
-                {showQuantities ? disc.remaining : '•••'}
-              </div>
-            </div>
-          </div>
 
-          {/* Inline exact count correction */}
-          {editingCount && (
-            <div className="mt-2.5 p-2" style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-              <div className="text-xs font-bold text-muted mb-1">CORRIGER LA QUANTITÉ COMPTÉE :</div>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  className="input input-sm"
-                  style={{ maxWidth: 110, fontFamily: 'var(--font-mono)' }}
-                  value={editCountVal}
-                  onChange={(e) => setEditCountVal(e.target.value)}
-                  autoFocus
-                />
-                <button type="button" className="btn btn-sm btn-primary" onClick={handleSaveExactCount}>
-                  Valider
-                </button>
-                <button type="button" className="btn btn-sm btn-ghost" onClick={() => setEditingCount(false)}>
-                  Annuler
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Visual pack breakdown illustration & Nearest-Pack Recommendation */}
-          {(innerPack || outerPack) && showQuantities && disc.remaining > 0 && (() => {
-            const activePack = innerPack || outerPack;
-            if (!activePack || activePack <= 1) return null;
-            const rec = calcClosestPackRecommendation(disc.remaining, activePack);
-            if (!rec) return null;
-
-            return (
-              <div
-                className="mt-2.5 p-2.5"
-                style={{
-                  background: 'var(--bg-surface)',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--border)',
-                }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-xs font-bold text-muted flex items-center gap-1.5">
-                    <IconBox size={14} style={{ color: 'var(--accent)' }} />
-                    <span>COLISAGE DU RELIQUAT ({disc.remaining} pcs) :</span>
+              {rec.isExactMultiple ? (
+                <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
+                  <div className="flex items-center gap-1.5 font-bold" style={{ color: 'var(--success)' }}>
+                    <IconBox size={14} />
+                    <span>{rec.closestPacks} × Colis ({activePack} pcs) = {rec.closestQty} pcs</span>
                   </div>
-                  <span
-                    className="badge"
+                  <button
+                    type="button"
+                    className="btn btn-xs btn-primary flex items-center gap-1"
+                    onClick={() => handleApplyPackQty(rec.closestQty, rec.closestPacks, activePack)}
+                  >
+                    <IconCheck size={12} /> Appliquer {rec.closestQty} pcs
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div
+                    className="p-2 mb-2 flex items-center justify-between gap-2 flex-wrap"
                     style={{
-                      fontSize: '0.68rem',
-                      padding: '2px 6px',
-                      background: rec.isExactMultiple ? 'rgba(34, 197, 94, 0.15)' : 'rgba(37, 99, 235, 0.15)',
-                      color: rec.isExactMultiple ? 'var(--success)' : 'var(--accent)',
-                      border: `1px solid ${rec.isExactMultiple ? 'rgba(34, 197, 94, 0.3)' : 'rgba(37, 99, 235, 0.3)'}`,
-                      fontWeight: 700,
+                      background: rec.closestAction === 'round_down'
+                        ? 'rgba(234, 179, 8, 0.10)'
+                        : 'rgba(37, 99, 235, 0.10)',
+                      border: `1px solid ${rec.closestAction === 'round_down' ? 'rgba(234, 179, 8, 0.3)' : 'rgba(37, 99, 235, 0.3)'}`,
+                      borderRadius: 'var(--radius-sm)',
                     }}
                   >
-                    {rec.isExactMultiple ? 'Multiple exact' : 'Règle du plus proche'}
-                  </span>
-                </div>
-
-                {rec.isExactMultiple ? (
-                  <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
-                    <div className="flex items-center gap-1.5 font-bold" style={{ color: 'var(--success)' }}>
-                      <IconBox size={14} />
-                      <span>{rec.closestPacks} × Colis ({activePack} pcs) = {rec.closestQty} pcs</span>
+                    <div>
+                      <div className="text-xs font-extrabold flex items-center gap-1.5">
+                        <span style={{ color: rec.closestAction === 'round_down' ? 'var(--warning)' : 'var(--accent)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                          <IconSparkles size={14} />
+                          <span>Recommandé : {rec.closestPacks} Colis = {rec.closestQty} pcs</span>
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            padding: '2px 8px',
+                            borderRadius: '9999px',
+                            background: rec.closestAction === 'round_down' ? 'rgba(234, 179, 8, 0.2)' : 'rgba(37, 99, 235, 0.2)',
+                            color: rec.closestAction === 'round_down' ? 'var(--warning)' : 'var(--accent)',
+                          }}
+                        >
+                          {rec.closestDiff < 0 ? `${rec.closestDiff} fraq retiré` : `+${rec.closestDiff} pcs (+1 colis)`}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted mt-0.5">
+                        Au plus proche ({Math.abs(rec.closestDiff)} pcs d'écart)
+                      </div>
                     </div>
+
                     <button
                       type="button"
                       className="btn btn-xs btn-primary flex items-center gap-1"
+                      style={{ fontWeight: 800, padding: '4px 10px' }}
                       onClick={() => handleApplyPackQty(rec.closestQty, rec.closestPacks, activePack)}
+                      title="Pré-remplir la quantité au plus proche"
                     >
-                      <IconCheck size={12} /> Appliquer {rec.closestQty} pcs
+                      <span>Appliquer {rec.closestQty} pcs</span>
                     </button>
                   </div>
-                ) : (
-                  <div>
-                    {/* Nearest Recommendation Box */}
-                    <div
-                      className="p-2 mb-2 flex items-center justify-between gap-2 flex-wrap"
+
+                  <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                    <button
+                      type="button"
+                      className={`btn btn-xs ${rec.closestAction === 'round_down' ? 'btn-secondary' : 'btn-ghost'}`}
                       style={{
-                        background: rec.closestAction === 'round_down'
-                          ? 'rgba(234, 179, 8, 0.10)'
-                          : 'rgba(37, 99, 235, 0.10)',
-                        border: `1px solid ${rec.closestAction === 'round_down' ? 'rgba(234, 179, 8, 0.3)' : 'rgba(37, 99, 235, 0.3)'}`,
-                        borderRadius: 'var(--radius-sm)',
+                        fontSize: '0.7rem',
+                        border: rec.closestAction === 'round_down' ? '1px solid var(--border)' : '1px dashed var(--border)',
                       }}
+                      onClick={() => handleApplyPackQty(rec.lowerQty, rec.lowerPacks, activePack)}
                     >
-                      <div>
-                        <div className="text-xs font-extrabold flex items-center gap-1.5">
-                          <span style={{ color: rec.closestAction === 'round_down' ? 'var(--warning)' : 'var(--accent)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                            <IconSparkles size={14} />
-                            <span>Recommandé : {rec.closestPacks} Colis = {rec.closestQty} pcs</span>
-                          </span>
-                          <span
-                            style={{
-                              fontSize: '0.68rem',
-                              fontWeight: 700,
-                              padding: '2px 8px',
-                              borderRadius: '9999px',
-                              background: rec.closestAction === 'round_down' ? 'rgba(234, 179, 8, 0.2)' : 'rgba(37, 99, 235, 0.2)',
-                              color: rec.closestAction === 'round_down' ? 'var(--warning)' : 'var(--accent)',
-                            }}
-                          >
-                            {rec.closestDiff < 0 ? `${rec.closestDiff} fraq retiré` : `+${rec.closestDiff} pcs (+1 colis)`}
-                          </span>
-                        </div>
-                        <div className="text-xs text-muted mt-0.5">
-                          Au plus proche ({Math.abs(rec.closestDiff)} pcs d'écart vs {rec.closestAction === 'round_down' ? rec.upperDiff : Math.abs(rec.lowerDiff)} pcs)
-                        </div>
-                      </div>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <IconBox size={12} /> {rec.lowerPacks} Colis ({rec.lowerQty} pcs)
+                      </span>
+                      <span className="text-muted ml-1">({rec.lowerDiff} pcs)</span>
+                    </button>
 
-                      <button
-                        type="button"
-                        className="btn btn-xs btn-primary flex items-center gap-1"
-                        style={{ fontWeight: 800, padding: '4px 10px' }}
-                        onClick={() => handleApplyPackQty(rec.closestQty, rec.closestPacks, activePack)}
-                        title="Pré-remplir la quantité au plus proche"
-                      >
-                        <span>Appliquer {rec.closestQty} pcs</span>
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      className={`btn btn-xs ${rec.closestAction === 'round_up' ? 'btn-secondary' : 'btn-ghost'}`}
+                      style={{
+                        fontSize: '0.7rem',
+                        border: rec.closestAction === 'round_up' ? '1px solid var(--border)' : '1px dashed var(--border)',
+                      }}
+                      onClick={() => handleApplyPackQty(rec.upperQty, rec.upperPacks, activePack)}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <IconBox size={12} /> {rec.upperPacks} Colis ({rec.upperQty} pcs)
+                      </span>
+                      <span className="text-muted ml-1">(+{rec.upperDiff} pcs)</span>
+                    </button>
 
-                    {/* Options Breakdown Chips */}
-                    <div className="flex items-center gap-1.5 flex-wrap text-xs">
-                      <button
-                        type="button"
-                        className={`btn btn-xs ${rec.closestAction === 'round_down' ? 'btn-secondary' : 'btn-ghost'}`}
-                        style={{
-                          fontSize: '0.7rem',
-                          border: rec.closestAction === 'round_down' ? '1px solid var(--border)' : '1px dashed var(--border)',
-                        }}
-                        onClick={() => handleApplyPackQty(rec.lowerQty, rec.lowerPacks, activePack)}
-                        title={`Colis complets inférieurs : ${rec.lowerQty} pcs`}
-                      >
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                          <IconBox size={12} /> {rec.lowerPacks} Colis ({rec.lowerQty} pcs)
-                        </span>
-                        <span className="text-muted ml-1">({rec.lowerDiff} pcs)</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`btn btn-xs ${rec.closestAction === 'round_up' ? 'btn-secondary' : 'btn-ghost'}`}
-                        style={{
-                          fontSize: '0.7rem',
-                          border: rec.closestAction === 'round_up' ? '1px solid var(--border)' : '1px dashed var(--border)',
-                        }}
-                        onClick={() => handleApplyPackQty(rec.upperQty, rec.upperPacks, activePack)}
-                        title={`Colis complets supérieurs : ${rec.upperQty} pcs`}
-                      >
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                          <IconBox size={12} /> {rec.upperPacks} Colis ({rec.upperQty} pcs)
-                        </span>
-                        <span className="text-muted ml-1">(+{rec.upperDiff} pcs)</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn btn-xs btn-ghost text-muted"
-                        style={{ fontSize: '0.7rem' }}
-                        onClick={() => handleApplyPackQty(disc.remaining, 0, activePack, true)}
-                        title={`Conserver exactement ${disc.remaining} pièces en fraq`}
-                      >
-                        Fraq exact ({disc.remaining} pcs)
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-xs btn-ghost text-muted"
+                      style={{ fontSize: '0.7rem' }}
+                      onClick={() => handleApplyPackQty(disc.remaining, 0, activePack, true)}
+                    >
+                      Fraq exact ({disc.remaining} pcs)
+                    </button>
                   </div>
-                )}
-              </div>
-            );
-          })()}
-        </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Stage tabs for counting */}
         <div className="stage-tabs">
@@ -6485,7 +6484,18 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
         {/* Packaging setup */}
         <div className="card">
           <div className="flex items-center justify-between" style={{ marginTop: 0, marginBottom: 8 }}>
-            <div className="section-title" style={{ margin: 0 }}>EMBALLAGES</div>
+            <div className="flex items-center gap-2">
+              <div className="section-title" style={{ margin: 0 }}>EMBALLAGES</div>
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost text-muted p-1"
+                onClick={() => setShowPackagingHelp(!showPackagingHelp)}
+                aria-label="Aide colisage"
+                title="Afficher/masquer la règle de facturation"
+              >
+                <IconInfo size={14} style={{ color: showPackagingHelp ? 'var(--accent)' : 'var(--text-muted)' }} />
+              </button>
+            </div>
             {(outerPack != null || innerPack != null) && (
               <button
                 type="button"
@@ -6498,25 +6508,27 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             )}
           </div>
 
-          {/* Wholesale smallest-unit guideline notice */}
-          <div
-            className="mb-2.5 p-2.5"
-            style={{
-              background: 'rgba(56, 189, 248, 0.08)',
-              border: '1px solid rgba(56, 189, 248, 0.25)',
-              borderRadius: '16px',
-            }}
-          >
-            <div className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--accent-light)' }}>
-              <IconInfo size={14} style={{ flexShrink: 0 }} />
-              <span>Règle d'or : Facturation toujours en pièces individuelles</span>
+          {/* Wholesale smallest-unit guideline notice (Collapsible) */}
+          {showPackagingHelp && (
+            <div
+              className="mb-2.5 p-2.5 animate-fade-in"
+              style={{
+                background: 'rgba(56, 189, 248, 0.08)',
+                border: '1px solid rgba(56, 189, 248, 0.25)',
+                borderRadius: '16px',
+              }}
+            >
+              <div className="text-xs font-bold flex items-center gap-1.5" style={{ color: 'var(--accent-light)' }}>
+                <IconInfo size={14} style={{ flexShrink: 0 }} />
+                <span>Règle d'or : Facturation toujours en pièces individuelles</span>
+              </div>
+              <div className="text-[11px] text-muted mt-1 leading-relaxed">
+                La quantité demandée est <strong>toujours la plus petite unité</strong> (stylos, pièces).
+                <br />
+                <em>Attention au carton :</em> La mention « 50 pcs » sur un carton désigne souvent <strong>50 pots/boîtes</strong> (soit 50 × 50 = 2 500 stylos) et non 50 stylos au total.
+              </div>
             </div>
-            <div className="text-[11px] text-muted mt-1 leading-relaxed">
-              La quantité demandée est <strong>toujours la plus petite unité</strong> (stylos, pièces).
-              <br />
-              <em>Attention au carton :</em> La mention « 50 pcs » sur un carton désigne souvent <strong>50 pots/boîtes</strong> (soit 50 × 50 = 2 500 stylos) et non 50 stylos au total.
-            </div>
-          </div>
+          )}
 
           {/* Description formula if packaging is configured */}
           {(() => {
@@ -6542,8 +6554,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           <div className="mb-2.5">
             <button
               type="button"
-              className={`btn btn-xs ${showMultiTierCalc ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1`}
-              style={{ fontSize: '0.72rem', borderRadius: '9999px', padding: '3px 10px' }}
+              className={`btn btn-xs ${showMultiTierCalc ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1.5`}
+              style={{ fontSize: '0.72rem', borderRadius: '9999px', padding: '3px 10px', maxWidth: '100%', whiteSpace: 'normal', textAlign: 'left' }}
               onClick={() => {
                 const next = !showMultiTierCalc;
                 setShowMultiTierCalc(next);
@@ -6555,8 +6567,8 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 }
               }}
             >
-              <IconLayers size={12} />
-              <span>Calculateur Carton Composé (pots × pièces)</span>
+              <IconLayers size={12} style={{ flexShrink: 0 }} />
+              <span>Carton Composé (pots × pièces)</span>
             </button>
           </div>
 
@@ -6920,9 +6932,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 }}
                 onClick={() => setActiveField('unit')}
               >
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-bold">UNITÉS (PIÈCES)</span>
-                  {activeField === 'unit' && <span className="badge badge-exact" style={{ fontSize: '0.62rem', padding: '1px 5px' }}>Cible</span>}
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <span className="text-xs sm:text-sm font-bold truncate">UNITÉS (PIÈCES)</span>
+                  {activeField === 'unit' && <span className="badge badge-exact flex-shrink-0" style={{ fontSize: '0.62rem', padding: '1px 5px' }}>Cible</span>}
                 </div>
                 <Stepper
                   value={loose}
