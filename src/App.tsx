@@ -4051,7 +4051,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         )}
 
         {/* Integrated Smart Search with Inline Mode Switcher — Scanner Button Inside */}
-        <div className="search-bar-unified mb-2.5">
+        <div className="search-bar-unified">
           <button
             type="button"
             className="search-mode-pill"
@@ -4118,7 +4118,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
 
         {/* Scope Toggle when client has multiple bills — Compact Pill Group */}
         {entityBills && entityBills.length > 1 && (
-          <div className="flex items-center gap-2 mb-2.5">
+          <div className="flex items-center gap-2 mb-3.5">
             <button
               type="button"
               className={`btn btn-xs flex-1 ${searchScope === 'current' ? 'btn-primary' : 'btn-secondary'}`}
