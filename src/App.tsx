@@ -203,6 +203,12 @@ import {
   isAudioMuted,
   setAudioMuted,
 } from './audio';
+import {
+  setupAndroidBackAndFullscreenGuard,
+  subscribePwaInstall,
+  promptPwaInstall,
+  isStandaloneApp,
+} from './fullscreenAndBackHandler';
 
 export interface ToastItem {
   message: string;
@@ -257,87 +263,18 @@ export default function App() {
     return 'light';
   });
 
-  // Always enforce fullscreen across every screen from start to closing (always-on, zero negotiation)
+  // Android Back-Button Trap & Always-on Fullscreen Guardian Subsystem
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    try {
-      localStorage.setItem('pointage_fullscreen_default', 'true');
-    } catch {}
-
-    const isFullscreenActive = () => {
-      const doc = document as any;
-      return !!(
-        doc.fullscreenElement ||
-        doc.webkitFullscreenElement ||
-        doc.mozFullScreenElement ||
-        doc.msFullscreenElement
-      );
-    };
-
-    const engageFullscreen = () => {
-      if (isFullscreenActive()) return;
-      const elem = document.documentElement as any;
-      const req =
-        elem.requestFullscreen ||
-        elem.webkitRequestFullscreen ||
-        elem.mozRequestFullScreen ||
-        elem.msRequestFullscreen;
-      if (req) {
-        try {
-          const p = req.call(elem);
-          if (p && typeof p.catch === 'function') {
-            p.catch(() => {});
-          }
-        } catch {}
-      }
-    };
-
-    // Attempt immediate fullscreen on mount
-    engageFullscreen();
-
-    // Listen to all touch, pointer, click, and keyboard interactions with capture: true
-    const events = ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'click', 'keydown', 'hashchange', 'popstate'];
-    events.forEach((evt) => {
-      window.addEventListener(evt, engageFullscreen, { capture: true, passive: true });
+    return setupAndroidBackAndFullscreenGuard({
+      onCloseModal: () => {
+        if (showWalkthrough) {
+          setShowWalkthrough(false);
+          return true;
+        }
+        return false;
+      },
     });
-
-    // Re-engage fullscreen on soft keyboard dismissal (focusout/blur)
-    const handleFocusOut = () => {
-      setTimeout(engageFullscreen, 250);
-      setTimeout(engageFullscreen, 500);
-    };
-    window.addEventListener('focusout', handleFocusOut, { capture: true, passive: true });
-
-    // Re-engage on visibility change (e.g. returning to the app from lockscreen or notification)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        engageFullscreen();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Watchdog on fullscreenchange: if exited, re-request on next interaction
-    const handleFsChange = () => {
-      if (!isFullscreenActive()) {
-        setTimeout(engageFullscreen, 100);
-      }
-    };
-    document.addEventListener('fullscreenchange', handleFsChange);
-    document.addEventListener('webkitfullscreenchange', handleFsChange);
-    document.addEventListener('mozfullscreenchange', handleFsChange);
-
-    return () => {
-      events.forEach((evt) => {
-        window.removeEventListener(evt, engageFullscreen, { capture: true } as any);
-      });
-      window.removeEventListener('focusout', handleFocusOut, { capture: true } as any);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      document.removeEventListener('fullscreenchange', handleFsChange);
-      document.removeEventListener('webkitfullscreenchange', handleFsChange);
-      document.removeEventListener('mozfullscreenchange', handleFsChange);
-    };
-  }, []);
+  }, [showWalkthrough]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -1062,6 +999,15 @@ function HomeScreen({
   const [activeOperator, setActiveOperatorState] = useState(() => getActiveOperator());
   const [operators, setOperators] = useState(() => loadOperatorsRoster());
   const [showOperatorModal, setShowOperatorModal] = useState(false);
+  const [canInstallPwa, setCanInstallPwa] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(() => isStandaloneApp());
+
+  useEffect(() => {
+    return subscribePwaInstall((can) => {
+      setCanInstallPwa(can);
+      setIsStandalone(isStandaloneApp());
+    });
+  }, []);
 
   const handleSelectOperator = (op: string) => {
     setActiveOperator(op);
@@ -1195,6 +1141,54 @@ function HomeScreen({
       </header>
 
       <div className="app-content">
+        {/* PWA Install Banner for permanent fullscreen without Android system notifications */}
+        {!isStandalone && canInstallPwa && (
+          <div
+            className="pwa-install-banner mb-3"
+            style={{
+              padding: '10px 14px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, rgba(230, 81, 0, 0.12), rgba(255, 152, 0, 0.08))',
+              border: '1px solid rgba(230, 81, 0, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <span style={{ fontSize: '1.25rem' }}>📱</span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-primary)' }}>
+                  Installer l'application
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  Plein écran permanent sans notification Android
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-sm btn-primary"
+              style={{
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                padding: '6px 12px',
+                flexShrink: 0,
+              }}
+              onClick={async () => {
+                const installed = await promptPwaInstall();
+                if (installed) {
+                  showToast('Application installée avec succès !', setToast);
+                }
+              }}
+            >
+              Installer (1 clic)
+            </button>
+          </div>
+        )}
+
         {/* BL Filter Tabs */}
         <div className="flex gap-2 mb-3">
           <button

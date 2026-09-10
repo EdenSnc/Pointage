@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   IconX,
   IconSun,
@@ -11,6 +11,7 @@ import {
 } from './icons';
 import { useDailyApiQuota } from './ai/quotaTracker';
 import { detectDeviceProfile, setForcedA54Mode, clearPwaCacheAndReload } from './deviceProfile';
+import { isStandaloneApp, promptPwaInstall, subscribePwaInstall } from './fullscreenAndBackHandler';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -41,6 +42,15 @@ export function SettingsModal({
   );
   const [profile, setProfile] = useState(() => detectDeviceProfile());
   const [isA54Active, setIsA54Active] = useState(() => profile.isSamsungA54);
+  const [canInstall, setCanInstall] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(() => isStandaloneApp());
+
+  useEffect(() => {
+    return subscribePwaInstall((can) => {
+      setCanInstall(can);
+      setIsStandalone(isStandaloneApp());
+    });
+  }, []);
 
   if (!isOpen) return null;
 
@@ -244,6 +254,34 @@ export function SettingsModal({
             </button>
           </div>
         </div>
+
+        {/* Mode Plein Écran & PWA Standalone */}
+        {!isStandalone && (
+          <div className="card mb-3" style={{ background: 'var(--bg-surface)' }}>
+            <div className="flex justify-between items-center">
+              <div style={{ flex: 1, paddingRight: 10 }}>
+                <div className="font-bold text-sm">Plein Écran Permanent (PWA)</div>
+                <div className="text-xs text-muted">
+                  Supprime les barres de navigation et les notifications Android de sortie de plein écran.
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                style={{ flexShrink: 0, fontWeight: 700 }}
+                onClick={async () => {
+                  if (canInstall) {
+                    await promptPwaInstall();
+                  } else {
+                    alert("Pour installer l'application sur Android : ouvrez le menu de votre navigateur Chrome (3 points verticaux) puis sélectionnez 'Ajouter à l'écran d'accueil' ou 'Installer l'application'.");
+                  }
+                }}
+              >
+                Installer
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Configuration Actions */}
         <div className="flex flex-col gap-2">
