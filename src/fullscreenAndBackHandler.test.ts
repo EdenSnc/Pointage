@@ -236,29 +236,47 @@ describe('fullscreenAndBackHandler Subsystem', () => {
       cleanup();
     });
 
-    it('does not call requestFullscreen on popstate to prevent Android notification spam', () => {
+    it('re-requests fullscreen on popstate when fullscreen was previously engaged and dropped', async () => {
       const cleanup = setupAndroidBackAndFullscreenGuard();
       const mockReq = (globalThis as any).document.documentElement.requestFullscreen;
-      mockReq.mockClear();
 
+      // Simulate first click to engage fullscreen
+      (globalThis as any).window.dispatchEvent({ type: 'click' });
+
+      // Flush microtask queue so requestAppFullscreen's .then() sets fullscreenEngaged = true
+      await new Promise((r) => setTimeout(r, 0));
+
+      // Now simulate popstate (back button) — fullscreen is not active so it should re-request
+      mockReq.mockClear();
       (globalThis as any).window.dispatchEvent({ type: 'popstate' });
 
-      expect(mockReq).not.toHaveBeenCalled();
+      // The handler checks fullscreenEngaged flag — since we clicked and it resolved, it should try
+      expect(mockReq).toHaveBeenCalledWith({ navigationUI: 'hide' });
 
       cleanup();
     });
 
-    it('requests screen wake lock on visibilitychange when returning to app', () => {
+    it('requests screen wake lock and re-engages fullscreen on visibilitychange resume', async () => {
       resetWakeLockForTesting();
       const cleanup = setupAndroidBackAndFullscreenGuard();
       const wakeLockMock = (globalThis as any).navigator.wakeLock.request;
+      const mockReq = (globalThis as any).document.documentElement.requestFullscreen;
+
+      // Engage fullscreen first via click
+      (globalThis as any).window.dispatchEvent({ type: 'click' });
+
+      // Flush microtask queue so fullscreenEngaged = true
+      await new Promise((r) => setTimeout(r, 0));
+
       wakeLockMock.mockClear();
+      mockReq.mockClear();
 
       // Release previous lock and simulate resume
       resetWakeLockForTesting();
       (globalThis as any).document.dispatchEvent({ type: 'visibilitychange' });
 
       expect(wakeLockMock).toHaveBeenCalledWith('screen');
+      expect(mockReq).toHaveBeenCalledWith({ navigationUI: 'hide' });
 
       cleanup();
     });
