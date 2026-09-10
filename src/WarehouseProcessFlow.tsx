@@ -20,6 +20,7 @@ interface WarehouseProcessFlowProps {
   currentStage: Stage;
   onSelectStage: (stage: Stage) => void;
   metrics: Record<Stage, StageFlowMetric>;
+  onToggleCollapse?: () => void;
   className?: string;
 }
 
@@ -33,6 +34,7 @@ export function WarehouseProcessFlow({
   currentStage,
   onSelectStage,
   metrics,
+  onToggleCollapse,
   className = '',
 }: WarehouseProcessFlowProps) {
   const handleStageClick = (s: Stage) => {
@@ -47,28 +49,76 @@ export function WarehouseProcessFlow({
       className={`warehouse-flow-container ${className}`}
       style={{
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+        flexDirection: 'column',
         padding: '12px 14px',
         background: 'var(--bg-card)',
         borderRadius: '24px',
         border: 'var(--glass-border)',
         boxShadow: 'var(--glass-shadow)',
-        marginBottom: '16px',
+        marginBottom: '14px',
         userSelect: 'none',
         position: 'relative',
       }}
     >
-      {STAGES.map((st, idx) => {
-        const isCurrent = currentStage === st.id;
-        const metric = metrics[st.id] || { done: 0, total: 0, percent: 0 };
-        const isComplete = metric.percent === 100 && metric.total > 0;
-        const IconComponent = st.icon;
+      {/* Optional Integrated Header with Collapse Toggle */}
+      {onToggleCollapse && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 10,
+            paddingBottom: 6,
+            borderBottom: '1px solid var(--glass-border-subtle)',
+          }}
+        >
+          <span
+            style={{
+              fontSize: '0.68rem',
+              fontWeight: 800,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: 'var(--text-muted)',
+            }}
+          >
+            Flux Logistique
+          </span>
+          <button
+            type="button"
+            className="btn btn-xs btn-ghost"
+            style={{
+              padding: '2px 8px',
+              borderRadius: 9999,
+              fontSize: '0.7rem',
+              color: 'var(--text-secondary)',
+              fontWeight: 600,
+            }}
+            onClick={onToggleCollapse}
+          >
+            ▲ Masquer
+          </button>
+        </div>
+      )}
 
-        return (
-          <React.Fragment key={st.id}>
-            {/* Step Node */}
+      {/* Nodes and Flow Connectors */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+        {STAGES.map((st, idx) => {
+          const isCurrent = currentStage === st.id;
+          const metric = metrics[st.id] || { done: 0, total: 0, percent: 0 };
+          const isComplete = metric.percent === 100 && metric.total > 0;
+          const IconComponent = st.icon;
+
+          return (
             <div
+              key={st.id}
               style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -77,9 +127,30 @@ export function WarehouseProcessFlow({
                 cursor: 'pointer',
                 flex: 1,
                 minWidth: 0,
+                position: 'relative',
               }}
               onClick={() => handleStageClick(st.id)}
             >
+              {/* Perfectly centered connector line spanning to next column */}
+              {idx < STAGES.length - 1 && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 20.5,
+                    left: 'calc(50% + 25px)',
+                    width: 'calc(100% - 50px)',
+                    height: 3,
+                    borderRadius: 9999,
+                    background:
+                      metric.percent === 100
+                        ? 'linear-gradient(90deg, var(--accent) 0%, rgba(16, 185, 129, 0.4) 100%)'
+                        : 'var(--bg-surface-elevated)',
+                    transition: 'background 0.3s ease',
+                    zIndex: 1,
+                  }}
+                />
+              )}
+
               {/* Circular Icon Pill with Pulse */}
               <div
                 style={{
@@ -111,6 +182,7 @@ export function WarehouseProcessFlow({
                     : 'none',
                   transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
                   position: 'relative',
+                  zIndex: 2,
                 }}
               >
                 <IconComponent size={20} />
@@ -139,7 +211,7 @@ export function WarehouseProcessFlow({
               </div>
 
               {/* Label & Progress Capsule */}
-              <div style={{ textAlign: 'center', minWidth: 0, width: '100%' }}>
+              <div style={{ textAlign: 'center', minWidth: 0, width: '100%', zIndex: 2 }}>
                 <div
                   style={{
                     fontSize: '0.78rem',
@@ -168,27 +240,9 @@ export function WarehouseProcessFlow({
                 </div>
               </div>
             </div>
-
-            {/* Connecting Flow Line between nodes */}
-            {idx < STAGES.length - 1 && (
-              <div
-                style={{
-                  width: 32,
-                  height: 3,
-                  borderRadius: 9999,
-                  background:
-                    metric.percent === 100
-                      ? 'linear-gradient(90deg, var(--accent) 0%, rgba(16, 185, 129, 0.4) 100%)'
-                      : 'var(--bg-surface-elevated)',
-                  marginBottom: 20,
-                  flexShrink: 0,
-                  transition: 'background 0.3s ease',
-                }}
-              />
-            )}
-          </React.Fragment>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -256,7 +256,7 @@ export default function App() {
     return 'light';
   });
 
-  // Always enforce fullscreen by default on user gestures (zero-toggle, always-on)
+  // Always enforce fullscreen across every screen from start to closing (always-on, zero negotiation)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -264,41 +264,77 @@ export default function App() {
       localStorage.setItem('pointage_fullscreen_default', 'true');
     } catch {}
 
-    let lastAttempt = 0;
-    const engageFullscreen = () => {
-      const now = Date.now();
-      if (now - lastAttempt < 1000) return; // avoid rapid repeated calls
-
+    const isFullscreenActive = () => {
       const doc = document as any;
-      const isCurrentlyFullscreen = !!(
+      return !!(
         doc.fullscreenElement ||
         doc.webkitFullscreenElement ||
         doc.mozFullScreenElement ||
         doc.msFullscreenElement
       );
+    };
 
-      if (!isCurrentlyFullscreen) {
-        lastAttempt = now;
-        const elem = document.documentElement as any;
-        const req =
-          elem.requestFullscreen ||
-          elem.webkitRequestFullscreen ||
-          elem.mozRequestFullScreen ||
-          elem.msRequestFullscreen;
-        if (req) {
-          req.call(elem).catch(() => {});
-        }
+    const engageFullscreen = () => {
+      if (isFullscreenActive()) return;
+      const elem = document.documentElement as any;
+      const req =
+        elem.requestFullscreen ||
+        elem.webkitRequestFullscreen ||
+        elem.mozRequestFullScreen ||
+        elem.msRequestFullscreen;
+      if (req) {
+        try {
+          const p = req.call(elem);
+          if (p && typeof p.catch === 'function') {
+            p.catch(() => {});
+          }
+        } catch {}
       }
     };
 
-    window.addEventListener('pointerdown', engageFullscreen, true);
-    window.addEventListener('touchstart', engageFullscreen, true);
-    window.addEventListener('click', engageFullscreen, true);
+    // Attempt immediate fullscreen on mount
+    engageFullscreen();
+
+    // Listen to all touch, pointer, click, and keyboard interactions with capture: true
+    const events = ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'click', 'keydown', 'hashchange', 'popstate'];
+    events.forEach((evt) => {
+      window.addEventListener(evt, engageFullscreen, { capture: true, passive: true });
+    });
+
+    // Re-engage fullscreen on soft keyboard dismissal (focusout/blur)
+    const handleFocusOut = () => {
+      setTimeout(engageFullscreen, 250);
+      setTimeout(engageFullscreen, 500);
+    };
+    window.addEventListener('focusout', handleFocusOut, { capture: true, passive: true });
+
+    // Re-engage on visibility change (e.g. returning to the app from lockscreen or notification)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        engageFullscreen();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Watchdog on fullscreenchange: if exited, re-request on next interaction
+    const handleFsChange = () => {
+      if (!isFullscreenActive()) {
+        setTimeout(engageFullscreen, 100);
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    document.addEventListener('webkitfullscreenchange', handleFsChange);
+    document.addEventListener('mozfullscreenchange', handleFsChange);
 
     return () => {
-      window.removeEventListener('pointerdown', engageFullscreen, true);
-      window.removeEventListener('touchstart', engageFullscreen, true);
-      window.removeEventListener('click', engageFullscreen, true);
+      events.forEach((evt) => {
+        window.removeEventListener(evt, engageFullscreen, { capture: true } as any);
+      });
+      window.removeEventListener('focusout', handleFocusOut, { capture: true } as any);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      document.removeEventListener('webkitfullscreenchange', handleFsChange);
+      document.removeEventListener('mozfullscreenchange', handleFsChange);
     };
   }, []);
 
@@ -449,94 +485,9 @@ function AudioMuteButton({ className, style }: { className?: string; style?: Rea
   );
 }
 
-// ---- Reusable Fullscreen Toggle (Hides Android status bar and browser chrome) ----
-export function FullscreenButton({ className, style }: { className?: string; style?: React.CSSProperties }) {
-  const [isFullscreen, setIsFullscreen] = useState(() => {
-    if (typeof document === 'undefined') return false;
-    return !!(
-      document.fullscreenElement ||
-      (document as any).webkitFullscreenElement ||
-      (document as any).mozFullScreenElement ||
-      (document as any).msFullscreenElement
-    );
-  });
-
-  useEffect(() => {
-    const handleFsChange = () => {
-      const fs = !!(
-        document.fullscreenElement ||
-        (document as any).webkitFullscreenElement ||
-        (document as any).mozFullScreenElement ||
-        (document as any).msFullscreenElement
-      );
-      setIsFullscreen(fs);
-    };
-
-    document.addEventListener('fullscreenchange', handleFsChange);
-    document.addEventListener('webkitfullscreenchange', handleFsChange);
-    document.addEventListener('mozfullscreenchange', handleFsChange);
-    document.addEventListener('MSFullscreenChange', handleFsChange);
-
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFsChange);
-      document.removeEventListener('webkitfullscreenchange', handleFsChange);
-      document.removeEventListener('mozfullscreenchange', handleFsChange);
-      document.removeEventListener('MSFullscreenChange', handleFsChange);
-    };
-  }, []);
-
-  const toggleFullscreen = async () => {
-    hapticTap('light');
-    try {
-      if (!isFullscreen) {
-        try {
-          localStorage.setItem('pointage_fullscreen_default', 'true');
-        } catch {}
-        const elem = document.documentElement;
-        if (elem.requestFullscreen) {
-          await elem.requestFullscreen();
-        } else if ((elem as any).webkitRequestFullscreen) {
-          await (elem as any).webkitRequestFullscreen();
-        } else if ((elem as any).mozRequestFullScreen) {
-          await (elem as any).mozRequestFullScreen();
-        } else if ((elem as any).msRequestFullscreen) {
-          await (elem as any).msRequestFullscreen();
-        }
-      } else {
-        try {
-          localStorage.setItem('pointage_fullscreen_default', 'false');
-        } catch {}
-        if (document.exitFullscreen) {
-          await document.exitFullscreen();
-        } else if ((document as any).webkitExitFullscreen) {
-          await (document as any).webkitExitFullscreen();
-        } else if ((document as any).mozCancelFullScreen) {
-          await (document as any).mozCancelFullScreen();
-        } else if ((document as any).msExitFullscreen) {
-          await (document as any).msExitFullscreen();
-        }
-      }
-    } catch (err) {
-      console.warn('Fullscreen toggle request:', err);
-    }
-  };
-
-  return (
-    <button
-      type="button"
-      className={className || 'header-icon-btn'}
-      style={{
-        borderRadius: 9999,
-        color: isFullscreen ? 'var(--accent)' : 'inherit',
-        ...style,
-      }}
-      onClick={toggleFullscreen}
-      title={isFullscreen ? 'Quitter le plein écran' : 'Plein écran immersif (Masquer barre Android & statut)'}
-      aria-label={isFullscreen ? 'Quitter le plein écran' : 'Plein écran immersif'}
-    >
-      {isFullscreen ? <IconMinimize size={18} /> : <IconMaximize size={18} />}
-    </button>
-  );
+// ---- Reusable Fullscreen Toggle (Fullscreen is always on by default across all screens) ----
+export function FullscreenButton(_props?: { className?: string; style?: React.CSSProperties }) {
+  return null;
 }
 
 // ---- Reusable Operator Header Button (Minimalist, Icon-Only) ----
@@ -3227,18 +3178,22 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
     return localStorage.getItem('pointage_sort_by_zone') === 'true' ? 'circuit' : 'bl';
   });
 
-  const handleSetSortMode = (m: LineSortMode) => {
-    setSortMode(m);
-    localStorage.setItem('pointage_sort_mode', m);
-    localStorage.setItem('pointage_sort_by_zone', String(m === 'circuit'));
-  };
-
   type FilterStatus = 'all' | 'todo' | 'done' | 'problems';
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
 
   const [searchParams, setSearchParams] = useSearchParams();
   const initialStage = (searchParams.get('stage') || sessionStorage.getItem(`pointage_stage_${billId}`) || 'preparation') as Stage;
   const [stage, setStage] = useState<Stage>(initialStage);
+
+  // Strict Pointage Rule: In Pointage stage, traversal circuit ('circuit' / Parcours) does not exist
+  const effectiveSortMode: LineSortMode = (stage === 'pointage' && sortMode === 'circuit') ? 'bl' : sortMode;
+
+  const handleSetSortMode = (m: LineSortMode) => {
+    const targetMode = (stage === 'pointage' && m === 'circuit') ? 'bl' : m;
+    setSortMode(targetMode);
+    localStorage.setItem('pointage_sort_mode', targetMode);
+    localStorage.setItem('pointage_sort_by_zone', String(targetMode === 'circuit'));
+  };
 
   const [selectedContainerFilter, setSelectedContainerFilter] = useState<number | 'all' | 'loose'>('all');
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -3755,10 +3710,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
 
   // Sorter based on active sortMode ('bl' | 'circuit' | 'recent' | 'family')
   const applySort = (arr: OrderLine[]): OrderLine[] => {
-    if (sortMode === 'circuit') {
+    if (effectiveSortMode === 'circuit') {
       return sortLinesByWarehouseZone(arr, profileMap);
     }
-    if (sortMode === 'recent') {
+    if (effectiveSortMode === 'recent') {
       return [...arr].sort((a, b) => {
         const timeA = lineLatestEventMap.get(a.id!)?.latestTime || '';
         const timeB = lineLatestEventMap.get(b.id!)?.latestTime || '';
@@ -3770,7 +3725,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         return (Number(a.no) || 0) - (Number(b.no) || 0);
       });
     }
-    if (sortMode === 'family') {
+    if (effectiveSortMode === 'family') {
       return [...arr].sort((a, b) => {
         const cmp = (a.designation || '').localeCompare(b.designation || '');
         if (cmp !== 0) return cmp;
@@ -3898,59 +3853,63 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
       </header>
 
       <div className="app-content">
-        {/* Collapsible Overview Header Pill */}
-        <div
-          className="flex items-center justify-between cursor-pointer"
-          style={{
-            padding: '8px 16px',
-            marginBottom: '16px',
-            borderRadius: '9999px',
-            background: 'var(--bg-card)',
-            border: 'var(--glass-border-subtle)',
-            boxShadow: 'var(--glass-shadow)',
-          }}
-          onClick={toggleOverviewDiagrams}
-        >
-          <div className="flex items-center gap-2 text-xs">
-            <span style={{ fontWeight: 800, color: 'var(--accent)' }}>
-              {stage === 'preparation' ? 'Prépa' : stage === 'chargement' ? 'Chargement' : 'Pointage'}
-            </span>
-            <span style={{ color: 'var(--text-muted)' }}>•</span>
-            <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
-              {stage === 'preparation' ? prepMetric.percent : stage === 'chargement' ? loadMetric.percent : pointMetric.percent}%
-            </span>
-            {trips && trips.length > 0 && (
-              <>
-                <span style={{ color: 'var(--text-muted)' }}>•</span>
-                <span style={{ color: 'var(--text-secondary)' }}>
-                  {trips.filter((t) => t.status !== 'cancelled').length} voyage{trips.filter((t) => t.status !== 'cancelled').length > 1 ? 's' : ''}
-                </span>
-              </>
-            )}
-          </div>
-          <button
-            type="button"
-            className="btn btn-xs btn-ghost flex items-center gap-1 text-[11px]"
-            style={{ padding: '3px 10px', borderRadius: '9999px', color: 'var(--text-secondary)' }}
+        {/* Collapsible Overview Header Pill (Compact pill when collapsed, integrated card when expanded) */}
+        {!showOverviewDiagrams ? (
+          <div
+            className="flex items-center justify-between cursor-pointer"
+            style={{
+              padding: '8px 16px',
+              marginBottom: '14px',
+              borderRadius: '9999px',
+              background: 'var(--bg-card)',
+              border: 'var(--glass-border-subtle)',
+              boxShadow: 'var(--glass-shadow)',
+            }}
+            onClick={toggleOverviewDiagrams}
           >
-            <span>{showOverviewDiagrams ? '▲ Masquer' : '▼ Aperçu'}</span>
-          </button>
-        </div>
-
-        {showOverviewDiagrams && (
+            <div className="flex items-center gap-2 text-xs">
+              <span style={{ fontWeight: 800, color: 'var(--accent)' }}>
+                {stage === 'preparation' ? 'Prépa' : stage === 'chargement' ? 'Chargement' : 'Pointage'}
+              </span>
+              <span style={{ color: 'var(--text-muted)' }}>•</span>
+              <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                {stage === 'preparation' ? prepMetric.percent : stage === 'chargement' ? loadMetric.percent : pointMetric.percent}%
+              </span>
+              {trips && trips.length > 0 && (
+                <>
+                  <span style={{ color: 'var(--text-muted)' }}>•</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    {trips.filter((t) => t.status !== 'cancelled').length} voyage{trips.filter((t) => t.status !== 'cancelled').length > 1 ? 's' : ''}
+                  </span>
+                </>
+              )}
+            </div>
+            <span
+              style={{
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                color: 'var(--text-secondary)',
+                padding: '2px 8px',
+                borderRadius: '9999px',
+                background: 'var(--bg-surface)',
+              }}
+            >
+              ▼ Aperçu
+            </span>
+          </div>
+        ) : (
           <div className="mb-3">
             {/* Visual Interactive Process Flow Pipeline (Apple Glass & Less-is-More) */}
             <WarehouseProcessFlow
               currentStage={stage}
               onSelectStage={handleStageChange}
+              onToggleCollapse={toggleOverviewDiagrams}
               metrics={{
                 preparation: prepMetric,
                 chargement: loadMetric,
                 pointage: pointMetric,
               }}
             />
-
-
 
             {/* Visual Truck Loading & Dock Staging Diagram */}
             {(stage === 'chargement' || (trips && trips.length > 0)) && (
@@ -4090,12 +4049,11 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         )}
 
-        {/* Integrated Smart Search with Inline Mode Switcher */}
-        <div className="search-wrapper mb-2.5">
+        {/* Integrated Smart Search with Inline Mode Switcher — Scanner Button Inside */}
+        <div className="search-bar-unified mb-2.5">
           <button
             type="button"
-            className="btn btn-xs btn-ghost text-muted"
-            style={{ padding: '0 8px', fontSize: '0.72rem', borderRadius: 9999, flexShrink: 0 }}
+            className="search-mode-pill"
             onClick={() => {
               hapticTap('light');
               const modes: SearchMode[] = ['smart', 'no', 'ref', 'ean', 'name'];
@@ -4104,17 +4062,16 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             }}
             title="Mode de recherche (cliquer pour basculer : Smart, N°, Réf, EAN, Nom)"
           >
-            <span style={{ fontWeight: 700, color: 'var(--accent)' }}>
+            <span>
               {searchMode === 'smart' ? 'Smart' : searchMode === 'no' ? 'N°' : searchMode === 'ref' ? 'Réf' : searchMode === 'name' ? 'Nom' : 'EAN'}
             </span>
-            <span style={{ fontSize: '0.65rem', marginLeft: 2, opacity: 0.7 }}>▾</span>
+            <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>▾</span>
           </button>
           <input
             id="bill-search-input"
             name="searchQuery"
             aria-label="Rechercher"
-            className="search-input"
-            style={{ paddingLeft: 4 }}
+            className="search-input-unified"
             placeholder={
               searchMode === 'smart'
                 ? 'Réf, scan, désignation...'
@@ -4139,7 +4096,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           {searchQuery ? (
             <button
               type="button"
-              className="search-clear-btn"
+              className="search-clear-btn-unified"
               onClick={() => handleSearchChange('')}
               title="Effacer la recherche"
               aria-label="Effacer la recherche"
@@ -4148,9 +4105,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             </button>
           ) : (
             <button
-              className="search-scan-btn"
+              className="search-scan-btn-unified"
               onClick={() => nav(`/scan?billId=${billId}&stage=${stage}`)}
               title="Scanner"
+              aria-label="Scanner"
             >
               <IconScan size={18} />
             </button>
@@ -4240,7 +4198,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         )}
 
-        {/* Status Filter Segmented Pills (Tous, À faire, Validés, Problèmes) */}
+        {/* Status Filter Segmented Pills (Tous, À faire, Validés, Écarts) */}
         <div
           className="flex items-center gap-1 mb-2.5 p-1"
           style={{
@@ -4252,7 +4210,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <button
             type="button"
             className={`btn btn-xs flex-1 ${filterStatus === 'all' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '5px 8px', whiteSpace: 'nowrap' }}
+            style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '5px 4px', whiteSpace: 'nowrap', minWidth: 0 }}
             onClick={() => {
               hapticTap('light');
               setFilterStatus('all');
@@ -4262,10 +4220,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             <span>Tous</span>
             <span
               style={{
-                marginLeft: 4,
-                padding: '1px 6px',
+                marginLeft: 3,
+                padding: '1px 5px',
                 borderRadius: 9999,
-                fontSize: '0.68rem',
+                fontSize: '0.65rem',
                 fontWeight: 700,
                 background: filterStatus === 'all' ? 'rgba(255, 255, 255, 0.25)' : 'var(--bg-card)',
               }}
@@ -4277,7 +4235,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <button
             type="button"
             className={`btn btn-xs flex-1 ${filterStatus === 'todo' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '5px 8px', whiteSpace: 'nowrap' }}
+            style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '5px 4px', whiteSpace: 'nowrap', minWidth: 0 }}
             onClick={() => {
               hapticTap('light');
               setFilterStatus('todo');
@@ -4287,10 +4245,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             <span>À faire</span>
             <span
               style={{
-                marginLeft: 4,
-                padding: '1px 6px',
+                marginLeft: 3,
+                padding: '1px 5px',
                 borderRadius: 9999,
-                fontSize: '0.68rem',
+                fontSize: '0.65rem',
                 fontWeight: 700,
                 background: filterStatus === 'todo' ? 'rgba(255, 255, 255, 0.25)' : 'var(--bg-card)',
               }}
@@ -4302,7 +4260,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <button
             type="button"
             className={`btn btn-xs flex-1 ${filterStatus === 'done' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '5px 8px', whiteSpace: 'nowrap' }}
+            style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '5px 4px', whiteSpace: 'nowrap', minWidth: 0 }}
             onClick={() => {
               hapticTap('light');
               setFilterStatus('done');
@@ -4315,10 +4273,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             </span>
             <span
               style={{
-                marginLeft: 4,
-                padding: '1px 6px',
+                marginLeft: 3,
+                padding: '1px 5px',
                 borderRadius: 9999,
-                fontSize: '0.68rem',
+                fontSize: '0.65rem',
                 fontWeight: 700,
                 background: filterStatus === 'done' ? 'rgba(255, 255, 255, 0.25)' : 'var(--bg-card)',
               }}
@@ -4330,7 +4288,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <button
             type="button"
             className={`btn btn-xs flex-1 ${filterStatus === 'problems' ? 'btn-warning' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '5px 8px', whiteSpace: 'nowrap' }}
+            style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '5px 4px', whiteSpace: 'nowrap', minWidth: 0 }}
             onClick={() => {
               hapticTap('light');
               setFilterStatus(filterStatus === 'problems' ? 'all' : 'problems');
@@ -4339,15 +4297,15 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           >
             <span className="flex items-center justify-center gap-1">
               <IconWarning size={11} />
-              <span>Problèmes</span>
+              <span>Écarts</span>
             </span>
             {filterCounts.problems > 0 && (
               <span
                 style={{
-                  marginLeft: 4,
-                  padding: '1px 6px',
+                  marginLeft: 3,
+                  padding: '1px 5px',
                   borderRadius: 9999,
-                  fontSize: '0.68rem',
+                  fontSize: '0.65rem',
                   fontWeight: 700,
                   background: filterStatus === 'problems' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(245, 158, 11, 0.2)',
                   color: filterStatus === 'problems' ? '#fff' : 'var(--warning)',
@@ -4359,166 +4317,192 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </button>
         </div>
 
-        {/* Consolidated Ergonomic Controls Row (Strictly 1 Row, Zero Wrapping Clutter) */}
+        {/* Consolidated Ergonomic Controls Row (Generous Touch Targets & Clean Spacing) */}
         <div
-          className="flex items-center gap-1.5 mb-2.5 overflow-x-auto no-scrollbar flex-nowrap"
-          style={{ WebkitOverflowScrolling: 'touch' }}
+          className="flex items-center justify-between gap-2 mb-3 overflow-x-auto no-scrollbar flex-nowrap"
+          style={{ WebkitOverflowScrolling: 'touch', padding: '2px 0' }}
         >
-          {/* Sort Mode Button */}
-          <button
-            type="button"
-            className="btn btn-xs btn-secondary flex items-center gap-1 font-semibold flex-shrink-0"
-            style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '4px 9px' }}
-            onClick={() => {
-              hapticTap('light');
-              const modes: LineSortMode[] = ['bl', 'circuit', 'recent', 'family'];
-              const next = modes[(modes.indexOf(sortMode) + 1) % modes.length];
-              handleSetSortMode(next);
-            }}
-            title="Cliquer pour changer l'ordre de tri (BL, Parcours, Récents, A-Z)"
-          >
-            {sortMode === 'bl' ? <IconLayers size={12} /> :
-             sortMode === 'circuit' ? <IconCompass size={12} /> :
-             sortMode === 'recent' ? <IconClock size={12} /> :
-             <IconTag size={12} />}
-            <span>{sortMode === 'bl' ? 'BL' : sortMode === 'circuit' ? 'Parcours' : sortMode === 'recent' ? 'Récents' : 'A-Z'}</span>
-            <span style={{ fontSize: '0.62rem', opacity: 0.6 }}>▾</span>
-          </button>
-
-          {/* Integrated Colis Filter Dropdown (Zero duplicate 'Tous', zero extra rows) */}
-          {activeContainers.length > 0 && (
-            <div className="relative flex-shrink-0">
-              <button
-                type="button"
-                className={`btn btn-xs ${selectedContainerFilter !== 'all' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1 font-semibold`}
-                style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '4px 9px' }}
-              >
-                <IconBox size={12} />
-                <span>
-                  {selectedContainerFilter === 'all'
-                    ? 'Colis'
-                    : selectedContainerFilter === 'loose'
-                    ? 'Hors colis'
-                    : (activeContainers.find((c) => c.id === selectedContainerFilter)?.label || 'Colis')}
-                </span>
-                <span style={{ fontSize: '0.62rem', opacity: 0.6 }}>▾</span>
-              </button>
-              <select
-                aria-label="Filtrer par colis"
-                value={String(selectedContainerFilter)}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setSelectedContainerFilter(v === 'all' ? 'all' : v === 'loose' ? 'loose' : Number(v));
-                }}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  opacity: 0,
-                  cursor: 'pointer',
-                }}
-              >
-                <option value="all">Tous les colis ({activeLinesPool.length})</option>
-                {activeContainers.map((c) => {
-                  const st = containerStats.get(c.id!) || { linesCount: 0 };
-                  return (
-                    <option key={c.id} value={c.id}>
-                      {c.type === 'chouala' ? 'Sac' : 'Carton'}: {c.label} ({st.linesCount})
-                    </option>
-                  );
-                })}
-                <option value="loose">Hors Colis (Fraq) ({containerStats.get('loose')?.linesCount || 0})</option>
-              </select>
-            </div>
-          )}
-
-          {/* Show/Hide Expected Quantities Toggle */}
-          <button
-            type="button"
-            className={`btn btn-xs ${showQuantities ? 'btn-ghost' : 'btn-secondary'} flex items-center gap-1 flex-shrink-0`}
-            style={{ borderRadius: 9999, padding: '4px 8px', fontSize: '0.72rem' }}
-            onClick={() => {
-              hapticTap('light');
-              toggleShowQuantities();
-            }}
-            title={showQuantities ? 'Masquer les quantités attendues' : 'Afficher les quantités attendues'}
-          >
-            {showQuantities ? <IconEye size={12} style={{ color: 'var(--accent)' }} /> : <IconEyeOff size={12} />}
-          </button>
-
-          {/* Selection Mode Toggle */}
-          <button
-            type="button"
-            className={`btn btn-xs ${isSelectionMode ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1 flex-shrink-0`}
-            style={{ borderRadius: 9999, padding: '4px 8px', fontSize: '0.72rem' }}
-            onClick={() => {
-              hapticTap('medium');
-              if (isSelectionMode) {
-                setIsSelectionMode(false);
-                setSelectedLineIds(new Set());
-              } else {
-                setIsSelectionMode(true);
-              }
-            }}
-            title="Sélection multiple d'articles"
-          >
-            <IconCheck size={11} />
-            <span>{isSelectionMode ? 'Terminer' : 'Sélec'}</span>
-          </button>
-
-          {/* Line Counter */}
-          <span className="text-xs text-muted font-mono font-bold whitespace-nowrap ml-auto flex-shrink-0">
-            {searchScope === 'all'
-              ? `${displayLines.length}/${entityLines?.length || displayLines.length} lig.`
-              : `${displayLines.length}/${lines.length} lig.`}
-          </span>
-
-          {/* Stage Reset Button */}
-          {billStageUnitTotals[stage] > 0 && (
+          {/* Left Cluster: Sort Mode, Colis, Eye, Multi-Select */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* Sort Mode Button (Parcours Prohibited in Pointage) */}
             <button
               type="button"
-              className="btn btn-xs flex items-center gap-1 font-bold flex-shrink-0"
-              style={{
-                background: 'rgba(239, 68, 68, 0.1)',
-                color: 'var(--danger)',
-                border: '1px solid rgba(239, 68, 68, 0.25)',
-                borderRadius: 9999,
-                padding: '4px 8px',
-                fontSize: '0.72rem',
-              }}
+              className="btn btn-xs btn-secondary flex items-center gap-1 font-semibold flex-shrink-0"
+              style={{ borderRadius: 9999, height: 34, padding: '0 11px', fontSize: '0.74rem' }}
               onClick={() => {
-                hapticTap('medium');
-                setShowResetPhaseModal(true);
+                hapticTap('light');
+                const availableModes: LineSortMode[] = stage === 'pointage'
+                  ? ['bl', 'recent', 'family']
+                  : ['bl', 'circuit', 'recent', 'family'];
+                const next = availableModes[(availableModes.indexOf(effectiveSortMode) + 1) % availableModes.length];
+                handleSetSortMode(next);
               }}
-              title={`Remettre à zéro les comptages de l'étape active`}
+              title="Cliquer pour changer l'ordre de tri"
             >
-              <IconUndo size={11} />
-              <span>Réinit</span>
+              {effectiveSortMode === 'bl' ? <IconLayers size={13} /> :
+               effectiveSortMode === 'circuit' ? <IconCompass size={13} /> :
+               effectiveSortMode === 'recent' ? <IconClock size={13} /> :
+               <IconTag size={13} />}
+              <span>{effectiveSortMode === 'bl' ? 'BL' : effectiveSortMode === 'circuit' ? 'Parcours' : effectiveSortMode === 'recent' ? 'Récents' : 'A-Z'}</span>
+              <span style={{ fontSize: '0.62rem', opacity: 0.6 }}>▾</span>
             </button>
-          )}
 
-          {/* Stage Sign-off / Valider Button */}
-          {stage === 'preparation' && (
+            {/* Integrated Colis Filter Dropdown */}
+            {activeContainers.length > 0 && (
+              <div className="relative flex-shrink-0">
+                <button
+                  type="button"
+                  className={`btn btn-xs ${selectedContainerFilter !== 'all' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1 font-semibold`}
+                  style={{ borderRadius: 9999, height: 34, padding: '0 11px', fontSize: '0.74rem' }}
+                >
+                  <IconBox size={13} />
+                  <span>
+                    {selectedContainerFilter === 'all'
+                      ? 'Colis'
+                      : selectedContainerFilter === 'loose'
+                      ? 'Hors colis'
+                      : (activeContainers.find((c) => c.id === selectedContainerFilter)?.label || 'Colis')}
+                  </span>
+                  <span style={{ fontSize: '0.62rem', opacity: 0.6 }}>▾</span>
+                </button>
+                <select
+                  aria-label="Filtrer par colis"
+                  value={String(selectedContainerFilter)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSelectedContainerFilter(v === 'all' ? 'all' : v === 'loose' ? 'loose' : Number(v));
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    opacity: 0,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="all">Tous les colis ({activeLinesPool.length})</option>
+                  {activeContainers.map((c) => {
+                    const st = containerStats.get(c.id!) || { linesCount: 0 };
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {c.type === 'chouala' ? 'Sac' : 'Carton'}: {c.label} ({st.linesCount})
+                      </option>
+                    );
+                  })}
+                  <option value="loose">Hors Colis (Fraq) ({containerStats.get('loose')?.linesCount || 0})</option>
+                </select>
+              </div>
+            )}
+
+            {/* Show/Hide Expected Quantities Toggle */}
             <button
               type="button"
-              className="btn btn-xs btn-primary flex items-center gap-1 font-bold flex-shrink-0"
-              style={{ borderRadius: 9999, padding: '4px 10px', fontSize: '0.74rem' }}
+              className={`btn btn-xs ${showQuantities ? 'btn-ghost' : 'btn-secondary'} flex items-center justify-center flex-shrink-0`}
+              style={{
+                borderRadius: '50%',
+                width: 34,
+                height: 34,
+                padding: 0,
+              }}
+              onClick={() => {
+                hapticTap('light');
+                toggleShowQuantities();
+              }}
+              title={showQuantities ? 'Masquer les quantités attendues' : 'Afficher les quantités attendues'}
+              aria-label={showQuantities ? 'Masquer les quantités attendues' : 'Afficher les quantités attendues'}
+            >
+              {showQuantities ? <IconEye size={15} style={{ color: 'var(--accent)' }} /> : <IconEyeOff size={15} />}
+            </button>
+
+            {/* Selection Mode Toggle */}
+            <button
+              type="button"
+              className={`btn btn-xs ${isSelectionMode ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1 font-semibold flex-shrink-0`}
+              style={{ borderRadius: 9999, height: 34, padding: '0 11px', fontSize: '0.74rem' }}
               onClick={() => {
                 hapticTap('medium');
-                setShowStageSignOffModal(true);
+                if (isSelectionMode) {
+                  setIsSelectionMode(false);
+                  setSelectedLineIds(new Set());
+                } else {
+                  setIsSelectionMode(true);
+                }
               }}
-              title="Valider et signer la préparation"
+              title="Sélection multiple d'articles"
             >
               <IconCheck size={12} />
-              <span>Valider</span>
+              <span>{isSelectionMode ? 'Terminer' : 'Sélec'}</span>
             </button>
-          )}
+          </div>
+
+          {/* Right Cluster: Line Counter, Reset, and Sign-off Buttons */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* Line Counter Badge */}
+            <span
+              className="text-xs text-muted font-mono font-bold whitespace-nowrap flex-shrink-0"
+              style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--glass-border-subtle)',
+                borderRadius: 9999,
+                height: 30,
+                padding: '0 9px',
+                display: 'inline-flex',
+                alignItems: 'center',
+              }}
+            >
+              {searchScope === 'all'
+                ? `${displayLines.length}/${entityLines?.length || displayLines.length} lig.`
+                : `${displayLines.length}/${lines.length} lig.`}
+            </span>
+
+            {/* Stage Reset Button */}
+            {billStageUnitTotals[stage] > 0 && (
+              <button
+                type="button"
+                className="btn btn-xs flex items-center gap-1 font-bold flex-shrink-0"
+                style={{
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  color: 'var(--danger)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: 9999,
+                  height: 34,
+                  padding: '0 10px',
+                  fontSize: '0.74rem',
+                }}
+                onClick={() => {
+                  hapticTap('medium');
+                  setShowResetPhaseModal(true);
+                }}
+                title="Remettre à zéro les comptages de l'étape active"
+              >
+                <IconUndo size={12} />
+                <span>Réinit</span>
+              </button>
+            )}
+
+            {/* Stage Sign-off / Valider Button */}
+            {stage === 'preparation' && (
+              <button
+                type="button"
+                className="btn btn-xs btn-primary flex items-center gap-1 font-bold flex-shrink-0"
+                style={{ borderRadius: 9999, height: 34, padding: '0 12px', fontSize: '0.74rem' }}
+                onClick={() => {
+                  hapticTap('medium');
+                  setShowStageSignOffModal(true);
+                }}
+                title="Valider et signer la préparation"
+              >
+                <IconCheck size={13} />
+                <span>Valider</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Picking Circuit Order Banner when sortMode === 'circuit' */}
-        {sortMode === 'circuit' && (
+        {/* Picking Circuit Order Banner when sortMode === 'circuit' (Prohibited in Pointage) */}
+        {effectiveSortMode === 'circuit' && stage !== 'pointage' && (
           <div
             className="flex items-center justify-between px-3 py-1.5 mb-2 rounded-xl text-xs font-semibold"
             style={{
