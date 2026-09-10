@@ -105,6 +105,7 @@ import {
   IconFolder,
   IconBolt,
   IconArrowLeft,
+  IconArrowUp,
   IconLayers,
   IconHash,
   IconHelp,
@@ -4199,18 +4200,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         )}
 
         {/* Status Filter Segmented Pills (Tous, À faire, Validés, Écarts) */}
-        <div
-          className="flex items-center gap-1 mb-2.5 p-1"
-          style={{
-            background: 'var(--bg-surface)',
-            borderRadius: 9999,
-            border: '1px solid var(--glass-border-subtle)',
-          }}
-        >
+        <div className="status-filter-row">
           <button
             type="button"
-            className={`btn btn-xs flex-1 ${filterStatus === 'all' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '5px 4px', whiteSpace: 'nowrap', minWidth: 0 }}
+            className={`status-pill ${filterStatus === 'all' ? 'active' : ''}`}
             onClick={() => {
               hapticTap('light');
               setFilterStatus('all');
@@ -4218,24 +4211,14 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             }}
           >
             <span>Tous</span>
-            <span
-              style={{
-                marginLeft: 3,
-                padding: '1px 5px',
-                borderRadius: 9999,
-                fontSize: '0.65rem',
-                fontWeight: 700,
-                background: filterStatus === 'all' ? 'rgba(255, 255, 255, 0.25)' : 'var(--bg-card)',
-              }}
-            >
+            <span className="status-pill-badge">
               {filterCounts.all}
             </span>
           </button>
 
           <button
             type="button"
-            className={`btn btn-xs flex-1 ${filterStatus === 'todo' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '5px 4px', whiteSpace: 'nowrap', minWidth: 0 }}
+            className={`status-pill ${filterStatus === 'todo' ? 'active' : ''}`}
             onClick={() => {
               hapticTap('light');
               setFilterStatus('todo');
@@ -4243,24 +4226,14 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             }}
           >
             <span>À faire</span>
-            <span
-              style={{
-                marginLeft: 3,
-                padding: '1px 5px',
-                borderRadius: 9999,
-                fontSize: '0.65rem',
-                fontWeight: 700,
-                background: filterStatus === 'todo' ? 'rgba(255, 255, 255, 0.25)' : 'var(--bg-card)',
-              }}
-            >
+            <span className="status-pill-badge">
               {filterCounts.todo}
             </span>
           </button>
 
           <button
             type="button"
-            className={`btn btn-xs flex-1 ${filterStatus === 'done' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '5px 4px', whiteSpace: 'nowrap', minWidth: 0 }}
+            className={`status-pill ${filterStatus === 'done' ? 'active' : ''}`}
             onClick={() => {
               hapticTap('light');
               setFilterStatus('done');
@@ -4271,24 +4244,14 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               <IconCheck size={11} />
               <span>Validés</span>
             </span>
-            <span
-              style={{
-                marginLeft: 3,
-                padding: '1px 5px',
-                borderRadius: 9999,
-                fontSize: '0.65rem',
-                fontWeight: 700,
-                background: filterStatus === 'done' ? 'rgba(255, 255, 255, 0.25)' : 'var(--bg-card)',
-              }}
-            >
+            <span className="status-pill-badge">
               {filterCounts.done}
             </span>
           </button>
 
           <button
             type="button"
-            className={`btn btn-xs flex-1 ${filterStatus === 'problems' ? 'btn-warning' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '5px 4px', whiteSpace: 'nowrap', minWidth: 0 }}
+            className={`status-pill status-warning ${filterStatus === 'problems' ? 'active' : ''}`}
             onClick={() => {
               hapticTap('light');
               setFilterStatus(filterStatus === 'problems' ? 'all' : 'problems');
@@ -4300,17 +4263,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               <span>Écarts</span>
             </span>
             {filterCounts.problems > 0 && (
-              <span
-                style={{
-                  marginLeft: 3,
-                  padding: '1px 5px',
-                  borderRadius: 9999,
-                  fontSize: '0.65rem',
-                  fontWeight: 700,
-                  background: filterStatus === 'problems' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(245, 158, 11, 0.2)',
-                  color: filterStatus === 'problems' ? '#fff' : 'var(--warning)',
-                }}
-              >
+              <span className="status-pill-badge">
                 {filterCounts.problems}
               </span>
             )}
@@ -4318,17 +4271,13 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         </div>
 
         {/* Consolidated Ergonomic Controls Row (Generous Touch Targets & Clean Spacing) */}
-        <div
-          className="flex items-center justify-between gap-2 mb-3 overflow-x-auto no-scrollbar flex-nowrap"
-          style={{ WebkitOverflowScrolling: 'touch', padding: '2px 0' }}
-        >
+        <div className="bill-controls-row">
           {/* Left Cluster: Sort Mode, Colis, Eye, Multi-Select */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {/* Sort Mode Button (Parcours Prohibited in Pointage) */}
             <button
               type="button"
-              className="btn btn-xs btn-secondary flex items-center gap-1 font-semibold flex-shrink-0"
-              style={{ borderRadius: 9999, height: 34, padding: '0 11px', fontSize: '0.74rem' }}
+              className="control-pill control-pill-secondary"
               onClick={() => {
                 hapticTap('light');
                 const availableModes: LineSortMode[] = stage === 'pointage'
@@ -4352,8 +4301,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               <div className="relative flex-shrink-0">
                 <button
                   type="button"
-                  className={`btn btn-xs ${selectedContainerFilter !== 'all' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1 font-semibold`}
-                  style={{ borderRadius: 9999, height: 34, padding: '0 11px', fontSize: '0.74rem' }}
+                  className={`control-pill ${selectedContainerFilter !== 'all' ? 'control-pill-primary' : 'control-pill-secondary'}`}
                 >
                   <IconBox size={13} />
                   <span>
@@ -4399,11 +4347,11 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             {/* Show/Hide Expected Quantities Toggle */}
             <button
               type="button"
-              className={`btn btn-xs ${showQuantities ? 'btn-ghost' : 'btn-secondary'} flex items-center justify-center flex-shrink-0`}
+              className="control-pill control-pill-secondary"
               style={{
                 borderRadius: '50%',
-                width: 34,
-                height: 34,
+                width: 32,
+                height: 32,
                 padding: 0,
               }}
               onClick={() => {
@@ -4419,8 +4367,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             {/* Selection Mode Toggle */}
             <button
               type="button"
-              className={`btn btn-xs ${isSelectionMode ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1 font-semibold flex-shrink-0`}
-              style={{ borderRadius: 9999, height: 34, padding: '0 11px', fontSize: '0.74rem' }}
+              className={`control-pill ${isSelectionMode ? 'control-pill-primary' : 'control-pill-secondary'}`}
               onClick={() => {
                 hapticTap('medium');
                 if (isSelectionMode) {
@@ -4433,7 +4380,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               title="Sélection multiple d'articles"
             >
               <IconCheck size={12} />
-              <span>{isSelectionMode ? 'Terminer' : 'Sélec'}</span>
+              <span>{isSelectionMode ? 'Fin' : 'Sélec'}</span>
             </button>
           </div>
 
@@ -4441,35 +4388,23 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {/* Line Counter Badge */}
             <span
-              className="text-xs text-muted font-mono font-bold whitespace-nowrap flex-shrink-0"
-              style={{
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--glass-border-subtle)',
-                borderRadius: 9999,
-                height: 30,
-                padding: '0 9px',
-                display: 'inline-flex',
-                alignItems: 'center',
-              }}
+              className="line-counter-pill"
+              title="Nombre de lignes affichées / total"
             >
               {searchScope === 'all'
-                ? `${displayLines.length}/${entityLines?.length || displayLines.length} lig.`
-                : `${displayLines.length}/${lines.length} lig.`}
+                ? `${displayLines.length}/${entityLines?.length || displayLines.length}`
+                : `${displayLines.length}/${lines.length}`}
             </span>
 
             {/* Stage Reset Button */}
             {billStageUnitTotals[stage] > 0 && (
               <button
                 type="button"
-                className="btn btn-xs flex items-center gap-1 font-bold flex-shrink-0"
+                className="control-pill"
                 style={{
                   background: 'rgba(239, 68, 68, 0.12)',
                   color: 'var(--danger)',
                   border: '1px solid rgba(239, 68, 68, 0.3)',
-                  borderRadius: 9999,
-                  height: 34,
-                  padding: '0 10px',
-                  fontSize: '0.74rem',
                 }}
                 onClick={() => {
                   hapticTap('medium');
@@ -4486,8 +4421,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             {stage === 'preparation' && (
               <button
                 type="button"
-                className="btn btn-xs btn-primary flex items-center gap-1 font-bold flex-shrink-0"
-                style={{ borderRadius: 9999, height: 34, padding: '0 12px', fontSize: '0.74rem' }}
+                className="control-pill control-pill-primary"
                 onClick={() => {
                   hapticTap('medium');
                   setShowStageSignOffModal(true);
@@ -5086,11 +5020,12 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
       {showScrollTop && (
         <button
           type="button"
-          className="scroll-top-pill"
+          className="scroll-top-fab"
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           title="Retourner en haut"
+          aria-label="Retourner en haut"
         >
-          ↑ Haut
+          <IconArrowUp size={20} />
         </button>
       )}
 
