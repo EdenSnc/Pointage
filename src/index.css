@@ -847,7 +847,6 @@ select,
 [data-theme="light"] .btn-primary:active *,
 [data-theme="light"] .btn-success * {
   color: #ffffff !important;
-  fill: #ffffff !important;
 }
 
 .btn-primary,
@@ -856,13 +855,23 @@ select,
 .btn-primary:focus *,
 .btn-primary:active * {
   color: #ffffff !important;
-  fill: #ffffff !important;
 }
 
 .btn-success,
 .btn-success * {
   color: #ffffff !important;
-  fill: #ffffff !important;
+}
+
+/* Ensure outline/stroke icons inside buttons do not have their open interiors filled */
+.btn-primary svg,
+.btn-success svg {
+  stroke: #ffffff !important;
+}
+
+svg polyline,
+svg[fill="none"] polyline,
+svg[fill="none"] path:not([fill*="#"]):not([fill*="url"]):not([fill*="var"]) {
+  fill: none !important;
 }
 
 

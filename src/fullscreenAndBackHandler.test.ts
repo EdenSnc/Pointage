@@ -6,6 +6,7 @@ import {
   requestScreenWakeLock,
   setupAndroidBackAndFullscreenGuard,
   subscribePwaInstall,
+  resetWakeLockForTesting,
 } from './fullscreenAndBackHandler';
 
 describe('fullscreenAndBackHandler Subsystem', () => {
@@ -235,26 +236,29 @@ describe('fullscreenAndBackHandler Subsystem', () => {
       cleanup();
     });
 
-    it('re-engages fullscreen on popstate if fullscreen was dropped by Android gesture', () => {
+    it('does not call requestFullscreen on popstate to prevent Android notification spam', () => {
       const cleanup = setupAndroidBackAndFullscreenGuard();
       const mockReq = (globalThis as any).document.documentElement.requestFullscreen;
       mockReq.mockClear();
 
       (globalThis as any).window.dispatchEvent({ type: 'popstate' });
 
-      expect(mockReq).toHaveBeenCalledWith({ navigationUI: 'hide' });
+      expect(mockReq).not.toHaveBeenCalled();
 
       cleanup();
     });
 
-    it('re-engages fullscreen on visibilitychange when returning to app', () => {
+    it('requests screen wake lock on visibilitychange when returning to app', () => {
+      resetWakeLockForTesting();
       const cleanup = setupAndroidBackAndFullscreenGuard();
-      const mockReq = (globalThis as any).document.documentElement.requestFullscreen;
-      mockReq.mockClear();
+      const wakeLockMock = (globalThis as any).navigator.wakeLock.request;
+      wakeLockMock.mockClear();
 
+      // Release previous lock and simulate resume
+      resetWakeLockForTesting();
       (globalThis as any).document.dispatchEvent({ type: 'visibilitychange' });
 
-      expect(mockReq).toHaveBeenCalledWith({ navigationUI: 'hide' });
+      expect(wakeLockMock).toHaveBeenCalledWith('screen');
 
       cleanup();
     });

@@ -3,7 +3,7 @@
 // ============================================================
 
 import React, { useState, useRef, useEffect } from 'react';
-import { HashRouter, Routes, Route, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { HashRouter, Routes, Route, useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
 import {
@@ -279,6 +279,16 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('pointage_theme', theme);
+
+    // Dynamically update theme-color meta tags so Android system status bar matches header
+    const themeColor = theme === 'dark' ? '#0c0d10' : '#ffffff';
+    let metaTheme = document.querySelector('meta[name="theme-color"]:not([media])') as HTMLMetaElement;
+    if (!metaTheme) {
+      metaTheme = document.createElement('meta');
+      metaTheme.setAttribute('name', 'theme-color');
+      document.head.appendChild(metaTheme);
+    }
+    metaTheme.setAttribute('content', themeColor);
   }, [theme]);
 
   const toggleTheme = () => {
