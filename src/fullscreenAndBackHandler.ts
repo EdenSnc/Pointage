@@ -179,10 +179,9 @@ export function setupAndroidBackAndFullscreenGuard(options?: GuardOptions): () =
   // 2. Engage fullscreen on first user click (one-shot).
   //    This is the ONLY place we initiate fullscreen from scratch.
   //    The Android notification will show ONCE and auto-hide after ~3s.
-  //    In installed PWA mode, we skip this entirely (already fullscreen natively).
   const handleFirstInteraction = () => {
-    if (fullscreenEngaged || isFullscreenActive() || isStandaloneApp()) {
-      // Already done or not needed — stop listening
+    if (fullscreenEngaged || isFullscreenActive()) {
+      // Already done — stop listening
       window.removeEventListener('click', handleFirstInteraction, true);
       return;
     }
@@ -202,7 +201,7 @@ export function setupAndroidBackAndFullscreenGuard(options?: GuardOptions): () =
     // popstate from hardware Back carries a valid user gesture activation,
     // so requestFullscreen can succeed. Android typically doesn't re-show
     // the notification for re-requests after back-exit.
-    if (fullscreenEngaged && !isFullscreenActive() && !isStandaloneApp()) {
+    if (fullscreenEngaged && !isFullscreenActive()) {
       requestAppFullscreen(true).catch(() => {});
     }
 
@@ -236,7 +235,7 @@ export function setupAndroidBackAndFullscreenGuard(options?: GuardOptions): () =
       // Re-acquire screen wake lock on resume
       requestScreenWakeLock().catch(() => {});
       // If we had fullscreen before, try to re-engage
-      if (fullscreenEngaged && !isFullscreenActive() && !isStandaloneApp()) {
+      if (fullscreenEngaged && !isFullscreenActive()) {
         requestAppFullscreen(true).catch(() => {});
       }
     }
