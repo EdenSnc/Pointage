@@ -23,8 +23,6 @@
   --glass-border: 1px solid rgba(255, 255, 255, 0.11);
   --glass-border-subtle: 1px solid rgba(255, 255, 255, 0.06);
   --glass-border-bright: 1px solid rgba(255, 255, 255, 0.22);
-  --border: rgba(255, 255, 255, 0.11);
-  --border-subtle: rgba(255, 255, 255, 0.06);
   --glass-shadow: 0 8px 32px -6px rgba(0, 0, 0, 0.7), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
   --glass-shadow-lg: 0 20px 48px -8px rgba(0, 0, 0, 0.85), inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
   --glass-shadow-glow: 0 0 30px -5px rgba(16, 185, 129, 0.25);
@@ -102,8 +100,6 @@
   --glass-border: 1px solid #d1d5db;
   --glass-border-subtle: 1px solid #e5e7eb;
   --glass-border-bright: 1px solid #9ca3af;
-  --border: #d1d5db;
-  --border-subtle: #e5e7eb;
   --glass-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06);
   --glass-shadow-lg: 0 12px 32px -4px rgba(0, 0, 0, 0.14), 0 4px 8px -2px rgba(0, 0, 0, 0.08);
   --glass-shadow-glow: 0 0 20px rgba(5, 150, 105, 0.2);
@@ -811,13 +807,9 @@ select,
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   user-select: none;
   -webkit-user-select: none;
-  text-align: center;
-  line-height: 1.25;
-  box-sizing: border-box;
+  white-space: nowrap;
   position: relative;
-  /* Anti-Cutoff Directive: Prevent clipping text inside buttons */
-  overflow: visible;
-  max-width: 100%;
+  overflow: hidden;
 }
 
 .btn:active {
@@ -917,43 +909,26 @@ select,
 
 .btn-sm {
   min-height: 38px;
-  padding: 8px 16px;
-  font-size: 0.84rem;
+  padding: 8px 14px;
+  font-size: 0.82rem;
   border-radius: var(--radius-button);
-  box-sizing: border-box;
-  white-space: nowrap;
 }
 
 .btn-xs {
-  min-height: 32px;
-  padding: 5px 12px;
-  font-size: 0.75rem;
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
   font-weight: 600;
   border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.06);
   border: var(--glass-border-subtle);
   color: var(--text-secondary);
   transition: all 0.15s ease;
-  box-sizing: border-box;
-  flex-shrink: 0;
-  white-space: nowrap;
 }
 
 .btn-xs:hover {
   background: rgba(255, 255, 255, 0.12);
   color: var(--text-primary);
-}
-
-.btn-primary.btn-xs,
-[data-theme="light"] .btn-primary.btn-xs {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
-  color: #ffffff !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-}
-
-[data-theme="dark"] .btn-primary.btn-xs {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
-  color: #ffffff !important;
 }
 
 .btn-icon {
@@ -1407,50 +1382,37 @@ select,
    ============================================================ */
 .search-wrapper {
   position: relative;
-  display: flex;
-  align-items: center;
-  background: var(--bg-input);
-  border: var(--glass-border);
-  border-radius: 9999px;
-  padding: 4px 6px 4px 12px;
-  min-height: 52px;
-  backdrop-filter: blur(12px);
   margin-bottom: 14px;
-  box-sizing: border-box;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-  transition: all 0.2s ease;
-}
-
-[data-theme="light"] .search-wrapper {
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
-}
-
-.search-wrapper:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
 }
 
 .search-input {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  min-height: 44px;
-  padding: 8px 8px;
-  background: transparent;
-  border: none;
+  width: 100%;
+  min-height: 52px;
+  padding: 14px 18px;
+  padding-right: 56px;
+  background: var(--bg-input);
+  backdrop-filter: blur(12px);
+  border: var(--glass-border);
+  border-radius: var(--radius-input);
   color: var(--text-primary);
   font-family: var(--font);
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 600;
   outline: none;
-  box-shadow: none;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+}
+
+.search-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(41, 121, 255, 0.25), inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .search-scan-btn {
-  position: static;
-  transform: none;
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 40px;
   height: 40px;
   display: flex;
@@ -1464,12 +1426,10 @@ select,
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
   transition: transform 0.15s ease;
-  flex-shrink: 0;
-  margin-left: 6px;
 }
 
 .search-scan-btn:active {
-  transform: scale(0.92);
+  transform: translateY(-50%) scale(0.92);
 }
 
 .input {

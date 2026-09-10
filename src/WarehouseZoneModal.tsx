@@ -3,6 +3,7 @@ import type { OrderLine } from './types';
 import {
   WAREHOUSE_ZONES,
   getZoneInfo,
+  getZoneLabel,
   getZoneShortLabel,
   parseZoneCodes,
   updateProductWarehouseZone,
@@ -136,10 +137,9 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
           maxHeight: isMobile ? '100vh' : '90vh',
           borderRadius: isMobile ? 0 : 24,
           overflowY: 'auto',
-          backgroundColor: 'var(--bg-card)',
-          backdropFilter: 'var(--glass-blur)',
-          border: isMobile ? 'none' : '1px solid var(--glass-border)',
-          boxShadow: 'var(--glass-shadow-lg)',
+          backgroundColor: 'var(--bg-surface)',
+          border: isMobile ? 'none' : '1px solid var(--border)',
+          boxShadow: 'var(--shadow-xl)',
           padding: isMobile ? '16px 14px' : 20,
           display: 'flex',
           flexDirection: 'column',
@@ -220,68 +220,35 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
           )}
         </div>
 
-        {/* Category Navigation Tabs (Apple Liquid Glass Pills - Zero Cutoff, High Contrast) */}
+        {/* Category Navigation Tabs (Pill style - 0 sharp corners) */}
         <div
-          className="flex gap-1 mb-3.5 p-1"
+          className="flex gap-1 mb-3 p-1"
           style={{
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--glass-border-subtle)',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
             borderRadius: 9999,
           }}
         >
           <button
             type="button"
-            className="flex-1 transition-all flex items-center justify-center font-bold"
-            style={{
-              fontSize: '0.78rem',
-              padding: '7px 12px',
-              borderRadius: 9999,
-              border: 'none',
-              cursor: 'pointer',
-              background: activeTab === 'chambre' ? 'var(--accent)' : 'transparent',
-              color: activeTab === 'chambre' ? '#ffffff' : 'var(--text-secondary)',
-              boxShadow: activeTab === 'chambre' ? '0 2px 8px rgba(16, 185, 129, 0.35)' : 'none',
-              whiteSpace: 'nowrap',
-              fontFamily: 'var(--font)',
-            }}
+            className={`btn btn-xs flex-1 ${activeTab === 'chambre' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ fontSize: '0.75rem', padding: '6px 10px', borderRadius: 9999 }}
             onClick={() => setActiveTab('chambre')}
           >
             Chambre
           </button>
           <button
             type="button"
-            className="flex-1 transition-all flex items-center justify-center font-bold"
-            style={{
-              fontSize: '0.78rem',
-              padding: '7px 12px',
-              borderRadius: 9999,
-              border: 'none',
-              cursor: 'pointer',
-              background: activeTab === 'couloir' ? 'var(--accent)' : 'transparent',
-              color: activeTab === 'couloir' ? '#ffffff' : 'var(--text-secondary)',
-              boxShadow: activeTab === 'couloir' ? '0 2px 8px rgba(16, 185, 129, 0.35)' : 'none',
-              whiteSpace: 'nowrap',
-              fontFamily: 'var(--font)',
-            }}
+            className={`btn btn-xs flex-1 ${activeTab === 'couloir' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ fontSize: '0.75rem', padding: '6px 10px', borderRadius: 9999 }}
             onClick={() => setActiveTab('couloir')}
           >
-            Couloir
+            Couloir (Salles 1–4)
           </button>
           <button
             type="button"
-            className="flex-1 transition-all flex items-center justify-center font-bold"
-            style={{
-              fontSize: '0.78rem',
-              padding: '7px 12px',
-              borderRadius: 9999,
-              border: 'none',
-              cursor: 'pointer',
-              background: activeTab === 'custom' ? 'var(--accent)' : 'transparent',
-              color: activeTab === 'custom' ? '#ffffff' : 'var(--text-secondary)',
-              boxShadow: activeTab === 'custom' ? '0 2px 8px rgba(16, 185, 129, 0.35)' : 'none',
-              whiteSpace: 'nowrap',
-              fontFamily: 'var(--font)',
-            }}
+            className={`btn btn-xs flex-1 ${activeTab === 'custom' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ fontSize: '0.75rem', padding: '6px 10px', borderRadius: 9999 }}
             onClick={() => setActiveTab('custom')}
           >
             Autre
@@ -321,9 +288,8 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
                         minHeight: 64,
                         padding: '8px 4px',
                         borderRadius: 16,
-                        background: isSelected ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-surface)',
+                        background: isSelected ? 'rgba(16, 185, 129, 0.18)' : 'var(--bg-card)',
                         border: isSelected ? '2px solid var(--accent)' : '1px solid var(--border)',
-                        boxShadow: isSelected ? '0 2px 8px rgba(16, 185, 129, 0.25)' : '0 1px 3px rgba(0, 0, 0, 0.04)',
                         cursor: 'pointer',
                         position: 'relative',
                       }}
@@ -400,9 +366,8 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
                       className="p-3 flex items-center justify-between text-left transition-all"
                       style={{
                         borderRadius: 16,
-                        background: isSelected ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-surface)',
+                        background: isSelected ? 'rgba(16, 185, 129, 0.18)' : 'var(--bg-card)',
                         border: isSelected ? '2px solid var(--accent)' : '1px solid var(--border)',
-                        boxShadow: isSelected ? '0 2px 8px rgba(16, 185, 129, 0.25)' : '0 1px 3px rgba(0, 0, 0, 0.04)',
                         cursor: 'pointer',
                       }}
                       onClick={() => handleToggleZone(z.code)}
@@ -497,21 +462,21 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
 
         {/* Actions Footer */}
         <div
-          className="mt-4 pt-3.5 flex items-center justify-between gap-3"
-          style={{ borderTop: '1px solid var(--glass-border-subtle)' }}
+          className="mt-4 pt-3 flex items-center justify-between gap-2"
+          style={{ borderTop: '1px solid var(--border)' }}
         >
           <button
             type="button"
             className="btn btn-ghost btn-sm text-muted"
-            style={{ borderRadius: 9999, padding: '8px 18px', fontSize: '0.86rem', fontWeight: 600 }}
+            style={{ borderRadius: 9999 }}
             onClick={onClose}
           >
             Annuler
           </button>
           <button
             type="button"
-            className="btn btn-sm btn-success flex items-center gap-2 font-bold"
-            style={{ borderRadius: 9999, padding: '10px 22px', fontSize: '0.88rem', color: '#ffffff', minHeight: 42 }}
+            className="btn btn-sm btn-success flex items-center gap-1.5 font-bold"
+            style={{ borderRadius: 9999, padding: '7px 18px' }}
             disabled={isSubmitting}
             onClick={() => handleSave()}
           >

@@ -58,7 +58,7 @@ export const WAREHOUSE_ZONES: WarehouseZoneOption[] = [
   },
   {
     code: 'CH_CTR',
-    label: 'Chambre Principale • Centre',
+    label: 'Chambre Principale • Centre / Milieu',
     shortLabel: 'CH • Centre',
     category: 'chambre',
     compassRow: 2,
