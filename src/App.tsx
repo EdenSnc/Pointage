@@ -205,9 +205,6 @@ import {
 } from './audio';
 import {
   setupAndroidBackAndFullscreenGuard,
-  subscribePwaInstall,
-  promptPwaInstall,
-  isStandaloneApp,
 } from './fullscreenAndBackHandler';
 
 export interface ToastItem {
@@ -1151,53 +1148,6 @@ function HomeScreen({
       </header>
 
       <div className="app-content">
-        {/* PWA Install Banner for permanent fullscreen without Android system notifications */}
-        {!isStandalone && canInstallPwa && (
-          <div
-            className="pwa-install-banner mb-3"
-            style={{
-              padding: '10px 14px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, rgba(230, 81, 0, 0.12), rgba(255, 152, 0, 0.08))',
-              border: '1px solid rgba(230, 81, 0, 0.3)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-              <span style={{ fontSize: '1.25rem' }}>📱</span>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-primary)' }}>
-                  Installer l'application
-                </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                  Plein écran permanent sans notification Android
-                </div>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="btn btn-sm btn-primary"
-              style={{
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                whiteSpace: 'nowrap',
-                padding: '6px 12px',
-                flexShrink: 0,
-              }}
-              onClick={async () => {
-                const installed = await promptPwaInstall();
-                if (installed) {
-                  showToast('Application installée avec succès !', setToast);
-                }
-              }}
-            >
-              Installer (1 clic)
-            </button>
-          </div>
-        )}
 
         {/* BL Filter Tabs */}
         <div className="flex gap-2 mb-3">
