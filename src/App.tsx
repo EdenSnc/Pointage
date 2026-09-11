@@ -1006,15 +1006,6 @@ function HomeScreen({
   const [activeOperator, setActiveOperatorState] = useState(() => getActiveOperator());
   const [operators, setOperators] = useState(() => loadOperatorsRoster());
   const [showOperatorModal, setShowOperatorModal] = useState(false);
-  const [canInstallPwa, setCanInstallPwa] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(() => isStandaloneApp());
-
-  useEffect(() => {
-    return subscribePwaInstall((can) => {
-      setCanInstallPwa(can);
-      setIsStandalone(isStandaloneApp());
-    });
-  }, []);
 
   const handleSelectOperator = (op: string) => {
     setActiveOperator(op);
