@@ -69,33 +69,119 @@ export function BrandLogo({ size = 26, style, className }: IconProps) {
   );
 }
 
-export function BrandWordmark({
-  size = 28,
-  showSubtitle = true,
+export function BrandWordmarkIntegrated({
+  size = 25,
   style,
+  className,
+  onClick,
+}: {
+  size?: number;
+  style?: React.CSSProperties;
+  className?: string;
+  onClick?: () => void;
+}) {
+  return (
+    <div
+      className={`brand-wordmark-integrated ${className || ''}`}
+      onClick={onClick}
+      title="Pointage"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        cursor: onClick ? 'pointer' : 'default',
+        userSelect: 'none',
+        ...style,
+      }}
+    >
+      {/* Precision-Cropped 'P' Glyph (Tight ViewBox, Zero Blank Padding) */}
+      <svg
+        width={Math.round(size * 1.02)}
+        height={size}
+        viewBox="78 46 388 380"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{ display: 'block', flexShrink: 0 }}
+        aria-hidden="true"
+      >
+        <defs>
+          <linearGradient id="pBodyGradInt" x1="15%" y1="10%" x2="85%" y2="90%">
+            <stop offset="0%" stopColor="#323642" />
+            <stop offset="50%" stopColor="#20232c" />
+            <stop offset="100%" stopColor="#14151b" />
+          </linearGradient>
+          <linearGradient id="pJadeGradInt" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#4ade80" />
+            <stop offset="100%" stopColor="#10b981" />
+          </linearGradient>
+          <linearGradient id="pCurlGradInt" x1="10%" y1="10%" x2="90%" y2="90%">
+            <stop offset="0%" stopColor="#6ee7b7" />
+            <stop offset="45%" stopColor="#34d399" />
+            <stop offset="100%" stopColor="#0f766e" />
+          </linearGradient>
+          <filter id="pCurlShadowInt" x="-25%" y="-25%" width="150%" height="150%">
+            <feDropShadow dx="-3" dy="4" stdDeviation="5" floodColor="#000000" floodOpacity="0.45" />
+          </filter>
+        </defs>
+
+        {/* Outer 'P' Letter Frame with Specular Contrast Rim */}
+        <path
+          d="M 160 416 C 114 416 88 390 88 344 L 88 168 C 88 96 136 56 220 56 L 320 56 C 408 56 456 104 456 192 L 456 244 C 456 332 408 380 320 380 L 264 380 C 258 380 252 384 250 390 C 244 406 236 416 216 416 Z"
+          fill="url(#pBodyGradInt)"
+          stroke="var(--brand-p-stroke, rgba(255, 255, 255, 0.28))"
+          strokeWidth="10"
+          strokeLinejoin="round"
+        />
+
+        {/* Inner White Paper Document */}
+        <path
+          d="M 160 416 L 160 178 C 160 138 184 114 224 114 L 324 114 C 348 114 366 132 366 156 L 366 266 C 366 278 358 296 344 314 L 254 410 C 248 416 238 416 230 416 Z"
+          fill="#FFFFFF"
+        />
+
+        {/* Document lines */}
+        <rect x="200" y="192" width="112" height="22" rx="11" fill="#1b1e26" />
+        <rect x="200" y="234" width="62" height="22" rx="11" fill="url(#pJadeGradInt)" />
+
+        {/* Folded Corner (Curl) */}
+        <path
+          d="M 366 266 C 366 312 338 350 286 372 C 264 382 246 398 234 416 C 248 382 278 350 316 332 C 346 320 362 296 366 266 Z"
+          fill="url(#pCurlGradInt)"
+          filter="url(#pCurlShadowInt)"
+        />
+      </svg>
+
+      {/* Integrated Wordmark Tail: 'ointage' seamlessly flowing from the 'P' */}
+      <span
+        className="brand-wordmark-rest"
+        style={{
+          fontSize: `${Math.round(size * 0.88)}px`,
+        }}
+      >
+        ointage
+      </span>
+    </div>
+  );
+}
+
+export function BrandWordmark({
+  size = 26,
+  style,
+  className,
+  onClick,
 }: {
   size?: number;
   showSubtitle?: boolean;
   style?: React.CSSProperties;
+  className?: string;
+  onClick?: () => void;
 }) {
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 9, ...style }}>
-      <BrandLogo size={size} />
-      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        <span
-          style={{
-            fontFamily: 'var(--font)',
-            fontSize: `${size * 0.76}px`,
-            fontWeight: 700,
-            letterSpacing: '-0.025em',
-            color: 'var(--text-primary)',
-            lineHeight: 1.05,
-          }}
-        >
-          Pointage
-        </span>
-      </div>
-    </div>
+    <BrandWordmarkIntegrated
+      size={size}
+      style={style}
+      className={className}
+      onClick={onClick}
+    />
   );
 }
 

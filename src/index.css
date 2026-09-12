@@ -533,6 +533,39 @@ select,
   opacity: 0.8;
 }
 
+/* ============================================================
+   INTEGRATED LETTERMARK WORDMARK ([P]ointage)
+   The 'P' icon seamlessly integrates as the initial capital letter.
+   ============================================================ */
+.brand-wordmark-integrated {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.5px;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.brand-wordmark-integrated:active {
+  opacity: 0.82;
+  transform: scale(0.975);
+}
+
+.brand-wordmark-rest {
+  font-family: var(--font);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  color: var(--text-primary);
+  line-height: 1;
+  display: inline-block;
+  margin-left: 0.5px;
+  transform: translateY(0.5px);
+}
+
+[data-theme="light"] .brand-wordmark-rest {
+  color: #111827;
+}
+
 .brand-glyph {
   display: flex;
   align-items: center;
