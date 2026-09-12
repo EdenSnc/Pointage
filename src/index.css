@@ -540,7 +540,7 @@ select,
 .brand-wordmark-integrated {
   display: inline-flex;
   align-items: center;
-  gap: 1.5px;
+  gap: 0;
   cursor: pointer;
   user-select: none;
   transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
@@ -558,7 +558,7 @@ select,
   color: var(--text-primary);
   line-height: 1;
   display: inline-block;
-  margin-left: 0.5px;
+  margin-left: -2px;
   transform: translateY(0.5px);
 }
 

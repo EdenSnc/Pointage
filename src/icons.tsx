@@ -95,9 +95,9 @@ export function BrandWordmarkIntegrated({
     >
       {/* Precision-Cropped 'P' Glyph (Tight ViewBox, Zero Blank Padding) */}
       <svg
-        width={Math.round(size * 1.02)}
+        width={Math.round(size * 1.0)}
         height={size}
-        viewBox="78 46 388 380"
+        viewBox="78 46 380 380"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         style={{ display: 'block', flexShrink: 0 }}
