@@ -236,47 +236,33 @@ describe('fullscreenAndBackHandler Subsystem', () => {
       cleanup();
     });
 
-    it('re-requests fullscreen on popstate when fullscreen was previously engaged and dropped', async () => {
+    it('does not trigger fullscreen requests on popstate, keeping navigation clean and static', async () => {
       const cleanup = setupAndroidBackAndFullscreenGuard();
       const mockReq = (globalThis as any).document.documentElement.requestFullscreen;
 
-      // Simulate first click to engage fullscreen
-      (globalThis as any).window.dispatchEvent({ type: 'click' });
-
-      // Flush microtask queue so requestAppFullscreen's .then() sets fullscreenEngaged = true
-      await new Promise((r) => setTimeout(r, 0));
-
-      // Now simulate popstate (back button) — fullscreen is not active so it should re-request
       mockReq.mockClear();
       (globalThis as any).window.dispatchEvent({ type: 'popstate' });
 
-      // The handler checks fullscreenEngaged flag — since we clicked and it resolved, it should try
-      expect(mockReq).toHaveBeenCalledWith({ navigationUI: 'hide' });
+      // No requestFullscreen called — avoiding Android system bar exit jolt
+      expect(mockReq).not.toHaveBeenCalled();
 
       cleanup();
     });
 
-    it('requests screen wake lock and re-engages fullscreen on visibilitychange resume', async () => {
+    it('requests screen wake lock on visibilitychange resume without forcing fullscreen', async () => {
       resetWakeLockForTesting();
       const cleanup = setupAndroidBackAndFullscreenGuard();
       const wakeLockMock = (globalThis as any).navigator.wakeLock.request;
       const mockReq = (globalThis as any).document.documentElement.requestFullscreen;
 
-      // Engage fullscreen first via click
-      (globalThis as any).window.dispatchEvent({ type: 'click' });
-
-      // Flush microtask queue so fullscreenEngaged = true
-      await new Promise((r) => setTimeout(r, 0));
-
       wakeLockMock.mockClear();
       mockReq.mockClear();
 
-      // Release previous lock and simulate resume
       resetWakeLockForTesting();
       (globalThis as any).document.dispatchEvent({ type: 'visibilitychange' });
 
       expect(wakeLockMock).toHaveBeenCalledWith('screen');
-      expect(mockReq).toHaveBeenCalledWith({ navigationUI: 'hide' });
+      expect(mockReq).not.toHaveBeenCalled();
 
       cleanup();
     });

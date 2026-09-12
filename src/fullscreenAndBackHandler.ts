@@ -152,19 +152,18 @@ export async function promptPwaInstall(): Promise<boolean> {
 }
 
 /**
- * Setup Android Hardware/Gesture Back Button Trap and Always-on Fullscreen Guardian
+ * Setup Android Hardware/Gesture Back Button Trap and Wake Lock Guardian
+ * (HTML5 fullscreen is NOT auto-requested, avoiding Android system bar pop-in jolts on Back)
  */
 export function setupAndroidBackAndFullscreenGuard(options?: GuardOptions): () => void {
   if (typeof window === 'undefined') return () => {};
 
   try {
-    localStorage.setItem('pointage_fullscreen_default', 'true');
+    localStorage.removeItem('pointage_fullscreen_default');
+    localStorage.removeItem('pointage_is_pwa');
   } catch {}
 
-  // Track whether we've already engaged fullscreen this session
-  let fullscreenEngaged = false;
-
-  // 1. Initialise History Guard buffer so Back button never exhausts history
+  // 1. Initialise History Guard buffer so Back button never exhausts history or closes the app
   const initHistoryGuard = () => {
     try {
       const state = window.history.state;
@@ -176,35 +175,8 @@ export function setupAndroidBackAndFullscreenGuard(options?: GuardOptions): () =
   };
   initHistoryGuard();
 
-  // 2. Engage fullscreen on first user click (one-shot).
-  //    Only in browser mode — installed PWA gets native fullscreen from manifest.
-  //    The Android notification will show ONCE and auto-hide after ~3s.
-  const handleFirstInteraction = () => {
-    if (fullscreenEngaged || isFullscreenActive() || isStandaloneApp()) {
-      // Already done, or running as installed PWA (manifest handles fullscreen natively)
-      window.removeEventListener('click', handleFirstInteraction, true);
-      return;
-    }
-    requestAppFullscreen(true).then((ok) => {
-      if (ok) {
-        fullscreenEngaged = true;
-        // Remove listener — we only need to do this once
-        window.removeEventListener('click', handleFirstInteraction, true);
-      }
-    }).catch(() => {});
-  };
-  window.addEventListener('click', handleFirstInteraction, { capture: true, passive: true });
-
-  // 3. Intercept popstate (Android Physical/Gesture Back Button)
+  // 2. Intercept popstate (Android Physical/Gesture Back Button)
   const handlePopState = (_e: PopStateEvent) => {
-    // If fullscreen was dropped by Android back gesture, re-engage it immediately.
-    // popstate from hardware Back carries a valid user gesture activation,
-    // so requestFullscreen can succeed. Android typically doesn't re-show
-    // the notification for re-requests after back-exit.
-    if (fullscreenEngaged && !isFullscreenActive() && !isStandaloneApp()) {
-      requestAppFullscreen(true).catch(() => {});
-    }
-
     // Check if an open modal can consume the back button
     if (options?.onCloseModal && options.onCloseModal()) {
       try {
@@ -229,15 +201,11 @@ export function setupAndroidBackAndFullscreenGuard(options?: GuardOptions): () =
   };
   window.addEventListener('popstate', handlePopState);
 
-  // 4. Resume from background / lockscreen
+  // 3. Resume from background / lockscreen
   const handleResume = () => {
     if (document.visibilityState === 'visible') {
       // Re-acquire screen wake lock on resume
       requestScreenWakeLock().catch(() => {});
-      // If we had fullscreen before, try to re-engage
-      if (fullscreenEngaged && !isFullscreenActive() && !isStandaloneApp()) {
-        requestAppFullscreen(true).catch(() => {});
-      }
     }
   };
   document.addEventListener('visibilitychange', handleResume);
@@ -248,7 +216,6 @@ export function setupAndroidBackAndFullscreenGuard(options?: GuardOptions): () =
   requestScreenWakeLock().catch(() => {});
 
   return () => {
-    window.removeEventListener('click', handleFirstInteraction, { capture: true } as any);
     window.removeEventListener('popstate', handlePopState);
     document.removeEventListener('visibilitychange', handleResume);
     window.removeEventListener('pageshow', handleResume);
