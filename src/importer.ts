@@ -35,54 +35,17 @@ export interface ImportResult {
   issues: ImportIssue[];
 }
 
-/**
- * Normalizes bill number to clean alphanumeric uppercase string.
- * Strips common prefixes like "BC/", "BL-", "FACTURE:", spaces and dashes.
- * Example: "BC/0U126/03835" -> "0U12603835"
- */
-export function normalizeBillNumber(raw: string | null | undefined): string {
-  if (!raw) return '';
-  let cleaned = raw.toUpperCase().trim();
-  // Strip common logistical prefixes
-  cleaned = cleaned.replace(/^(BC|BL|FACTURE|COMMANDE|BON)[\s\/\-_:]*/i, '');
-  // Keep only alphanumeric characters
-  cleaned = cleaned.replace(/[^A-Z0-9]/g, '');
-  return cleaned;
-}
-
-/**
- * Determines whether two bills represent the same delivery note.
- */
-export function isSameBill(
-  b1Number: string | undefined,
-  b1Client: string | undefined,
-  b2Number: string | undefined,
-  b2Client: string | undefined
-): boolean {
-  const norm1 = normalizeBillNumber(b1Number);
-  const norm2 = normalizeBillNumber(b2Number);
-
-  const isGeneric1 = !norm1 || norm1 === 'AUTO' || norm1 === 'BLAUTO' || norm1 === 'NOTEMANUSCRITE';
-  const isGeneric2 = !norm2 || norm2 === 'AUTO' || norm2 === 'BLAUTO' || norm2 === 'NOTEMANUSCRITE';
-
-  // Primary rule: Exact normalized bill number match (if non-generic)
-  if (!isGeneric1 && !isGeneric2) {
-    return norm1 === norm2;
-  }
-
-  // Fallback for informal handwritten notes or bills lacking explicit BL numbers:
-  // If at least one bill number is generic, match on identical non-generic client name
-  const c1 = (b1Client || '').trim().toLowerCase();
-  const c2 = (b2Client || '').trim().toLowerCase();
-  const isGenericClient1 = !c1 || c1.includes('client divers') || c1.includes('client inconnu') || c1.includes('note interne');
-  const isGenericClient2 = !c2 || c2.includes('client divers') || c2.includes('client inconnu') || c2.includes('note interne');
-
-  if (!isGenericClient1 && !isGenericClient2 && c1 === c2) {
-    return true;
-  }
-
-  return false;
-}
+export {
+  normalizeBillNumber,
+  normalizeClientName,
+  isClientCompatible,
+  isSameBill,
+  isDuplicateLine,
+} from './deduplication';
+import {
+  isSameBill,
+  isDuplicateLine,
+} from './deduplication';
 
 function validateLine(
   line: ImportLineJSON,
@@ -245,16 +208,21 @@ export async function importBills(
   let totalImportedLines = 0;
   const issues = validateImport(payload);
 
-  // Retrieve all existing active bills in the database to detect multi-page additions
-  const existingActiveBills = await db.bills
-    .filter((b) => b.status === 'active')
-    .toArray();
+  // Retrieve all existing bills in the database to detect multi-page additions or re-imports
+  const existingBills = await db.bills.toArray();
 
   for (const billData of bills) {
-    // Check if this bill matches an existing active bill OR a bill previously processed in this import
-    const candidateBills = [...existingActiveBills, ...importedBills];
+    // Check if this bill matches an existing bill OR a bill previously processed in this import
+    const candidateBills = [...existingBills, ...importedBills];
     const matchingBill = candidateBills.find((cb) =>
-      isSameBill(cb.billNumber, cb.client, billData.billNumber, billData.client)
+      isSameBill(
+        cb.billNumber,
+        cb.client,
+        billData.billNumber,
+        billData.client,
+        cb.bcNumber || undefined,
+        billData.bcNumber || undefined
+      )
     );
 
     const lines = billData.lines || [];
@@ -278,24 +246,20 @@ export async function importBills(
         const rawPrice = lineData.unitPrice;
         const unitPrice = typeof rawPrice === 'number' && !isNaN(rawPrice) && rawPrice >= 0 ? rawPrice : null;
 
-        // Duplicate prevention: check against existing lines in the target bill
-        const isDuplicate = existingLines.some((el) => {
-          // 1. Line number matches AND (same reference, same designation, or same quantity)
-          if (cleanNo && el.no === cleanNo) {
-            if (ref && el.reference && ref.toLowerCase() === el.reference.toLowerCase()) return true;
-            if (lineData.designation && el.designation && lineData.designation.trim().toLowerCase() === el.designation.trim().toLowerCase()) return true;
-            if (el.orderedQty === qty) return true;
-          }
-          // 2. Exact reference match AND quantity match
-          if (ref && el.reference && ref.toLowerCase() === el.reference.toLowerCase() && el.orderedQty === qty) {
-            return true;
-          }
-          // 3. Exact EAN match AND quantity match
-          if (ean && el.ean && ean === el.ean && el.orderedQty === qty) {
-            return true;
-          }
-          return false;
-        });
+        // Duplicate prevention using dedicated deduplication engine
+        const isDuplicate = existingLines.some((el) =>
+          isDuplicateLine(
+            {
+              no: cleanNo,
+              page: lineData.page,
+              reference: ref,
+              ean,
+              designation: lineData.designation,
+              orderedQty: qty,
+            },
+            el
+          )
+        );
 
         if (!isDuplicate) {
           const finalNo = cleanNo || String(existingLines.length + addedForThisBill + 1);

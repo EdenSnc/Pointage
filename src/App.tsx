@@ -69,6 +69,13 @@ import {
   QRSyncPayload,
 } from './logic';
 import { parseImportJSON, importBills, getOrCreateSession, validateImport } from './importer';
+import {
+  findDuplicateBillGroups,
+  mergeDuplicateBills,
+  findDuplicateLinesInBill,
+  mergeDuplicateLinesInBill,
+  isSameBill,
+} from './deduplication';
 import { parseExcelImport } from './excelImporter';
 import { exportBackup, importBackup, downloadBackup, shareBackup } from './backup';
 import type { BackupData } from './backup';
@@ -1109,6 +1116,37 @@ function HomeScreen({
     }));
   }, [displayBills]);
 
+  // Detect duplicate BLs / BCs across active bills
+  const duplicateBillGroups = React.useMemo(() => {
+    return findDuplicateBillGroups(activeBills);
+  }, [activeBills]);
+
+  const [isMergingDuplicates, setIsMergingDuplicates] = useState(false);
+
+  const handleMergeAllDuplicates = async () => {
+    if (isMergingDuplicates || duplicateBillGroups.length === 0) return;
+    setIsMergingDuplicates(true);
+    try {
+      let totalMergedLines = 0;
+      let totalRemovedBills = 0;
+      for (const group of duplicateBillGroups) {
+        if (!group.primary.id) continue;
+        const dupIds = group.duplicates.map((d) => d.id!).filter(Boolean);
+        const res = await mergeDuplicateBills(group.primary.id, dupIds);
+        totalMergedLines += res.mergedLinesCount;
+        totalRemovedBills += res.removedBillsCount;
+      }
+      showToast(
+        `${totalRemovedBills} bon(s) doublon(s) fusionné(s) avec succès (${totalMergedLines} ligne(s) consolidée(s))`,
+        setToast
+      );
+    } catch (err: any) {
+      showToast(`Erreur de fusion : ${err.message || err}`, setToast);
+    } finally {
+      setIsMergingDuplicates(false);
+    }
+  };
+
   return (
     <>
       <header className="app-header">
@@ -1203,6 +1241,51 @@ function HomeScreen({
                 <span>Nouveau BL</span>
               </button>
             )}
+          </div>
+        )}
+
+        {/* Duplicate Bills Warning Banner */}
+        {duplicateBillGroups.length > 0 && billFilter === 'active' && !homeSearch && (
+          <div
+            className="card p-3 mb-3 flex items-center justify-between gap-2"
+            style={{
+              background: 'rgba(245, 158, 11, 0.12)',
+              border: '1px solid rgba(245, 158, 11, 0.32)',
+              borderRadius: 16,
+            }}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <IconWarning size={20} style={{ color: '#f59e0b', flexShrink: 0 }} />
+              <div className="min-w-0">
+                <div className="text-xs font-bold" style={{ color: '#f59e0b' }}>
+                  {duplicateBillGroups.length} bon(s) en double détecté(s)
+                </div>
+                <div className="text-[11px] text-muted truncate">
+                  {duplicateBillGroups
+                    .map(
+                      (g) =>
+                        `${g.primary.billNumber} (${g.duplicates.length + 1} ex.)`
+                    )
+                    .join(' • ')}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-xs flex-shrink-0"
+              style={{
+                background: '#f59e0b',
+                color: '#000',
+                fontWeight: 800,
+                borderRadius: 'var(--radius-pill)',
+                padding: '6px 14px',
+                fontSize: '0.74rem',
+              }}
+              onClick={handleMergeAllDuplicates}
+              disabled={isMergingDuplicates}
+            >
+              {isMergingDuplicates ? 'Fusion...' : 'Fusionner tout'}
+            </button>
           </div>
         )}
 
@@ -1451,7 +1534,20 @@ function ManualBillModal({
   const nav = useNavigate();
   const [client, setClient] = useState('');
   const [billNumber, setBillNumber] = useState('');
+  const [bcNumber, setBcNumber] = useState('');
   const [selectedWilaya, setSelectedWilaya] = useState('');
+
+  const allActiveBills = useLiveQuery(() => db.bills.filter((b) => b.status === 'active').toArray()) || [];
+
+  const detectedDuplicate = React.useMemo(() => {
+    const rawNum = billNumber.trim();
+    const rawClient = client.trim();
+    const rawBc = bcNumber.trim();
+    if (!rawNum && !rawBc) return null;
+    return allActiveBills.find((eb) =>
+      isSameBill(eb.billNumber, eb.client, rawNum, rawClient, eb.bcNumber || undefined, rawBc || undefined)
+    );
+  }, [allActiveBills, billNumber, client, bcNumber]);
 
   if (!isOpen) return null;
 
@@ -1469,8 +1565,16 @@ function ManualBillModal({
       showToast('Session non prête', setToast);
       return;
     }
+    if (detectedDuplicate) {
+      showToast(`Ce bon existe déjà (N° ${detectedDuplicate.billNumber})`, setToast);
+      onClose();
+      nav(`/bill/${detectedDuplicate.id}`);
+      return;
+    }
+
     const finalClient = client.trim().toUpperCase() || 'CLIENT COMPTOIR';
     const finalBillNumber = billNumber.trim().toUpperCase() || `BL-${Date.now().toString().slice(-4)}`;
+    const finalBcNumber = bcNumber.trim().toUpperCase() || null;
     const now = new Date().toISOString();
     const decomposed = decomposeTimestamp(now);
     const detected = selectedWilaya
@@ -1481,6 +1585,7 @@ function ManualBillModal({
       sessionId,
       billNumber: finalBillNumber,
       client: finalClient,
+      bcNumber: finalBcNumber,
       date: decomposed.dateStr,
       timestamp: decomposed.timestamp,
       year: decomposed.year,
@@ -1496,6 +1601,7 @@ function ManualBillModal({
       updatedAt: now,
     });
 
+    scheduleVaultMirror(100);
     hapticTap('medium');
     playSuccessChime();
     showToast(`Bon ${finalBillNumber} créé avec succès`, setToast);
@@ -1571,6 +1677,49 @@ function ManualBillModal({
               style={{ borderRadius: '16px', height: 44, padding: '0 14px' }}
             />
           </div>
+
+          <div>
+            <label className="text-xs text-muted font-bold block mb-1">N° Bon de Commande BC (optionnel)</label>
+            <input
+              className="input"
+              type="text"
+              placeholder="Ex: BC/0U126/03835"
+              value={bcNumber}
+              onChange={(e) => setBcNumber(e.target.value)}
+              style={{ borderRadius: '16px', height: 44, padding: '0 14px' }}
+            />
+          </div>
+
+          {detectedDuplicate && (
+            <div
+              className="p-3 rounded-2xl flex items-center justify-between gap-2"
+              style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+              }}
+            >
+              <div className="min-w-0">
+                <div className="text-xs font-bold text-danger flex items-center gap-1">
+                  <IconWarning size={13} />
+                  <span>Ce bon existe déjà !</span>
+                </div>
+                <div className="text-[11px] text-muted truncate">
+                  N° {detectedDuplicate.billNumber} • {detectedDuplicate.client}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-xs btn-primary flex-shrink-0"
+                style={{ fontSize: '0.72rem', padding: '4px 10px', borderRadius: 'var(--radius-pill)' }}
+                onClick={() => {
+                  onClose();
+                  nav(`/bill/${detectedDuplicate.id}`);
+                }}
+              >
+                Ouvrir
+              </button>
+            </div>
+          )}
 
           <div className="flex gap-2 justify-end mt-3">
             <button
@@ -3174,6 +3323,12 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
 
   const [showResetPhaseModal, setShowResetPhaseModal] = useState(false);
 
+  // Group duplicate product references/designations within this bill
+  const duplicateLineGroups = React.useMemo(() => {
+    return findDuplicateLinesInBill(lines);
+  }, [lines]);
+  const [isMergingLines, setIsMergingLines] = useState(false);
+
   // Distinct lines with active counts in current stage
   const currentStageLinesCount = React.useMemo(() => {
     const lineIdSet = new Set<number>();
@@ -4451,6 +4606,58 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         )}
 
+        {/* Duplicate lines within bill warning & 1-click merge */}
+        {duplicateLineGroups.size > 0 && (
+          <div
+            className="card p-3 mb-3 flex items-center justify-between gap-2"
+            style={{
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: 16,
+            }}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <IconWarning size={18} style={{ color: '#ef4444', flexShrink: 0 }} />
+              <div className="min-w-0">
+                <div className="text-xs font-bold text-danger">
+                  {duplicateLineGroups.size} article(s) répété(s) sur plusieurs lignes
+                </div>
+                <div className="text-[11px] text-muted truncate">
+                  {Array.from(duplicateLineGroups.values())
+                    .map((grp) => `${grp[0].reference || grp[0].designation} (${grp.length} lignes)`)
+                    .join(' • ')}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-xs flex-shrink-0"
+              style={{
+                background: '#ef4444',
+                color: '#fff',
+                fontWeight: 800,
+                borderRadius: 'var(--radius-pill)',
+                padding: '6px 12px',
+                fontSize: '0.72rem',
+              }}
+              disabled={isMergingLines}
+              onClick={async () => {
+                setIsMergingLines(true);
+                try {
+                  const res = await mergeDuplicateLinesInBill(billId);
+                  showToast(`${res.mergedCount} ligne(s) doublon(s) fusionnée(s) avec succès`, setToast);
+                } catch (err: any) {
+                  showToast(`Erreur de fusion : ${err.message || err}`, setToast);
+                } finally {
+                  setIsMergingLines(false);
+                }
+              }}
+            >
+              {isMergingLines ? 'Fusion...' : 'Fusionner les lignes'}
+            </button>
+          </div>
+        )}
+
         {/* Lines */}
         {displayLines.map((line) => {
           const info = lineLatestEventMap.get(line.id!);
@@ -4459,6 +4666,11 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           const disc = calcDiscrepancy(line, stageTotal);
           const isSelected = selectedLineIds.has(line.id!);
           const isLastValidated = lastValidatedLineInfo?.line.id === line.id;
+          const lineRef = (line.reference || '').trim().toLowerCase();
+          const lineDesig = (line.designation || '').trim().toLowerCase();
+          const lineDupKey = lineRef || lineDesig;
+          const lineDupGroup = lineDupKey ? duplicateLineGroups.get(lineDupKey) : undefined;
+          const isDuplicateProduct = Boolean(lineDupGroup && lineDupGroup.length > 1);
 
           const handleCardClick = () => {
             if (isSelectionMode) {
@@ -4525,6 +4737,22 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                       )}
                       {line.status === 'active' && disc.isOver && (
                         <span className="badge badge-over">{showQuantities ? `${disc.over} Excéd` : 'Excédent'}</span>
+                      )}
+                      {isDuplicateProduct && (
+                        <span
+                          className="badge flex items-center gap-1"
+                          style={{
+                            fontSize: '0.65rem',
+                            fontWeight: 700,
+                            background: 'rgba(239, 68, 68, 0.15)',
+                            color: '#ef4444',
+                            borderRadius: '9999px',
+                            padding: '2px 7px',
+                          }}
+                          title={`Cet article apparaît ${lineDupGroup!.length} fois dans ce bon`}
+                        >
+                          <IconWarning size={10} /> Doublon ({lineDupGroup!.length}x)
+                        </span>
                       )}
                       {info?.latestTime && (
                         <span
