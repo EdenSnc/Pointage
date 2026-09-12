@@ -1102,7 +1102,7 @@ function HomeScreen({
     <>
       <header className="app-header">
         <div className="brand-container" onClick={() => nav('/')} title="Pointage">
-          <BrandLogo size={32} />
+          <BrandLogo size={26} />
           <div className="brand-text">
             <span className="brand-title">Pointage</span>
           </div>

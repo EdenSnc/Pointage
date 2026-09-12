@@ -79,15 +79,15 @@ export function BrandWordmark({
   style?: React.CSSProperties;
 }) {
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, ...style }}>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 9, ...style }}>
       <BrandLogo size={size} />
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         <span
           style={{
             fontFamily: 'var(--font)',
             fontSize: `${size * 0.76}px`,
-            fontWeight: 800,
-            letterSpacing: '-0.02em',
+            fontWeight: 700,
+            letterSpacing: '-0.025em',
             color: 'var(--text-primary)',
             lineHeight: 1.05,
           }}
