@@ -105,6 +105,13 @@ export function setupAndroidBackAndFullscreenGuard(options?: GuardOptions): () =
   try {
     localStorage.removeItem('pointage_fullscreen_default');
     localStorage.removeItem('pointage_is_pwa');
+
+    // Actively exit HTML5 fullscreen if currently active
+    const doc = document as any;
+    if (doc && (doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement)) {
+      const exit = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
+      if (exit) exit.call(doc).catch(() => {});
+    }
   } catch {}
 
   // 1. Initialise History Guard buffer so Back button never exhausts history or closes the app
