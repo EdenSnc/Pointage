@@ -81,10 +81,23 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
     try {
       playSuccessChime();
       hapticTap('medium');
-      const finalZones = zonesToSave !== undefined ? zonesToSave : selectedZones;
+      let finalZones = zonesToSave !== undefined ? [...zonesToSave] : [...selectedZones];
+
+      // Auto-commit typed custom zone if user didn't explicitly click "Ajouter"
+      if (activeTab === 'custom' && customInput.trim()) {
+        const trimmed = customInput.trim();
+        if (!finalZones.includes(trimmed)) {
+          finalZones = [...finalZones, trimmed].slice(0, 2);
+        }
+      }
+
       const zoneString = finalZones.length > 0 ? finalZones.join(', ') : null;
+      if (!line.id) {
+        throw new Error('Identifiant d’article manquant');
+      }
+
       await updateProductWarehouseZone(
-        line.id!,
+        line.id,
         line.billId,
         line.reference,
         zoneString,

@@ -4,6 +4,7 @@
 
 import { db } from './db';
 import { saveProductProfile } from './hooks';
+import { scheduleVaultMirror } from './offlineVault';
 import type { OrderLine, ProductProfile, WarehouseZone } from './types';
 
 export interface WarehouseZoneOption {
@@ -283,6 +284,9 @@ export async function updateProductWarehouseZone(
     reason: operatorName ? `Défini par ${operatorName}` : 'Mise à jour emplacement entrepôt',
     timestamp: new Date().toISOString(),
   });
+
+  // Mirror update immediately to offline vault
+  scheduleVaultMirror(200);
 }
 
 /**

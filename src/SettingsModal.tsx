@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   IconX,
   IconSun,
@@ -8,9 +8,11 @@ import {
   IconSparkles,
   IconSend,
   IconUndo,
+  IconCheck,
 } from './icons';
 import { useDailyApiQuota } from './ai/quotaTracker';
 import { detectDeviceProfile, setForcedA54Mode, clearPwaCacheAndReload } from './deviceProfile';
+import { getVaultMeta, restoreFromVault } from './offlineVault';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -245,7 +247,53 @@ export function SettingsModal({
           </div>
         </div>
 
-
+        {/* Protection des Données & Miroir Local */}
+        <div className="card mb-3" style={{ background: 'var(--bg-surface)' }}>
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-2">
+              <IconCheck size={16} style={{ color: 'var(--success)' }} />
+              <div className="font-bold text-sm">Miroir Local de Secours</div>
+            </div>
+            <span
+              className="badge"
+              style={{
+                fontSize: '0.68rem',
+                padding: '2px 8px',
+                background: 'rgba(16, 185, 129, 0.15)',
+                color: 'var(--success)',
+                fontWeight: 800,
+              }}
+            >
+              100% Hors-Ligne
+            </span>
+          </div>
+          <div className="text-xs text-muted mb-2.5 leading-relaxed">
+            {(() => {
+              const meta = getVaultMeta();
+              if (meta) {
+                return `Dernier miroir : ${meta.billsCount} bon(s), ${meta.linesCount} article(s)`;
+              }
+              return 'Miroir automatique actif sur ce téléphone (résistant au nettoyage mémoire)';
+            })()}
+          </div>
+          <button
+            type="button"
+            className="btn btn-xs btn-secondary btn-full flex items-center justify-center gap-2 font-bold"
+            onClick={async () => {
+              try {
+                if (!window.confirm("Restaurer toutes les données depuis le miroir local d'urgence ?")) return;
+                const res = await restoreFromVault();
+                alert(`Restauré avec succès : ${res.billsCount} bon(s) et ${res.linesCount} article(s).`);
+                window.location.reload();
+              } catch (e) {
+                alert((e as Error).message);
+              }
+            }}
+            title="Restaure immédiatement la base de données depuis la copie miroir locale"
+          >
+            <IconUndo size={13} /> Restaurer depuis le miroir local
+          </button>
+        </div>
 
         {/* Configuration Actions */}
         <div className="flex flex-col gap-2">

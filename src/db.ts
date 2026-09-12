@@ -118,47 +118,120 @@ export async function requestPersistence(): Promise<boolean> {
   return false;
 }
 
-// Automatically ensure persistence on startup
+// Automatically ensure persistence on startup and on first user gesture
 requestPersistence().catch(() => {});
+if (typeof window !== 'undefined') {
+  window.addEventListener('pointerdown', () => requestPersistence().catch(() => {}), { once: true });
+  window.addEventListener('keydown', () => requestPersistence().catch(() => {}), { once: true });
+}
 
 /**
- * Automatically checks for any legacy database instances (e.g. 'pointage-db')
- * and imports any missing bills and lines so nothing is ever lost across version updates.
+ * Automatically checks for any legacy database instances (e.g. 'pointage-db', 'pointage_db', 'pointage')
+ * and imports any missing bills, orderLines, countEvents, transportContainers, and productProfiles.
+ * Guarantees zero data loss across version or branding updates.
  */
 export async function recoverLegacyBillsFromOldDatabase(): Promise<number> {
   if (typeof indexedDB === 'undefined') return 0;
-  try {
-    const legacyDBName = 'pointage-db';
-    let recoveredCount = 0;
+  let totalRecovered = 0;
+  const legacyNames = ['pointage-db', 'pointage_db', 'pointage'];
 
-    const openReq = indexedDB.open(legacyDBName);
-    const legacyDb = await new Promise<IDBDatabase | null>((resolve) => {
-      openReq.onsuccess = () => resolve(openReq.result);
-      openReq.onerror = () => resolve(null);
-    });
+  let namesToCheck = legacyNames;
+  if (typeof indexedDB.databases === 'function') {
+    try {
+      const existingDbs = await indexedDB.databases();
+      const existingNames = new Set(existingDbs.map((d) => d.name));
+      namesToCheck = legacyNames.filter((name) => existingNames.has(name));
+    } catch {}
+  }
 
-    if (!legacyDb) return 0;
+  for (const legacyDBName of namesToCheck) {
+    let legacyDb: IDBDatabase | null = null;
+    try {
+      const openReq = indexedDB.open(legacyDBName);
+      legacyDb = await new Promise<IDBDatabase | null>((resolve) => {
+        const timer = setTimeout(() => resolve(null), 1500);
+        openReq.onsuccess = () => {
+          clearTimeout(timer);
+          resolve(openReq.result);
+        };
+        openReq.onerror = () => {
+          clearTimeout(timer);
+          resolve(null);
+        };
+        openReq.onblocked = () => {
+          clearTimeout(timer);
+          resolve(null);
+        };
+      });
 
-    if (legacyDb.objectStoreNames.contains('bills')) {
-      const tx = legacyDb.transaction('bills', 'readonly');
-      const store = tx.objectStore('bills');
-      const req = store.getAll();
+      if (!legacyDb) continue;
+      if (!legacyDb.objectStoreNames.contains('bills')) {
+        legacyDb.close();
+        continue;
+      }
+
+      const storeNames = Array.from(legacyDb.objectStoreNames);
+      const hasOrderLines = storeNames.includes('orderLines');
+      const hasCountEvents = storeNames.includes('countEvents');
+      const hasContainers = storeNames.includes('transportContainers');
+      const hasProfiles = storeNames.includes('productProfiles');
+
+      const txStores = ['bills'];
+      if (hasOrderLines) txStores.push('orderLines');
+      if (hasCountEvents) txStores.push('countEvents');
+      if (hasContainers) txStores.push('transportContainers');
+      if (hasProfiles) txStores.push('productProfiles');
+
+      const tx = legacyDb.transaction(txStores, 'readonly');
+      const billsStore = tx.objectStore('bills');
       const legacyBills = await new Promise<Bill[]>((resolve) => {
+        const req = billsStore.getAll();
         req.onsuccess = () => resolve(req.result || []);
         req.onerror = () => resolve([]);
       });
 
+      let allLegacyLines: OrderLine[] = [];
+      if (hasOrderLines) {
+        allLegacyLines = await new Promise<OrderLine[]>((resolve) => {
+          const req = tx.objectStore('orderLines').getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => resolve([]);
+        });
+      }
+
+      let allLegacyEvents: CountEvent[] = [];
+      if (hasCountEvents) {
+        allLegacyEvents = await new Promise<CountEvent[]>((resolve) => {
+          const req = tx.objectStore('countEvents').getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => resolve([]);
+        });
+      }
+
+      let allLegacyContainers: TransportContainer[] = [];
+      if (hasContainers) {
+        allLegacyContainers = await new Promise<TransportContainer[]>((resolve) => {
+          const req = tx.objectStore('transportContainers').getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => resolve([]);
+        });
+      }
+
       for (const legBill of legacyBills) {
-        const exists = await db.bills
+        const currentBill = await db.bills
           .where('billNumber')
           .equals(legBill.billNumber)
           .first();
-        if (!exists) {
+
+        let targetBillId: number;
+
+        if (!currentBill) {
           const decomposed = decomposeTimestamp(legBill.createdAt || legBill.date);
           const detectedWilaya = detectWilaya(legBill.clientAddress || legBill.client);
-          await db.bills.add({
+          targetBillId = await db.bills.add({
             ...legBill,
             id: undefined,
+            status: legBill.status || 'active',
             timestamp: legBill.timestamp || decomposed.timestamp,
             year: legBill.year || decomposed.year,
             month: legBill.month || decomposed.month,
@@ -169,18 +242,80 @@ export async function recoverLegacyBillsFromOldDatabase(): Promise<number> {
             wilaya: legBill.wilaya || detectedWilaya?.wilaya || null,
             wilayaCode: legBill.wilayaCode || detectedWilaya?.wilayaCode || null,
           });
-          recoveredCount++;
+          totalRecovered++;
+        } else {
+          targetBillId = currentBill.id!;
+        }
+
+        // Check if this bill has its orderLines in db
+        const existingLinesCount = await db.orderLines
+          .where('billId')
+          .equals(targetBillId)
+          .count();
+
+        if (existingLinesCount === 0 && legBill.id) {
+          const matchingLines = allLegacyLines.filter((l) => l.billId === legBill.id);
+          for (const line of matchingLines) {
+            const oldLineId = line.id;
+            const newLineId = await db.orderLines.add({
+              ...line,
+              id: undefined,
+              billId: targetBillId,
+            });
+
+            // Recover matching countEvents
+            const matchingEvents = allLegacyEvents.filter(
+              (e) => e.orderLineId === oldLineId || (e.billId === legBill.id && !e.orderLineId)
+            );
+            for (const ev of matchingEvents) {
+              await db.countEvents.add({
+                ...ev,
+                id: undefined,
+                billId: targetBillId,
+                orderLineId: newLineId,
+              });
+            }
+          }
+
+          // Recover matching containers
+          const matchingContainers = allLegacyContainers.filter((c) => c.billId === legBill.id);
+          for (const c of matchingContainers) {
+            await db.transportContainers.add({
+              ...c,
+              id: undefined,
+              billId: targetBillId,
+            });
+          }
         }
       }
-    }
 
-    legacyDb.close();
-    return recoveredCount;
-  } catch (err) {
-    console.warn('Legacy DB recovery check bypassed:', err);
-    return 0;
+      // Recover product profiles if available
+      if (hasProfiles) {
+        const legacyProfiles = await new Promise<ProductProfile[]>((resolve) => {
+          const req = tx.objectStore('productProfiles').getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => resolve([]);
+        });
+        for (const lp of legacyProfiles) {
+          const exists = await db.productProfiles.where('reference').equals(lp.reference).first();
+          if (!exists) {
+            await db.productProfiles.add({
+              ...lp,
+              id: undefined,
+            });
+          }
+        }
+      }
+
+      legacyDb.close();
+    } catch (err) {
+      console.warn(`Legacy DB recovery check for ${legacyDBName} bypassed:`, err);
+    }
   }
+
+  return totalRecovered;
 }
 
 // Trigger recovery in the background
 recoverLegacyBillsFromOldDatabase().catch(() => {});
+

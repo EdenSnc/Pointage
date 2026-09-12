@@ -3,9 +3,10 @@
 // ============================================================
 
 import React, { useState, useRef, useEffect } from 'react';
-import { HashRouter, Routes, Route, useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
+import { HashRouter, Routes, Route, useNavigate, useParams, useSearchParams, useLocation, Navigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
+import { scheduleVaultMirror, autoRecoverFromVaultIfEmpty } from './offlineVault';
 import {
   useActiveSession,
   useSessionBills,
@@ -292,6 +293,14 @@ export default function App() {
     setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
   };
 
+  useEffect(() => {
+    autoRecoverFromVaultIfEmpty().then((recovered) => {
+      if (recovered) {
+        showToast('Données restaurées depuis le miroir local', setToast);
+      }
+    }).catch(() => {});
+  }, []);
+
   return (
     <HashRouter>
       {!isOnline && (
@@ -356,6 +365,7 @@ export default function App() {
           <Route path="/bill/:billId/summary" element={<SummaryScreen setToast={setToast} />} />
 
           <Route path="/scan" element={<GlobalScanScreen setToast={setToast} />} />
+          <Route path="/bill/:billId/scan" element={<GlobalScanScreen setToast={setToast} />} />
           <Route
             path="/backup"
             element={
@@ -367,6 +377,7 @@ export default function App() {
           />
           <Route path="/history" element={<HistoryScreen />} />
           <Route path="/bill/:billId/extras" element={<ExtrasScreen setToast={setToast} />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </ErrorBoundary>
       {toast && (
@@ -1030,7 +1041,7 @@ function HomeScreen({
 
   const [billFilter, setBillFilter] = useState<'active' | 'archived'>('active');
 
-  const activeBills = bills.filter(b => b.status === 'active');
+  const activeBills = bills.filter(b => b.status !== 'completed');
   const archivedBills = bills.filter(b => b.status === 'completed');
   const displayBills = billFilter === 'active' ? activeBills : archivedBills;
 
@@ -5105,7 +5116,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
 
   const handleBack = () => {
     if (fromParam === 'scan') {
-      nav(`/bill/${billId}/scan?stage=${stage}`, { replace: true });
+      nav(`/scan${billId ? `?billId=${billId}&stage=${stage}` : ''}`, { replace: true });
     } else if (fromParam === 'home') {
       nav('/', { replace: true });
     } else {
@@ -5148,24 +5159,13 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const [showSubModal, setShowSubModal] = useState(false);
   const [subSearch, setSubSearch] = useState('');
   const [selectedSubLine, setSelectedSubLine] = useState<OrderLine | null>(null);
-  const [subPaidAdvance, setSubPaidAdvance] = useState(false);
-  const [subNotifyClient, setSubNotifyClient] = useState(true);
-  const [subCustomNote, setSubCustomNote] = useState('');
+  const [substituteQty, setSubstituteQty] = useState<string>('');
+  const [substituteNotifyClient, setSubstituteNotifyClient] = useState(true);
 
-  // Edit mode
+  // Direct edit of orderedQty (with reason tracking)
   const [editingQty, setEditingQty] = useState(false);
   const [editQtyVal, setEditQtyVal] = useState('');
   const [editReason, setEditReason] = useState<ChangeReason>('official_change');
-  const [editingField, setEditingField] = useState<string | null>(null);
-  const [editFieldVal, setEditFieldVal] = useState('');
-  const [showQuantities, setShowQuantities] = useState(() => localStorage.getItem('pointage_show_quantities') === 'true');
-
-  const [activeOperator, setActiveOperatorState] = useState(() => getActiveOperator());
-  const [operators, setOperators] = useState(() => loadOperatorsRoster());
-  const [showOperatorModal, setShowOperatorModal] = useState(false);
-
-  const [crossBillOptions, setCrossBillOptions] = useState<CrossBillPreparedStockOption[]>([]);
-  const [selectedCrossBillOption, setSelectedCrossBillOption] = useState<CrossBillPreparedStockOption | null>(null);
   const [showCrossBillModal, setShowCrossBillModal] = useState(false);
   const [showReplenishModal, setShowReplenishModal] = useState(false);
   const [showZoneModal, setShowZoneModal] = useState(false);
@@ -5249,7 +5249,28 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     };
   }, [billId, line?.id, line?.orderedQty, line?.reference, line?.ean, line?.designation, line?.shortageResolvedAsPartial, stageTotal]);
 
-  if (!line || !bill) return <div className="app-content"><div className="spinner" /></div>;
+  if (!line || !bill) {
+    return (
+      <div className="app-content flex flex-col items-center justify-center p-6 text-center" style={{ minHeight: '60vh' }}>
+        <div className="card max-w-sm w-full p-6 text-center" style={{ borderRadius: 20 }}>
+          <div className="mx-auto mb-3 flex items-center justify-center" style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(234, 179, 8, 0.15)', color: 'var(--warning)' }}>
+            <IconWarning size={28} />
+          </div>
+          <h3 className="font-bold text-base mb-1">Article ou bon indisponible</h3>
+          <p className="text-xs text-muted mb-4">
+            Cet article n’a pas été trouvé ou a été mis à jour.
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary btn-full"
+            onClick={handleBack}
+          >
+            Retour
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const disc = calcDiscrepancy(line, stageTotal);
   const batchQty = useDirectEntry
@@ -5364,6 +5385,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
         playSuccessChime();
       }
       showToast(`+${qtyAdded} enregistré`, setToast);
+      scheduleVaultMirror(300);
 
       const autoReturn = localStorage.getItem('pointage_auto_return_after_add') !== 'false';
 
@@ -5392,6 +5414,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
       playUndoBeep();
       hapticTap('medium');
       showToast('Dernier comptage annulé', setToast);
+      scheduleVaultMirror(300);
     } else {
       playErrorBeep();
       showToast('Rien à annuler', setToast);
@@ -5408,6 +5431,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     playUndoBeep();
     hapticTap('medium');
     showToast('Comptage réinitialisé à 0', setToast);
+    scheduleVaultMirror(300);
   };
 
   const handleApplyPackQty = (qty: number, packsCount: number, pSize?: number | null, isLooseOnly?: boolean) => {
@@ -5450,6 +5474,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
       });
     }
     showToast('Colisage effacé', setToast);
+    scheduleVaultMirror(300);
   };
 
   const handleSaveExactCount = async () => {
@@ -5472,6 +5497,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     }
     setEditingCount(false);
     showToast(`Comptage ajusté à ${val} pièces`, setToast);
+    scheduleVaultMirror(300);
   };
 
   const handleSaveQty = async () => {
@@ -5480,6 +5506,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     await updateOrderLineField(lineId, 'orderedQty', line.orderedQty, newQty, editReason);
     setEditingQty(false);
     showToast('Quantité mise à jour', setToast);
+    scheduleVaultMirror(300);
   };
 
   const handleStatusChange = async (newStatus: LineStatus) => {
@@ -5491,6 +5518,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     }
     await updateLineStatus(lineId, newStatus);
     showToast(`Statut → ${newStatus === 'cancelled' ? 'Annulé' : newStatus === 'not_found' ? 'Introuvable' : 'Actif'}`, setToast);
+    scheduleVaultMirror(300);
   };
 
   return (
@@ -7932,8 +7960,9 @@ function Stepper({ value, onChange, onFocus }: { value: number; onChange: (v: nu
 // ============================================================
 function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
   const nav = useNavigate();
+  const { billId: billIdFromPath } = useParams();
   const [searchParams] = useSearchParams();
-  const billIdParam = searchParams.get('billId');
+  const billIdParam = searchParams.get('billId') || billIdFromPath;
   const stageParam = searchParams.get('stage') || 'preparation';
 
   const session = useActiveSession();

@@ -2,9 +2,10 @@
 // POINTAGE — JSON Multi-Bill Importer
 // ============================================================
 
-import { db } from './db';
+import { db, requestPersistence } from './db';
 import { generateReferenceAliases } from './logic';
 import { findProductProfileMatch, saveProductProfile } from './hooks';
+import { scheduleVaultMirror } from './offlineVault';
 import type {
   ImportPayload,
   ImportBillJSON,
@@ -282,7 +283,7 @@ export async function importBills(
           // 1. Line number matches AND (same reference, same designation, or same quantity)
           if (cleanNo && el.no === cleanNo) {
             if (ref && el.reference && ref.toLowerCase() === el.reference.toLowerCase()) return true;
-            if (lineData.designation && el.designation && lineData.designation.toLowerCase() === lineData.designation.toLowerCase()) return true;
+            if (lineData.designation && el.designation && lineData.designation.trim().toLowerCase() === el.designation.trim().toLowerCase()) return true;
             if (el.orderedQty === qty) return true;
           }
           // 2. Exact reference match AND quantity match
@@ -507,6 +508,10 @@ export async function importBills(
       importedBills.push(bill);
     }
   }
+
+  // Ensure persistent storage and mirror data to offline vault
+  requestPersistence().catch(() => {});
+  scheduleVaultMirror(100);
 
   return { bills: importedBills, mergedBills, lineCount: totalImportedLines, issues };
 }
