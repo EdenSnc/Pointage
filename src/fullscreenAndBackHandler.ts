@@ -1,34 +1,20 @@
 /**
  * ============================================================
- * ANDROID BACK BUTTON TRAP & ALWAYS-ON FULLSCREEN SUBSYSTEM
+ * ANDROID BACK BUTTON TRAP & SCREEN WAKELOCK SUBSYSTEM
  * ============================================================
  *
+ * Fullscreen is completely disabled across the application to prevent
+ * Android Chrome/WebAPK system bar pop-in jolts and navigation issues.
+ *
  * Strategy:
- * 1. Request HTML5 fullscreen ONCE on the first user interaction (tap/click).
- *    - Android Chrome shows the security notification ONCE. It auto-hides after ~3s.
- *    - We never re-trigger from scratch after that initial engagement.
- *
- * 2. If Android drops fullscreen via Back button, we re-request in popstate.
- *    Android Chrome typically does NOT re-show the notification for immediate
- *    re-requests within the same user-gesture context.
- *
- * 3. Virtual history trap prevents the app from quitting on Back at root.
- *
- * 4. Screen WakeLock keeps the display awake during warehouse shifts.
- *
- * 5. PWA install hooks for 1-click installation (installed PWA = zero notifications).
+ * 1. Virtual history trap prevents the app from quitting on Back at root.
+ * 2. Screen WakeLock keeps the display awake during warehouse shifts.
+ * 3. Standard PWA standalone window mode with static, stable system UI.
  */
 
-// Check if currently active in HTML5 Fullscreen
+// Fullscreen is completely disabled
 export function isFullscreenActive(): boolean {
-  if (typeof document === 'undefined') return false;
-  const doc = document as any;
-  return !!(
-    doc.fullscreenElement ||
-    doc.webkitFullscreenElement ||
-    doc.mozFullScreenElement ||
-    doc.msFullscreenElement
-  );
+  return false;
 }
 
 // Check if running as an installed standalone PWA (WebAPK / iOS Standalone)
@@ -36,56 +22,14 @@ export function isStandaloneApp(): boolean {
   if (typeof window === 'undefined') return false;
   return (
     window.matchMedia?.('(display-mode: standalone)').matches ||
-    window.matchMedia?.('(display-mode: fullscreen)').matches ||
     (window.navigator as any)?.standalone === true ||
     (typeof document !== 'undefined' && Boolean(document.referrer?.includes('android-app://')))
   );
 }
 
-let lastFsAttempt = 0;
-
-// Request HTML5 fullscreen with throttle to avoid spamming the OS notification
-export async function requestAppFullscreen(force = false): Promise<boolean> {
-  if (typeof document === 'undefined') return false;
-  if (isFullscreenActive()) return true;
-
-  const now = Date.now();
-  // 2-second cooldown to prevent notification re-queue
-  if (!force && now - lastFsAttempt < 2000) {
-    return false;
-  }
-  lastFsAttempt = now;
-
-  const elem = document.documentElement as any;
-  if (!elem) return false;
-
-  const req =
-    elem.requestFullscreen ||
-    elem.webkitRequestFullscreen ||
-    elem.mozRequestFullScreen ||
-    elem.msRequestFullscreen;
-
-  if (!req) return false;
-
-  try {
-    const p = req.call(elem, { navigationUI: 'hide' });
-    if (p && typeof p.then === 'function') {
-      await p;
-      return true;
-    }
-    return true;
-  } catch {
-    try {
-      const p2 = req.call(elem);
-      if (p2 && typeof p2.then === 'function') {
-        await p2;
-        return true;
-      }
-      return true;
-    } catch {
-      return false;
-    }
-  }
+// Deprecated no-op: HTML5 fullscreen is permanently disabled
+export async function requestAppFullscreen(_force = false): Promise<boolean> {
+  return false;
 }
 
 // Screen WakeLock to prevent phone display sleep during warehouse operations

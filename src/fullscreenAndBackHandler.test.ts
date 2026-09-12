@@ -113,18 +113,8 @@ describe('fullscreenAndBackHandler Subsystem', () => {
   });
 
   describe('isFullscreenActive', () => {
-    it('returns false when no fullscreen element is present', () => {
+    it('always returns false as fullscreen is completely disabled', () => {
       expect(isFullscreenActive()).toBe(false);
-    });
-
-    it('returns true when document.fullscreenElement is set', () => {
-      (globalThis as any).document.fullscreenElement = {};
-      expect(isFullscreenActive()).toBe(true);
-    });
-
-    it('detects vendor-prefixed webkitFullscreenElement', () => {
-      (globalThis as any).document.webkitFullscreenElement = {};
-      expect(isFullscreenActive()).toBe(true);
     });
   });
 
@@ -143,30 +133,9 @@ describe('fullscreenAndBackHandler Subsystem', () => {
   });
 
   describe('requestAppFullscreen', () => {
-    it('requests fullscreen with navigationUI: "hide"', async () => {
+    it('is a disabled no-op returning false', async () => {
       const res = await requestAppFullscreen(true);
-      expect(res).toBe(true);
-      expect((globalThis as any).document.documentElement.requestFullscreen).toHaveBeenCalledWith({
-        navigationUI: 'hide',
-      });
-    });
-
-    it('throttles rapid sequential requests unless force=true', async () => {
-      const mockReq = (globalThis as any).document.documentElement.requestFullscreen;
-
-      // First forced call succeeds
-      await requestAppFullscreen(true);
-      expect(mockReq).toHaveBeenCalledTimes(1);
-
-      // Second immediate call without force is throttled
-      const throttled = await requestAppFullscreen(false);
-      expect(throttled).toBe(false);
-      expect(mockReq).toHaveBeenCalledTimes(1);
-
-      // Third forced call succeeds
-      const forced = await requestAppFullscreen(true);
-      expect(forced).toBe(true);
-      expect(mockReq).toHaveBeenCalledTimes(2);
+      expect(res).toBe(false);
     });
   });
 

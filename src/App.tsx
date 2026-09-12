@@ -430,10 +430,7 @@ function AudioMuteButton({ className, style }: { className?: string; style?: Rea
   );
 }
 
-// ---- Reusable Fullscreen Toggle (Fullscreen is always on by default across all screens) ----
-export function FullscreenButton(_props?: { className?: string; style?: React.CSSProperties }) {
-  return null;
-}
+
 
 // ---- Reusable Operator Header Button (Minimalist, Icon-Only) ----
 function OperatorHeaderButton({
