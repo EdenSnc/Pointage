@@ -6,6 +6,7 @@ import { db } from './db';
 import { saveProductProfile } from './hooks';
 import { scheduleVaultMirror } from './offlineVault';
 import type { OrderLine, ProductProfile, WarehouseZone } from './types';
+import { detectProductFamily, extractNumericReference } from './rangeShortcuts';
 
 export interface WarehouseZoneOption {
   code: string;
@@ -326,3 +327,167 @@ export function sortLinesByWarehouseZone(
 export function getWarehouseCircuitDescription(): string {
   return 'Chambre (NW ➔ SE) ⟶ Couloir (Salles 1–3) ⟶ Salle 4 (Sud ➔ Nord)';
 }
+
+export interface SimilarLocationSuggestion {
+  suggestedZone: string;
+  zoneLabel: string;
+  shortLabel: string;
+  reason: string;
+  confidence: number;
+  matchType: 'close_reference' | 'same_category' | 'name_similarity';
+  sampleReference?: string | null;
+  sampleDesignation?: string | null;
+}
+
+/**
+ * Searches for similar products with known locations when the target product
+ * has no location set.
+ * Uses:
+ * 1. Numeric reference proximity (e.g. 71661 is right next to 71662)
+ * 2. Product family / category matching (e.g. Trousses -> Chambre Nord)
+ */
+export function findSimilarProductLocations(
+  targetLine: OrderLine,
+  allLines: OrderLine[],
+  profilesMap?: Map<string, ProductProfile>
+): SimilarLocationSuggestion | null {
+  // If target already has an assigned zone, no fallback needed
+  if (targetLine.warehouseZone) {
+    return null;
+  }
+
+  const targetNum = extractNumericReference(targetLine.reference);
+  const targetFamily = detectProductFamily(targetLine.designation || '');
+
+  const candidates: {
+    line: OrderLine;
+    zone: string;
+    num: number | null;
+    family: { id: string; name: string };
+  }[] = [];
+
+  for (const l of allLines) {
+    if (l.id === targetLine.id) continue;
+    const zone = l.warehouseZone || (l.reference && profilesMap ? profilesMap.get(l.reference)?.warehouseZone : null);
+    if (!zone) continue;
+
+    candidates.push({
+      line: l,
+      zone,
+      num: extractNumericReference(l.reference),
+      family: detectProductFamily(l.designation || ''),
+    });
+  }
+
+  // Also check product profiles
+  if (profilesMap) {
+    profilesMap.forEach((prof, ref) => {
+      if (!prof.warehouseZone) return;
+      // Skip if already in candidate lines
+      if (candidates.some((c) => c.line.reference === ref)) return;
+
+      candidates.push({
+        line: {
+          id: -1,
+          billId: -1,
+          no: '',
+          page: null,
+          reference: ref,
+          originalReference: ref,
+          ean: null,
+          originalEan: null,
+          designation: prof.normalizedDesignation || ref,
+          originalDesignation: prof.normalizedDesignation || ref,
+          orderedQty: 0,
+          originalOrderedQty: 0,
+          status: 'active',
+          warehouseZone: prof.warehouseZone,
+        },
+        zone: prof.warehouseZone,
+        num: extractNumericReference(ref),
+        family: detectProductFamily(prof.normalizedDesignation || ''),
+      });
+    });
+  }
+
+  if (candidates.length === 0) return null;
+
+  const suggestions: SimilarLocationSuggestion[] = [];
+
+  // Strategy 1: Check close numeric reference
+  if (targetNum !== null) {
+    let closestCandidate: (typeof candidates)[0] | null = null;
+    let minDiff = Infinity;
+
+    for (const cand of candidates) {
+      if (cand.num === null) continue;
+      const diff = Math.abs(targetNum - cand.num);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestCandidate = cand;
+      }
+    }
+
+    if (closestCandidate && minDiff <= 60) {
+      const confidence = minDiff <= 5 ? 0.95 : minDiff <= 20 ? 0.85 : 0.72;
+      const primaryZone = parseZoneCodes(closestCandidate.zone)[0] || closestCandidate.zone;
+      suggestions.push({
+        suggestedZone: primaryZone,
+        zoneLabel: getZoneLabel(primaryZone),
+        shortLabel: getZoneShortLabel(primaryZone),
+        reason: `Réf très proche : ${closestCandidate.line.reference || closestCandidate.num} (écart de ${minDiff}) située en ${getZoneShortLabel(primaryZone)}`,
+        confidence,
+        matchType: 'close_reference',
+        sampleReference: closestCandidate.line.reference,
+        sampleDesignation: closestCandidate.line.designation,
+      });
+    }
+  }
+
+  // Strategy 2: Check same family / category
+  if (targetFamily.id !== 'divers') {
+    const sameFamily = candidates.filter((c) => c.family.id === targetFamily.id);
+    if (sameFamily.length > 0) {
+      // Find the most frequent zone in this family
+      const zoneCounts = new Map<string, { count: number; sample: (typeof sameFamily)[0] }>();
+      for (const item of sameFamily) {
+        const pz = parseZoneCodes(item.zone)[0] || item.zone;
+        const curr = zoneCounts.get(pz) || { count: 0, sample: item };
+        curr.count += 1;
+        zoneCounts.set(pz, curr);
+      }
+
+      let bestZone = '';
+      let maxCount = 0;
+      let bestSample: (typeof sameFamily)[0] | null = null;
+
+      zoneCounts.forEach((val, z) => {
+        if (val.count > maxCount) {
+          maxCount = val.count;
+          bestZone = z;
+          bestSample = val.sample;
+        }
+      });
+
+      if (bestZone && bestSample) {
+        suggestions.push({
+          suggestedZone: bestZone,
+          zoneLabel: getZoneLabel(bestZone),
+          shortLabel: getZoneShortLabel(bestZone),
+          reason: `Même famille "${targetFamily.name}" : ${maxCount} article(s) rangé(s) en ${getZoneShortLabel(bestZone)} (ex: ${bestSample.line.designation})`,
+          confidence: 0.80,
+          matchType: 'same_category',
+          sampleReference: bestSample.line.reference,
+          sampleDesignation: bestSample.line.designation,
+        });
+      }
+    }
+  }
+
+  if (suggestions.length === 0) return null;
+
+  // Return highest confidence
+  suggestions.sort((a, b) => b.confidence - a.confidence);
+  return suggestions[0];
+}
+

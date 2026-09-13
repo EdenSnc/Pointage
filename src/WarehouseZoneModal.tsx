@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { OrderLine } from './types';
+import { db } from './db';
 import {
   WAREHOUSE_ZONES,
   getZoneInfo,
@@ -7,14 +8,17 @@ import {
   getZoneShortLabel,
   parseZoneCodes,
   updateProductWarehouseZone,
+  findSimilarProductLocations,
+  type SimilarLocationSuggestion,
 } from './warehouseZones';
-import { IconCompass, IconMapPin, IconX, IconCheck, IconTrash } from './icons';
+import { IconCompass, IconMapPin, IconX, IconCheck, IconTrash, IconZap } from './icons';
 import { playSuccessChime, hapticTap } from './audio';
 
 interface WarehouseZoneModalProps {
   isOpen: boolean;
   onClose: () => void;
   line: OrderLine;
+  siblingLines?: OrderLine[];
   currentZone?: string | null;
   activeOperator?: string | null;
   onZoneUpdated?: (newZone: string | null) => void;
@@ -26,6 +30,7 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
   isOpen,
   onClose,
   line,
+  siblingLines,
   currentZone,
   activeOperator,
   onZoneUpdated,
@@ -36,6 +41,36 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
   const initialSelected = parseZoneCodes(currentZoneNorm);
 
   const [selectedZones, setSelectedZones] = useState<string[]>(initialSelected);
+  const [fallbackSuggestion, setFallbackSuggestion] = useState<SimilarLocationSuggestion | null>(null);
+
+  React.useEffect(() => {
+    let isCancelled = false;
+    if (siblingLines && siblingLines.length > 0 && !line.warehouseZone) {
+      const sugg = findSimilarProductLocations(line, siblingLines);
+      if (!isCancelled) setFallbackSuggestion(sugg);
+    } else if (!line.warehouseZone && line.billId) {
+      db.orderLines.where('billId').equals(line.billId).toArray().then((all) => {
+        if (!isCancelled) {
+          const sugg = findSimilarProductLocations(line, all);
+          setFallbackSuggestion(sugg);
+        }
+      }).catch(() => {});
+    }
+    return () => { isCancelled = true; };
+  }, [line, siblingLines]);
+
+  const handleAdoptSuggestion = (sugg: SimilarLocationSuggestion) => {
+    hapticTap('medium');
+    playSuccessChime();
+    setSelectedZones([sugg.suggestedZone]);
+    if (sugg.suggestedZone.startsWith('CO_')) {
+      setActiveTab('couloir');
+    } else if (sugg.suggestedZone.startsWith('CH_')) {
+      setActiveTab('chambre');
+    } else {
+      setActiveTab('custom');
+    }
+  };
 
   // Auto-detect initial tab from first selected zone
   const [activeTab, setActiveTab] = useState<ZoneTab>(() => {
@@ -232,6 +267,53 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
             </button>
           )}
         </div>
+
+        {/* Smart Locating Fallback Suggestion */}
+        {selectedZones.length === 0 && fallbackSuggestion && (
+          <div
+            className="p-3 mb-3 text-xs"
+            style={{
+              borderRadius: 16,
+              background: 'rgba(59, 130, 246, 0.12)',
+              border: '1px solid rgba(59, 130, 246, 0.35)',
+            }}
+          >
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <div className="flex items-center gap-1.5 font-bold" style={{ color: '#60a5fa' }}>
+                <IconZap size={14} />
+                <span>Emplacement Suggéré par Similarité</span>
+              </div>
+              <span
+                className="badge"
+                style={{
+                  background: 'rgba(59, 130, 246, 0.25)',
+                  color: '#93c5fd',
+                  fontWeight: 800,
+                  fontSize: '0.68rem',
+                }}
+              >
+                {Math.round(fallbackSuggestion.confidence * 100)}% Match
+              </span>
+            </div>
+            <div className="text-xs font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
+              {fallbackSuggestion.reason}
+            </div>
+            <button
+              type="button"
+              className="btn btn-xs w-full flex items-center justify-center gap-1.5 font-bold"
+              style={{
+                borderRadius: 9999,
+                background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                color: '#fff',
+                padding: '6px 12px',
+              }}
+              onClick={() => handleAdoptSuggestion(fallbackSuggestion)}
+            >
+              <IconCheck size={13} />
+              <span>Adopter : {fallbackSuggestion.shortLabel}</span>
+            </button>
+          </div>
+        )}
 
         {/* Category Navigation Tabs (Pill style - 0 sharp corners) */}
         <div

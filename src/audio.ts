@@ -326,4 +326,45 @@ export function playErrorBeep() {
   } catch {}
 }
 
+/**
+ * Amazon-style Industrial Dock Alert Siren (high-attention broadcast chime)
+ * Signals all or targeted warehouse workers to report to the dock for truck unloading.
+ * Haptic: Urgent multi-pulse [200ms, 100ms, 200ms, 100ms, 300ms]
+ */
+export function playDockAlertTone() {
+  triggerAmbientFlash('warning');
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    try {
+      navigator.vibrate([200, 100, 200, 100, 300]);
+    } catch {}
+  }
+
+  if (isAudioMuted()) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  try {
+    const now = ctx.currentTime;
+    // Two rapid high-visibility pulses (880 Hz -> 660 Hz)
+    [0, 0.22, 0.44].forEach((offset) => {
+      const startTime = now + offset;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(880, startTime);
+      osc.frequency.exponentialRampToValueAtTime(659.25, startTime + 0.16);
+
+      gain.gain.setValueAtTime(0.001, startTime);
+      gain.gain.linearRampToValueAtTime(0.24, startTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.18);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + 0.18);
+    });
+  } catch {}
+}
+
+
 

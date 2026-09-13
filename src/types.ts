@@ -139,6 +139,7 @@ export interface Bill {
   documentType?: 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | 'proforma' | null;
   commercialNote?: string | null;
   imageUrl?: string | null;
+  billPhotos?: string[] | null;
   // Stage Operator Accountability
   preparedBy?: string | null;
   preparedAt?: string | null;
@@ -432,3 +433,40 @@ export interface StoreDemand {
   createdAt: string;
   updatedAt: string;
 }
+
+export type DechargementStatus = 'scheduled' | 'arrived' | 'in_progress' | 'completed' | 'inspected';
+
+export interface DechargementSession {
+  id?: number;
+  title: string;
+  truckPlate?: string | null;
+  carrierName?: string | null;
+  supplierName?: string | null;
+  containerNumber?: string | null;
+  dockZone: string;
+  status: DechargementStatus;
+  estimatedCartons: number;
+  unloadedCartons: number;
+  damagedCartons: number;
+  palletsCount?: number | null;
+  assignedWorkers: string[];
+  broadcastToAll: boolean;
+  lastBroadcastAt?: string | null;
+  damagePhotos?: string[];
+  notes?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DechargementWorkerCall {
+  sessionId: number;
+  dockZone: string;
+  truckInfo: string;
+  targetAudience: 'all' | string[];
+  calledBy: string;
+  message: string;
+  timestamp: string;
+}
+

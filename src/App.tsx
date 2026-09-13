@@ -144,6 +144,9 @@ import {
   IconSparkles,
   IconClock,
   IconHistory,
+  IconMegaphone,
+  IconBell,
+  IconZap,
 } from './icons';
 
 import {
@@ -170,7 +173,17 @@ import {
   getZoneShortLabel,
   sortLinesByWarehouseZone,
   getWarehouseCircuitDescription,
+  findSimilarProductLocations,
+  updateProductWarehouseZone,
+  type SimilarLocationSuggestion,
 } from './warehouseZones';
+import {
+  analyzeBillRangeStructure,
+  checkReferenceInBill,
+  detectProductFamily,
+  type NumericRangeCluster,
+  type ReferenceCheckResult,
+} from './rangeShortcuts';
 import {
   downloadTripExitWorkbook,
   formatTripWhatsAppMessage,
@@ -192,6 +205,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { SettingsModal } from './SettingsModal';
 import { StoreDemandModal } from './StoreDemandModal';
 import { StaffNavetteModal } from './StaffNavetteModal';
+import { DechargementModal } from './DechargementModal';
 import { FastScanQuantityCard } from './FastScanQuantityCard';
 import { ConformityDonutChart } from './ConformityDonutChart';
 import { ConcentricStageRings } from './ConcentricStageRings';
@@ -205,6 +219,7 @@ import {
   playExactMatchChime,
   playUndoBeep,
   playErrorBeep,
+  playDockAlertTone,
   hapticTap,
   isAudioMuted,
   setAudioMuted,
@@ -306,8 +321,69 @@ export default function App() {
     }).catch(() => {});
   }, []);
 
+  const [activeDockCall, setActiveDockCall] = useState<{
+    sessionId: number;
+    title: string;
+    dockZone: string;
+    truckPlate?: string;
+    targetAudience: string | string[];
+    timestamp: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const handleDockCall = (e: Event) => {
+      const custom = e as CustomEvent;
+      if (custom.detail) {
+        setActiveDockCall(custom.detail);
+      }
+    };
+    window.addEventListener('dock-worker-call', handleDockCall);
+    return () => window.removeEventListener('dock-worker-call', handleDockCall);
+  }, []);
+
   return (
     <HashRouter>
+      {activeDockCall && (
+        <div
+          className="dock-call-banner flex items-center justify-between gap-2 p-2.5"
+          style={{
+            background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+            color: '#000',
+            fontWeight: 800,
+            fontSize: '0.8rem',
+            position: 'sticky',
+            top: 0,
+            zIndex: 9999,
+            boxShadow: '0 4px 16px rgba(245, 158, 11, 0.4)',
+          }}
+        >
+          <div className="flex items-center gap-2 truncate">
+            <span style={{ fontSize: '1.2rem' }}>🚨</span>
+            <span className="truncate">
+              APPEL DÉCHARGEMENT : {activeDockCall.dockZone} • {activeDockCall.title} ({activeDockCall.truckPlate || 'Camion'})
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn btn-xs"
+            style={{
+              background: '#000',
+              color: '#f59e0b',
+              fontWeight: 900,
+              borderRadius: 9999,
+              padding: '4px 12px',
+              flexShrink: 0,
+            }}
+            onClick={() => {
+              playSuccessChime();
+              showToast('✓ Présence confirmée au déchargement quai', setToast);
+              setActiveDockCall(null);
+            }}
+          >
+            ✓ J'arrive
+          </button>
+        </div>
+      )}
       {!isOnline && (
         <div
           className="offline-banner"
@@ -1017,6 +1093,7 @@ function HomeScreen({
   const [showManualBillModal, setShowManualBillModal] = useState(false);
   const [showStoreDemandModal, setShowStoreDemandModal] = useState(false);
   const [showStaffNavetteModal, setShowStaffNavetteModal] = useState(false);
+  const [showDechargementModal, setShowDechargementModal] = useState(false);
   const [showQuantities, setShowQuantities] = useState(() => localStorage.getItem('pointage_show_quantities') === 'true');
   const [activeOperator, setActiveOperatorState] = useState(() => getActiveOperator());
   const [operators, setOperators] = useState(() => loadOperatorsRoster());
@@ -1181,37 +1258,59 @@ function HomeScreen({
 
       <div className="app-content">
 
-        {/* Quick Tools: Remontées Magasin & Navette Chauffeurs */}
-        <div className="grid grid-cols-2 gap-2 mb-3">
+        {/* Quick Tools: Remontées Magasin, Navette Chauffeurs & Déchargement Quai */}
+        <div className="grid grid-cols-3 gap-1.5 mb-3">
           <button
             type="button"
-            className="btn btn-sm btn-secondary flex items-center justify-center gap-1.5"
+            className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
             style={{
               borderRadius: 12,
               background: 'rgba(234, 179, 8, 0.1)',
               borderColor: 'rgba(234, 179, 8, 0.3)',
               color: '#eab308',
               fontWeight: 700,
+              fontSize: '0.72rem',
+              padding: '6px 4px',
             }}
             onClick={() => setShowStoreDemandModal(true)}
             title="Noter et suivre les demandes des vendeurs en magasins / surfaces"
           >
-            <span>🏪 Remontées Magasin</span>
+            <span>🏪 Demandes</span>
           </button>
           <button
             type="button"
-            className="btn btn-sm btn-secondary flex items-center justify-center gap-1.5"
+            className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
             style={{
               borderRadius: 12,
               background: 'rgba(59, 130, 246, 0.1)',
               borderColor: 'rgba(59, 130, 246, 0.3)',
               color: '#3b82f6',
               fontWeight: 700,
+              fontSize: '0.72rem',
+              padding: '6px 4px',
             }}
             onClick={() => setShowStaffNavetteModal(true)}
             title="Voir les trajets des chauffeurs et places disponibles pour les ouvriers"
           >
-            <span>🚐 Navette Chauffeurs</span>
+            <span>🚐 Navette</span>
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
+            style={{
+              borderRadius: 12,
+              background: 'rgba(245, 158, 11, 0.14)',
+              borderColor: 'rgba(245, 158, 11, 0.35)',
+              color: '#f59e0b',
+              fontWeight: 800,
+              fontSize: '0.72rem',
+              padding: '6px 4px',
+            }}
+            onClick={() => setShowDechargementModal(true)}
+            title="Gérer les arrivées camions, pointage déchargement et appel préparateurs"
+          >
+            <IconTruck size={14} />
+            <span>Déchargement</span>
           </button>
         </div>
 
@@ -1561,6 +1660,12 @@ function HomeScreen({
       <StaffNavetteModal
         isOpen={showStaffNavetteModal}
         onClose={() => setShowStaffNavetteModal(false)}
+      />
+
+      <DechargementModal
+        isOpen={showDechargementModal}
+        onClose={() => setShowDechargementModal(false)}
+        onToast={(m) => showToast(m, setToast)}
       />
     </>
   );
@@ -3500,6 +3605,103 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const [showQRSync, setShowQRSync] = useState(false);
   const [unknownBarcodeModal, setUnknownBarcodeModal] = useState<string | null>(null);
 
+  // Mental Shortcuts (Plages & Familles)
+  const [showMentalShortcuts, setShowMentalShortcuts] = useState(false);
+  const [selectedFamilyFilter, setSelectedFamilyFilter] = useState<string | null>(null);
+  const [selectedRangeCluster, setSelectedRangeCluster] = useState<NumericRangeCluster | null>(null);
+
+  const rangeStructure = React.useMemo(() => {
+    return analyzeBillRangeStructure(lines);
+  }, [lines]);
+
+  const refCheckResult = React.useMemo(() => {
+    if (!searchQuery.trim()) return null;
+    return checkReferenceInBill(searchQuery, lines, rangeStructure);
+  }, [searchQuery, lines, rangeStructure]);
+
+  // Commande-Level Photo Gallery
+  const billPhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const [selectedZoomPhoto, setSelectedZoomPhoto] = useState<string | null>(null);
+
+  const handleBillPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !bill?.id) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 900;
+        let width = img.width;
+        let height = img.height;
+        if (width > height && width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+
+        const currentPhotos = bill.billPhotos || [];
+        const nextPhotos = [...currentPhotos, dataUrl];
+        await db.bills.update(bill.id, { billPhotos: nextPhotos });
+        showToast("Photo de modèle attachée à la commande", setToast);
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDeleteBillPhoto = async (photoToDelete: string) => {
+    if (!bill?.id) return;
+    const currentPhotos = bill.billPhotos || [];
+    const nextPhotos = currentPhotos.filter((p) => p !== photoToDelete);
+    await db.bills.update(bill.id, { billPhotos: nextPhotos });
+    setSelectedZoomPhoto(null);
+    showToast("Photo retirée de la commande", setToast);
+  };
+
+  // Robust Multi-Select Engine (Long press + Always-accessible checkbox)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didLongPressTrigger = useRef(false);
+
+  const toggleLineSelection = (lineId: number) => {
+    setSelectedLineIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(lineId)) {
+        next.delete(lineId);
+      } else {
+        next.add(lineId);
+      }
+      if (next.size > 0 && !isSelectionMode) {
+        setIsSelectionMode(true);
+      }
+      return next;
+    });
+  };
+
+  const handleTouchStartCard = (lineId: number) => {
+    didLongPressTrigger.current = false;
+    longPressTimerRef.current = setTimeout(() => {
+      didLongPressTrigger.current = true;
+      hapticTap('medium');
+      toggleLineSelection(lineId);
+    }, 380);
+  };
+
+  const handleTouchEndCard = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
   const [activeOperator, setActiveOperatorState] = useState(() => getActiveOperator());
   const [operators, setOperators] = useState(() => loadOperatorsRoster());
   const [showOperatorModal, setShowOperatorModal] = useState(false);
@@ -3845,6 +4047,18 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
     }
   }
 
+  // Mental Shortcuts (Famille & Plage) filters
+  if (selectedFamilyFilter) {
+    displayLines = displayLines.filter(
+      (l) => detectProductFamily(l.designation || '').id === selectedFamilyFilter
+    );
+  }
+  if (selectedRangeCluster) {
+    displayLines = displayLines.filter((l) =>
+      selectedRangeCluster.lineIds.includes(l.id!)
+    );
+  }
+
   // Status Filter ('all' | 'todo' | 'done' | 'problems')
   if (filterStatus === 'todo') {
     displayLines = displayLines.filter((l) => {
@@ -4077,6 +4291,78 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             </div>
           </div>
         )}
+
+        {/* Commande-Level Photo Gallery (Modèles demandés / Bons manuscrits) */}
+        <div
+          className="card p-3 mb-3"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            borderRadius: 16,
+          }}
+        >
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-1.5 font-bold text-xs">
+              <IconCamera size={15} style={{ color: 'var(--accent)' }} />
+              <span>Photos Commande & Modèles demandés ({(bill.billPhotos || []).length})</span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-xs btn-primary flex items-center gap-1 font-bold"
+              style={{ borderRadius: 9999, padding: '3px 10px' }}
+              onClick={() => billPhotoInputRef.current?.click()}
+            >
+              <IconPlus size={12} />
+              <span>+ Photo Modèle</span>
+            </button>
+            <input
+              ref={billPhotoInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              style={{ display: 'none' }}
+              onChange={handleBillPhotoUpload}
+            />
+          </div>
+
+          {bill.billPhotos && bill.billPhotos.length > 0 ? (
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pt-1">
+              {bill.billPhotos.map((photo, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    width: 68,
+                    height: 68,
+                    borderRadius: 12,
+                    overflow: 'hidden',
+                    border: '2px solid var(--accent)',
+                    position: 'relative',
+                    flexShrink: 0,
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => setSelectedZoomPhoto(photo)}
+                >
+                  <img
+                    src={photo}
+                    alt={`Modèle ${idx + 1}`}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-[11px] text-muted flex items-center justify-between">
+              <span>Ajoutez des photos des modèles exacts ou motifs pour les vendeurs et chauffeurs</span>
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost text-accent font-bold"
+                onClick={() => billPhotoInputRef.current?.click()}
+              >
+                Prendre photo
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Collapsible Overview Header Pill (Compact pill when collapsed, integrated card when expanded) */}
         {!showOverviewDiagrams ? (
@@ -4591,10 +4877,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             {/* Selection Mode Toggle */}
             <button
               type="button"
-              className={`control-pill ${isSelectionMode ? 'control-pill-primary' : 'control-pill-secondary'}`}
+              className={`control-pill ${isSelectionMode || selectedLineIds.size > 0 ? 'control-pill-primary' : 'control-pill-secondary'}`}
               onClick={() => {
                 hapticTap('medium');
-                if (isSelectionMode) {
+                if (isSelectionMode || selectedLineIds.size > 0) {
                   setIsSelectionMode(false);
                   setSelectedLineIds(new Set());
                 } else {
@@ -4604,7 +4890,21 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               title="Sélection multiple d'articles"
             >
               <IconCheck size={12} />
-              <span>{isSelectionMode ? 'Fin' : 'Sélec'}</span>
+              <span>{isSelectionMode || selectedLineIds.size > 0 ? `Sélec (${selectedLineIds.size})` : 'Sélec'}</span>
+            </button>
+
+            {/* Mental Shortcuts (Plages & Familles) Toggle */}
+            <button
+              type="button"
+              className={`control-pill ${showMentalShortcuts || selectedFamilyFilter || selectedRangeCluster ? 'control-pill-primary' : 'control-pill-secondary'}`}
+              onClick={() => {
+                hapticTap('light');
+                setShowMentalShortcuts((prev) => !prev);
+              }}
+              title="Afficher les raccourcis mentaux des plages numériques et familles"
+            >
+              <IconZap size={12} />
+              <span>Plages</span>
             </button>
           </div>
 
@@ -4652,8 +4952,8 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                 }}
                 title="Valider et signer la préparation"
               >
-                <IconCheck size={13} />
-                <span>Valider</span>
+                <IconCheck size={12} />
+                <span>Signer</span>
               </button>
             )}
           </div>
@@ -4682,8 +4982,138 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         )}
 
+        {/* Skip-Guide Alert: Ref is Absent in this Order */}
+        {refCheckResult && refCheckResult.isSkipped && (
+          <div
+            className="p-3 mb-2 flex items-start gap-2.5 text-xs"
+            style={{
+              borderRadius: 14,
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1.5px solid rgba(239, 68, 68, 0.4)',
+              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.12)',
+            }}
+          >
+            <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>⛔</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, color: 'var(--danger)', fontSize: '0.84rem' }}>
+                Réf {refCheckResult.numericValue} : ABSENT de cette commande ! (Zapper directement)
+              </div>
+              {refCheckResult.familyContext && (
+                <div style={{ marginTop: 2, color: 'var(--text-primary)', fontWeight: 600 }}>
+                  {refCheckResult.familyContext}
+                </div>
+              )}
+              <div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: '0.74rem' }}>
+                Plages présentes dans ce bon : {refCheckResult.activeRangesInBill.join(' • ')}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mental Shortcuts Drawer (Familles & Plages Numériques) */}
+        {showMentalShortcuts && (
+          <div
+            className="card p-3 mb-3"
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              borderRadius: 16,
+            }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5 font-bold text-xs" style={{ color: 'var(--accent)' }}>
+                <IconZap size={14} />
+                <span>Raccourcis Mentaux • Plages Numériques Présentes</span>
+              </div>
+              {(selectedFamilyFilter || selectedRangeCluster) && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs text-danger font-bold"
+                  onClick={() => {
+                    setSelectedFamilyFilter(null);
+                    setSelectedRangeCluster(null);
+                  }}
+                >
+                  Réinitialiser filtres
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {rangeStructure.families.map((fam) => {
+                const isFamActive = selectedFamilyFilter === fam.id;
+                return (
+                  <div
+                    key={fam.id}
+                    className="p-2 rounded-xl"
+                    style={{
+                      background: isFamActive ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                      border: `1px solid ${isFamActive ? 'var(--accent)' : 'var(--glass-border-subtle)'}`,
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-1 mb-1.5">
+                      <button
+                        type="button"
+                        className="flex items-center gap-1.5 font-bold text-xs text-left"
+                        style={{
+                          color: isFamActive ? 'var(--accent)' : 'var(--text-primary)',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: 0,
+                        }}
+                        onClick={() => setSelectedFamilyFilter(isFamActive ? null : fam.id)}
+                      >
+                        <span>{fam.icon}</span>
+                        <span>{fam.name}</span>
+                        <span className="badge" style={{ fontSize: '0.65rem', padding: '1px 6px' }}>
+                          {fam.lineCount} art
+                        </span>
+                      </button>
+                      <span className="text-[10px] text-muted font-bold">
+                        {fam.totalOrderedUnits} unités
+                      </span>
+                    </div>
+
+                    {/* Series / Plages chips */}
+                    <div className="flex flex-wrap gap-1">
+                      {fam.numericRanges.map((cluster) => {
+                        const isClusterActive = selectedRangeCluster?.label === cluster.label;
+                        return (
+                          <button
+                            key={cluster.label}
+                            type="button"
+                            className={`btn btn-xs ${isClusterActive ? 'btn-primary' : 'btn-secondary'}`}
+                            style={{
+                              borderRadius: 9999,
+                              fontSize: '0.68rem',
+                              padding: '2px 8px',
+                              fontWeight: 700,
+                            }}
+                            onClick={() => {
+                              if (isClusterActive) {
+                                setSelectedRangeCluster(null);
+                              } else {
+                                setSelectedRangeCluster(cluster);
+                                setSelectedFamilyFilter(fam.id);
+                              }
+                            }}
+                            title={`Filtrer uniquement sur ${cluster.label}`}
+                          >
+                            <span>{cluster.label} ({cluster.count})</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Selection Toolbar when in multi-select mode */}
-        {isSelectionMode && (
+        {(isSelectionMode || selectedLineIds.size > 0) && (
           <div
             className="selection-toolbar flex items-center justify-between p-2 mb-2"
             style={{
@@ -4692,25 +5122,49 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               border: '1px solid rgba(16, 185, 129, 0.25)',
             }}
           >
-            <button
-              type="button"
-              className="btn btn-xs btn-ghost"
-              style={{ fontWeight: 700, color: 'var(--accent)' }}
-              onClick={() => {
-                const allDisplayedIds = displayLines.map((l) => l.id!).filter(Boolean);
-                const allSelected =
-                  allDisplayedIds.length > 0 && allDisplayedIds.every((id) => selectedLineIds.has(id));
-                if (allSelected) {
-                  setSelectedLineIds(new Set());
-                } else {
-                  setSelectedLineIds(new Set(allDisplayedIds));
-                }
-              }}
-            >
-              {displayLines.length > 0 && displayLines.every((l) => selectedLineIds.has(l.id!))
-                ? 'Tout décocher'
-                : `Tout cocher (${displayLines.length})`}
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost"
+                style={{ fontWeight: 700, color: 'var(--accent)' }}
+                onClick={() => {
+                  const allDisplayedIds = displayLines.map((l) => l.id!).filter(Boolean);
+                  const allSelected =
+                    allDisplayedIds.length > 0 && allDisplayedIds.every((id) => selectedLineIds.has(id));
+                  if (allSelected) {
+                    setSelectedLineIds(new Set());
+                  } else {
+                    setSelectedLineIds(new Set(allDisplayedIds));
+                  }
+                }}
+              >
+                {displayLines.length > 0 && displayLines.every((l) => selectedLineIds.has(l.id!))
+                  ? 'Tout décocher'
+                  : `Tout cocher (${displayLines.length})`}
+              </button>
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost text-warning"
+                style={{ fontWeight: 700 }}
+                onClick={() => {
+                  const shortIds = displayLines
+                    .filter((l) => {
+                      const info = lineLatestEventMap.get(l.id!);
+                      const evts = eventsByLine.get(l.id!) || [];
+                      const stageTotal = info ? info.stageTotal : sumStageEvents(evts, stage);
+                      const disc = calcDiscrepancy(l, stageTotal);
+                      return disc.isShort || (stageTotal === 0 && l.status === 'active');
+                    })
+                    .map((l) => l.id!)
+                    .filter(Boolean);
+                  setSelectedLineIds(new Set(shortIds));
+                  setIsSelectionMode(true);
+                }}
+                title="Sélectionner tous les articles manquants ou non commencés"
+              >
+                Manquants
+              </button>
+            </div>
             <span className="text-xs font-bold" style={{ color: 'var(--accent)' }}>
               {selectedLineIds.size} sélectionné{selectedLineIds.size > 1 ? 's' : ''}
             </span>
@@ -4722,7 +5176,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                 setSelectedLineIds(new Set());
               }}
             >
-              Annuler
+              Fermer
             </button>
           </div>
         )}
@@ -4794,17 +5248,12 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           const isDuplicateProduct = Boolean(lineDupGroup && lineDupGroup.length > 1);
 
           const handleCardClick = () => {
-            if (isSelectionMode) {
+            if (didLongPressTrigger.current) {
+              return;
+            }
+            if (isSelectionMode || selectedLineIds.size > 0) {
               hapticTap('light');
-              setSelectedLineIds((prev) => {
-                const next = new Set(prev);
-                if (next.has(line.id!)) {
-                  next.delete(line.id!);
-                } else {
-                  next.add(line.id!);
-                }
-                return next;
-              });
+              toggleLineSelection(line.id!);
             } else {
               nav(`/bill/${line.billId}/line/${line.id}?stage=${stage}`);
             }
@@ -4816,20 +5265,43 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               id={`line-${line.id}`}
               className={`product-card ${isSelected ? 'selected-line-card' : ''} ${line.id === lastUpdatedLineId ? 'just-updated-card' : ''}`}
               onClick={handleCardClick}
+              onTouchStart={() => handleTouchStartCard(line.id!)}
+              onTouchEnd={handleTouchEndCard}
+              onTouchMove={handleTouchEndCard}
+              onMouseDown={() => handleTouchStartCard(line.id!)}
+              onMouseUp={handleTouchEndCard}
+              onMouseLeave={handleTouchEndCard}
             >
               <div className="flex items-start gap-2">
-                {isSelectionMode && (
-                  <div
-                    className={`selection-checkbox ${isSelected ? 'checked' : ''}`}
-                    style={{ marginTop: 2 }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleCardClick();
-                    }}
-                  >
-                    {isSelected && <IconCheck size={13} />}
-                  </div>
-                )}
+                <button
+                  type="button"
+                  className={`selection-checkbox-btn ${isSelected ? 'checked' : ''}`}
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 7,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: isSelected ? 'var(--accent)' : 'rgba(255, 255, 255, 0.05)',
+                    border: `2px solid ${isSelected ? 'var(--accent)' : 'rgba(255, 255, 255, 0.22)'}`,
+                    color: '#fff',
+                    cursor: 'pointer',
+                    padding: 0,
+                    flexShrink: 0,
+                    marginTop: 2,
+                    transition: 'all 0.15s ease',
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    hapticTap('light');
+                    toggleLineSelection(line.id!);
+                  }}
+                  title={isSelected ? "Désélectionner l'article" : "Sélectionner l'article"}
+                  aria-label={isSelected ? "Désélectionner l'article" : "Sélectionner l'article"}
+                >
+                  {isSelected && <IconCheck size={14} />}
+                </button>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1 flex-wrap">
@@ -4997,8 +5469,11 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                         </div>
                       );
                     }
+
+                    const similarLoc = !effectiveZone ? findSimilarProductLocations(line, displayLines, profileMap) : null;
+
                     return (
-                      <div className="flex items-center gap-1.5 mt-1">
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                         <button
                           type="button"
                           className={`badge-zone-pill ${effectiveZone ? 'badge-zone-assigned' : 'badge-zone-unassigned'}`}
@@ -5011,6 +5486,42 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                           <IconMapPin size={10} />
                           <span>{zoneShort || '+ Emplacement'}</span>
                         </button>
+                        {!effectiveZone && similarLoc && (
+                          <button
+                            type="button"
+                            className="badge"
+                            style={{
+                              background: 'rgba(59, 130, 246, 0.15)',
+                              border: '1px solid rgba(59, 130, 246, 0.4)',
+                              color: '#60a5fa',
+                              fontSize: '0.65rem',
+                              fontWeight: 700,
+                              borderRadius: 9999,
+                              padding: '2px 8px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              hapticTap('light');
+                              await updateProductWarehouseZone(
+                                line.id!,
+                                line.billId,
+                                line.reference,
+                                similarLoc.suggestedZone,
+                                activeOperator || undefined
+                              );
+                              showToast(`Emplacement ${similarLoc.shortLabel} adopté (${similarLoc.reason})`, setToast);
+                            }}
+                            title={`Adopter l'emplacement suggéré (${similarLoc.reason})`}
+                          >
+                            <IconZap size={10} />
+                            <span>Suggéré: {similarLoc.shortLabel}</span>
+                            <span style={{ textDecoration: 'underline', marginLeft: 2 }}>Adopter</span>
+                          </button>
+                        )}
                       </div>
                     );
                   })()}
@@ -5451,6 +5962,62 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             );
           }}
         />
+      )}
+
+      {/* Commande Photo Zoom Lightbox Modal */}
+      {selectedZoomPhoto && (
+        <div
+          className="modal-backdrop"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.92)',
+            zIndex: 999,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+          onClick={() => setSelectedZoomPhoto(null)}
+        >
+          <div
+            className="flex items-center justify-between w-full max-w-lg mb-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="text-xs font-bold text-muted">
+              Photo modèle / bon manuscrit ({bill.client})
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="btn btn-xs btn-danger font-bold"
+                onClick={() => handleDeleteBillPhoto(selectedZoomPhoto)}
+              >
+                Supprimer photo
+              </button>
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost text-white"
+                onClick={() => setSelectedZoomPhoto(null)}
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+          <img
+            src={selectedZoomPhoto}
+            alt="Modèle commande agrandi"
+            style={{
+              maxWidth: '100%',
+              maxHeight: '80vh',
+              objectFit: 'contain',
+              borderRadius: 12,
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
       )}
     </>
   );
