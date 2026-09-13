@@ -337,28 +337,28 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
         className="card"
         style={{
           width: '100%',
-          maxWidth: isMobile ? '100%' : 540,
-          height: isMobile ? '100%' : 'auto',
-          maxHeight: isMobile ? '100vh' : '92vh',
-          borderRadius: isMobile ? 0 : 24,
+          maxWidth: 520,
+          maxHeight: '90vh',
+          borderRadius: 'var(--radius-modal, 26px)',
           overflowY: 'auto',
           backgroundColor: 'var(--bg-surface)',
-          border: isMobile ? 'none' : '1px solid var(--border)',
+          border: '1px solid var(--border)',
           boxShadow: 'var(--shadow-xl)',
-          padding: isMobile ? '16px 14px' : 22,
+          backdropFilter: 'var(--glass-blur)',
+          padding: 20,
           display: 'flex',
           flexDirection: 'column',
         }}
       >
         {/* Header */}
-        <div className="flex justify-between items-start mb-3">
+        <div className="flex justify-between items-center mb-3">
           <div className="flex items-center gap-2.5">
             <div
               style={{
-                width: 42,
-                height: 42,
-                borderRadius: 14,
-                background: 'rgba(59, 130, 246, 0.16)',
+                width: 36,
+                height: 36,
+                borderRadius: 12,
+                background: 'rgba(59, 130, 246, 0.12)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -366,15 +366,10 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
                 flexShrink: 0,
               }}
             >
-              <IconTruck size={24} />
+              <IconTruck size={20} />
             </div>
-            <div>
-              <div className="font-extrabold text-sm flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
-                <span>Déchargement Quai & Réception Inbound</span>
-              </div>
-              <div className="text-xs text-muted">
-                Pointage descente camion • Constat avaries • Appel manutentionnaires
-              </div>
+            <div className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>
+              <span>Déchargement Quai</span>
             </div>
           </div>
           <button
@@ -387,11 +382,11 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
           </button>
         </div>
 
-        {/* Tab Navigation */}
+        {/* Tab Navigation — Apple Segmented Style */}
         <div
-          className="flex gap-1 mb-3 p-1"
+          className="flex gap-1 mb-3.5 p-1"
           style={{
-            background: 'var(--bg-card)',
+            background: 'var(--bg-input)',
             border: '1px solid var(--border)',
             borderRadius: 9999,
           }}
@@ -399,23 +394,23 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
           <button
             type="button"
             className={`btn btn-xs flex-1 ${activeTab === 'current' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.76rem', padding: '6px 8px' }}
+            style={{ borderRadius: 9999, fontSize: '0.78rem', height: 34 }}
             onClick={() => setActiveTab('current')}
           >
-            Déchargement en cours
+            En cours
           </button>
           <button
             type="button"
             className={`btn btn-xs flex-1 ${activeTab === 'new' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.76rem', padding: '6px 8px' }}
+            style={{ borderRadius: 9999, fontSize: '0.78rem', height: 34 }}
             onClick={() => setActiveTab('new')}
           >
-            + Nouvelle Arrivée
+            + Arrivée
           </button>
           <button
             type="button"
             className={`btn btn-xs flex-1 ${activeTab === 'history' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.76rem', padding: '6px 8px' }}
+            style={{ borderRadius: 9999, fontSize: '0.78rem', height: 34 }}
             onClick={() => setActiveTab('history')}
           >
             Historique ({sessions.length})
@@ -678,16 +673,15 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
               </>
             ) : (
               <div className="text-center p-8 text-muted">
-                <IconBox size={40} style={{ opacity: 0.4, margin: '0 auto 10px' }} />
-                <div className="font-bold text-sm">Aucun déchargement actif</div>
-                <div className="text-xs mt-1">Créez une nouvelle arrivée pour commencer le pointage quai.</div>
+                <IconBox size={38} style={{ opacity: 0.35, margin: '0 auto 8px' }} />
+                <div className="font-bold text-sm">Aucun déchargement en cours</div>
                 <button
                   type="button"
                   className="btn btn-sm btn-primary mt-3 font-bold"
-                  style={{ borderRadius: 9999 }}
+                  style={{ borderRadius: 9999, minHeight: 40, padding: '0 20px' }}
                   onClick={() => setActiveTab('new')}
                 >
-                  + Enregistrer une arrivée camion
+                  + Nouvelle arrivée camion
                 </button>
               </div>
             )}

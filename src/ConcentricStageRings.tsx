@@ -121,13 +121,13 @@ export function ConcentricStageRings({
           </filter>
         </defs>
 
-        {/* --- Background Tracks (Subtle Translucent Glass) --- */}
+        {/* --- Background Tracks (Subtle Translucent Neutral Glass) --- */}
         <circle
           cx={center}
           cy={center}
           r={rPrep}
           fill="none"
-          stroke="rgba(16, 185, 129, 0.15)"
+          stroke="var(--ring-track, rgba(148, 163, 184, 0.2))"
           strokeWidth={config.stroke}
         />
         <circle
@@ -135,7 +135,7 @@ export function ConcentricStageRings({
           cy={center}
           r={rLoad}
           fill="none"
-          stroke="rgba(59, 130, 246, 0.15)"
+          stroke="var(--ring-track, rgba(148, 163, 184, 0.2))"
           strokeWidth={config.stroke}
         />
         <circle
@@ -143,7 +143,7 @@ export function ConcentricStageRings({
           cy={center}
           r={rPoint}
           fill="none"
-          stroke="rgba(168, 85, 247, 0.15)"
+          stroke="var(--ring-track, rgba(148, 163, 184, 0.2))"
           strokeWidth={config.stroke}
         />
 

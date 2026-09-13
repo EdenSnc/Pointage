@@ -64,46 +64,21 @@ export const StaffNavetteModal: React.FC<StaffNavetteModalProps> = ({ isOpen, on
           padding: 20,
         }}
       >
-        <div className="flex justify-between items-center mb-3">
-          <div>
-            <h2 className="text-base font-bold flex items-center gap-2">
-              <IconBus size={18} className="text-accent" />
-              <span>Navette & Covoiturage Chauffeurs</span>
-              <span className="badge badge-exact text-xs">{activeTrips.length}</span>
-            </h2>
-            <div className="text-xs text-muted">
-              Départs camions du dépôt & retours vers vos quartiers
-            </div>
-          </div>
-          <button className="btn btn-ghost btn-xs btn-icon" onClick={onClose} aria-label="Fermer">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-base font-bold flex items-center gap-2">
+            <IconBus size={18} className="text-accent" />
+            <span>Navette Chauffeurs</span>
+            <span className="badge badge-exact text-xs">{activeTrips.length}</span>
+          </h2>
+          <button className="btn btn-ghost btn-xs btn-icon" onClick={onClose} aria-label="Fermer" style={{ borderRadius: 9999 }}>
             <IconX size={16} />
           </button>
         </div>
 
-        {/* Informational banner */}
-        <div
-          className="p-3.5 mb-3 flex items-start gap-2.5 text-xs"
-          style={{
-            background: 'rgba(59, 130, 246, 0.08)',
-            border: '1px solid rgba(59, 130, 246, 0.22)',
-            borderRadius: 'var(--radius-card, 20px)',
-            color: 'var(--text-primary)',
-          }}
-        >
-          <IconSparkles size={18} className="text-blue-400 shrink-0 mt-0.5" />
-          <div>
-            <div className="font-bold text-blue-400 mb-0.5">Entraide Transport Ouvriers / Dépôt</div>
-            <div>
-              Profitez des rotations et des retours des fourgons de livraison pour rentrer ou vous déplacer sans payer de taxi/Yassir. Les places en cabine sont indiquées ci-dessous.
-            </div>
-          </div>
-        </div>
-
         {activeTrips.length === 0 ? (
           <div className="text-center py-10 text-muted text-xs">
-            <IconTruck size={36} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
-            <div>Aucun départ de camion enregistré pour aujourd'hui.</div>
-            <div className="text-[11px] mt-1">Les départs créés au quai s'afficheront ici en temps réel.</div>
+            <IconBus size={34} style={{ margin: '0 auto 8px', opacity: 0.35 }} />
+            <div className="font-semibold">Aucun départ prévu aujourd'hui</div>
           </div>
         ) : (
           <div className="flex flex-col gap-2.5">

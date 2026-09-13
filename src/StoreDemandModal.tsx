@@ -189,27 +189,24 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
         className="card"
         style={{
           width: '100%',
-          maxWidth: 540,
-          maxHeight: '92vh',
+          maxWidth: 520,
+          maxHeight: '90vh',
           overflowY: 'auto',
           backgroundColor: 'var(--bg-surface)',
-          border: '1px solid var(--glass-border-subtle)',
+          border: '1px solid var(--border)',
           boxShadow: 'var(--shadow-xl)',
-          borderRadius: 'var(--radius-lg)',
+          borderRadius: 'var(--radius-modal, 26px)',
+          backdropFilter: 'var(--glass-blur)',
           padding: 20,
         }}
       >
-        <div className="flex justify-between items-center mb-3">
-          <div>
-            <h2 className="text-base font-bold flex items-center gap-2">
-              <span>Remontées Magasin & Besoins Surface</span>
-              <span className="badge badge-exact text-xs">{demands.length}</span>
-            </h2>
-            <div className="text-xs text-muted">
-              Demandes des vendeurs, ruptures urgentes et réassorts
-            </div>
-          </div>
-          <button className="btn btn-ghost btn-xs btn-icon" onClick={onClose}>
+        <div className="flex justify-between items-center mb-3.5">
+          <h2 className="text-base font-bold flex items-center gap-2">
+            <IconStore size={18} className="text-accent" />
+            <span>Remontées Magasin</span>
+            <span className="badge badge-exact text-xs">{demands.length}</span>
+          </h2>
+          <button className="btn btn-ghost btn-xs btn-icon" onClick={onClose} style={{ borderRadius: 9999 }}>
             <IconX size={16} />
           </button>
         </div>
@@ -219,16 +216,17 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
           <button
             type="button"
             className={`btn btn-xs ${isAdding ? 'btn-secondary' : 'btn-primary'} flex items-center gap-1.5`}
+            style={{ borderRadius: 9999, padding: '6px 14px', height: 34 }}
             onClick={() => setIsAdding(!isAdding)}
           >
             <IconPlus size={14} />
-            <span>{isAdding ? 'Fermer le formulaire' : 'Noter un besoin vendeur'}</span>
+            <span>{isAdding ? 'Fermer' : 'Noter un besoin'}</span>
           </button>
           {filteredDemands.length > 0 && (
             <button
               type="button"
-              className="btn btn-xs btn-secondary flex items-center gap-1.5 ml-auto"
-              style={{ background: '#25D366', color: '#fff', border: 'none' }}
+              className="btn btn-xs flex items-center gap-1.5 ml-auto"
+              style={{ background: '#25D366', color: '#fff', border: 'none', borderRadius: 9999, padding: '6px 12px', height: 34, fontWeight: 700 }}
               onClick={handleShareWhatsApp}
               title="Envoyer le récapitulatif par WhatsApp au commercial"
             >
@@ -393,11 +391,11 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
         )}
 
         {/* Filter pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-2 mb-3">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1.5 mb-2.5">
           <button
             type="button"
             className={`btn btn-xs ${filterType === 'all' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 8px' }}
+            style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '4px 10px', height: 28 }}
             onClick={() => setFilterType('all')}
           >
             Tous types
@@ -405,7 +403,7 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
           <button
             type="button"
             className={`btn btn-xs flex items-center gap-1 ${filterType === 'high_demand' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 8px' }}
+            style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '4px 10px', height: 28 }}
             onClick={() => setFilterType('high_demand')}
           >
             <IconFlame size={12} />
@@ -414,7 +412,7 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
           <button
             type="button"
             className={`btn btn-xs flex items-center gap-1 ${filterType === 'out_of_stock' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 8px' }}
+            style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '4px 10px', height: 28 }}
             onClick={() => setFilterType('out_of_stock')}
           >
             <IconAlertTriangle size={12} />
@@ -423,7 +421,7 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
           <button
             type="button"
             className={`btn btn-xs flex items-center gap-1 ${filterType === 'replenish_urgent' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 8px' }}
+            style={{ borderRadius: 9999, fontSize: '0.74rem', padding: '4px 10px', height: 28 }}
             onClick={() => setFilterType('replenish_urgent')}
           >
             <IconPackage size={12} />
@@ -431,29 +429,35 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
           </button>
         </div>
 
-        {/* Status filter pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 mb-3">
-          <span className="text-[10px] text-muted font-bold uppercase mr-1">Statut :</span>
+        {/* Status filter segmented bar */}
+        <div
+          className="flex gap-1 mb-3 p-0.5"
+          style={{
+            background: 'var(--bg-input)',
+            border: '1px solid var(--border)',
+            borderRadius: 9999,
+          }}
+        >
           <button
             type="button"
-            className={`btn btn-xs ${filterStatus === 'pending' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ borderRadius: 9999, fontSize: '0.7rem', padding: '2px 7px' }}
+            className={`btn btn-xs flex-1 ${filterStatus === 'pending' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ borderRadius: 9999, fontSize: '0.74rem', height: 28 }}
             onClick={() => setFilterStatus('pending')}
           >
             En attente
           </button>
           <button
             type="button"
-            className={`btn btn-xs ${filterStatus === 'treated' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ borderRadius: 9999, fontSize: '0.7rem', padding: '2px 7px' }}
+            className={`btn btn-xs flex-1 ${filterStatus === 'treated' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ borderRadius: 9999, fontSize: '0.74rem', height: 28 }}
             onClick={() => setFilterStatus('treated')}
           >
             Traités
           </button>
           <button
             type="button"
-            className={`btn btn-xs ${filterStatus === 'all' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ borderRadius: 9999, fontSize: '0.7rem', padding: '2px 7px' }}
+            className={`btn btn-xs flex-1 ${filterStatus === 'all' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ borderRadius: 9999, fontSize: '0.74rem', height: 28 }}
             onClick={() => setFilterStatus('all')}
           >
             Tous

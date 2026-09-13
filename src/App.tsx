@@ -1298,85 +1298,53 @@ function HomeScreen({
       <div className="app-content">
 
         {/* Quick Tools: Remontées Magasin, Navette Chauffeurs & Déchargement Quai */}
-        <div className="grid grid-cols-3 gap-2.5 mb-4">
+        <div className="apple-quick-bar">
           <button
             type="button"
-            className="btn btn-sm btn-secondary flex items-center justify-center gap-1.5"
-            style={{
-              borderRadius: 16,
-              background: 'rgba(234, 179, 8, 0.08)',
-              borderColor: 'rgba(234, 179, 8, 0.25)',
-              color: '#eab308',
-              fontWeight: 700,
-              fontSize: '0.75rem',
-              padding: '10px 6px',
-              minHeight: 44,
-              backdropFilter: 'blur(16px)',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.1)',
-            }}
+            className="apple-quick-btn"
             onClick={() => setShowStoreDemandModal(true)}
-            title="Noter et suivre les demandes des vendeurs en magasins / surfaces"
+            title="Remontées magasins et besoins surface"
           >
-            <IconStore size={15} />
+            <IconStore size={16} />
             <span>Demandes</span>
           </button>
           <button
             type="button"
-            className="btn btn-sm btn-secondary flex items-center justify-center gap-1.5"
-            style={{
-              borderRadius: 16,
-              background: 'rgba(59, 130, 246, 0.08)',
-              borderColor: 'rgba(59, 130, 246, 0.25)',
-              color: '#3b82f6',
-              fontWeight: 700,
-              fontSize: '0.75rem',
-              padding: '10px 6px',
-              minHeight: 44,
-              backdropFilter: 'blur(16px)',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.1)',
-            }}
+            className="apple-quick-btn"
             onClick={() => setShowStaffNavetteModal(true)}
-            title="Voir les trajets des chauffeurs et places disponibles pour les ouvriers"
+            title="Navette & covoiturage chauffeurs"
           >
-            <IconBus size={15} />
+            <IconBus size={16} />
             <span>Navette</span>
           </button>
           <button
             type="button"
-            className="btn btn-sm btn-secondary flex items-center justify-center gap-1.5"
-            style={{
-              borderRadius: 16,
-              background: 'rgba(245, 158, 11, 0.10)',
-              borderColor: 'rgba(245, 158, 11, 0.3)',
-              color: '#f59e0b',
-              fontWeight: 800,
-              fontSize: '0.75rem',
-              padding: '10px 6px',
-              minHeight: 44,
-              backdropFilter: 'blur(16px)',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.1)',
-            }}
+            className="apple-quick-btn"
             onClick={() => setShowDechargementModal(true)}
-            title="Gérer les arrivées camions, pointage déchargement et appel préparateurs"
+            title="Déchargement quai et arrivées camions"
           >
-            <IconTruck size={15} />
+            <IconTruck size={16} />
             <span>Déchargement</span>
           </button>
         </div>
 
-        {/* BL Filter Tabs */}
-        <div className="flex gap-2 mb-3">
+        {/* BL Filter Tabs — Apple Segmented Control */}
+        <div className="apple-segmented-bar">
           <button
-            className={`btn btn-sm ${billFilter === 'active' ? 'btn-primary' : 'btn-secondary'} flex-1 flex items-center justify-center gap-1`}
+            type="button"
+            className={`apple-segmented-tab ${billFilter === 'active' ? 'active' : ''}`}
             onClick={() => setBillFilter('active')}
           >
-            <IconBox size={15} /> Bons Actifs ({activeBills.length})
+            <IconBox size={14} />
+            <span>Bons Actifs ({activeBills.length})</span>
           </button>
           <button
-            className={`btn btn-sm ${billFilter === 'archived' ? 'btn-primary' : 'btn-secondary'} flex-1 flex items-center justify-center gap-1`}
+            type="button"
+            className={`apple-segmented-tab ${billFilter === 'archived' ? 'active' : ''}`}
             onClick={() => setBillFilter('archived')}
           >
-            <IconClipboard size={15} /> Historique ({archivedBills.length})
+            <IconClipboard size={14} />
+            <span>Historique ({archivedBills.length})</span>
           </button>
         </div>
 
@@ -2281,53 +2249,21 @@ function BillCard({
               </span>
             )}
             {bill.bcNumber && (
-              <span
-                style={{
-                  fontSize: '0.62rem',
-                  fontWeight: 600,
-                  padding: '1px 6px',
-                  borderRadius: '9999px',
-                  background: 'rgba(59, 130, 246, 0.15)',
-                  color: '#3b82f6',
-                  flexShrink: 0,
-                }}
-                title="Numéro Bon de Commande"
-              >
-                BC:{bill.bcNumber}
+              <span className="apple-pill-metadata" title="Numéro Bon de Commande">
+                <IconFileText size={10} />
+                <span>BC:{bill.bcNumber}</span>
               </span>
             )}
             {bill.wilaya && (
-              <span
-                style={{
-                  fontSize: '0.62rem',
-                  fontWeight: 700,
-                  padding: '1px 6px',
-                  borderRadius: '9999px',
-                  background: 'rgba(168, 85, 247, 0.15)',
-                  color: '#a855f7',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 3,
-                  flexShrink: 0,
-                }}
-                title={`Wilaya : ${bill.wilaya}`}
-              >
-                {bill.wilaya}
+              <span className="apple-pill-metadata" title={`Wilaya : ${bill.wilaya}`}>
+                <IconMapPin size={10} />
+                <span>{bill.wilaya}</span>
               </span>
             )}
             {bill.date && (
-              <span
-                style={{
-                  fontSize: '0.62rem',
-                  fontWeight: 600,
-                  padding: '1px 6px',
-                  borderRadius: '9999px',
-                  background: 'var(--bg-surface)',
-                  color: 'var(--text-muted)',
-                  flexShrink: 0,
-                }}
-              >
-                {bill.date}
+              <span className="apple-pill-metadata">
+                <IconClock size={10} />
+                <span>{bill.date}</span>
               </span>
             )}
             {bill.shippingStatus && (
