@@ -87,6 +87,25 @@
   --radius-sm: 10px;
   --min-touch: 44px;
   --ring-track: rgba(148, 163, 184, 0.16);
+
+  /* 3D Isometric Empty Box Theme Variables */
+  --empty-box-right-1: #3b4252;
+  --empty-box-right-2: #242833;
+  --empty-box-left-1: #252a34;
+  --empty-box-left-2: #161920;
+  --empty-box-cavity-1: #07080b;
+  --empty-box-cavity-2: #13151c;
+  --empty-box-cavity-wall: #1a1e27;
+  --empty-box-flap-fl-1: #323846;
+  --empty-box-flap-fl-2: #21252f;
+  --empty-box-flap-fr-1: #4a5366;
+  --empty-box-flap-fr-2: #2e3442;
+  --empty-box-flap-bl-1: #2c323f;
+  --empty-box-flap-bl-2: #1e222b;
+  --empty-box-flap-br-1: #3f4757;
+  --empty-box-flap-br-2: #272c37;
+  --empty-box-edge: rgba(255, 255, 255, 0.14);
+  --empty-box-shadow: rgba(0, 0, 0, 0.65);
 }
 
 [data-theme="light"] {
@@ -162,6 +181,25 @@
   --radius-sm: 10px;
   --min-touch: 44px;
   --ring-track: rgba(148, 163, 184, 0.2);
+
+  /* 3D Isometric Empty Box Theme Variables */
+  --empty-box-right-1: #cbd5e1;
+  --empty-box-right-2: #94a3b8;
+  --empty-box-left-1: #94a3b8;
+  --empty-box-left-2: #64748b;
+  --empty-box-cavity-1: #1e293b;
+  --empty-box-cavity-2: #0f172a;
+  --empty-box-cavity-wall: #334155;
+  --empty-box-flap-fl-1: #e2e8f0;
+  --empty-box-flap-fl-2: #cbd5e1;
+  --empty-box-flap-fr-1: #f8fafc;
+  --empty-box-flap-fr-2: #cbd5e1;
+  --empty-box-flap-bl-1: #cbd5e1;
+  --empty-box-flap-bl-2: #94a3b8;
+  --empty-box-flap-br-1: #e2e8f0;
+  --empty-box-flap-br-2: #cbd5e1;
+  --empty-box-edge: rgba(255, 255, 255, 0.55);
+  --empty-box-shadow: rgba(15, 23, 42, 0.18);
 }
 
 *, *::before, *::after {
@@ -2515,9 +2553,75 @@ svg[fill="none"] path:not([fill*="#"]):not([fill*="url"]):not([fill*="var"]) {
 }
 
 .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: 60px 24px;
+  padding: 44px 20px;
   color: var(--text-secondary);
+}
+
+.empty-state-illustration {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.empty-floating-badge {
+  animation: emptyBadgeHover 2.8s ease-in-out infinite;
+  transform-origin: 100px 50px;
+}
+
+.empty-badge-shadow {
+  animation: emptyBadgeShadowScale 2.8s ease-in-out infinite;
+  transform-origin: 100px 88px;
+}
+
+@keyframes emptyBadgeHover {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
+@keyframes emptyBadgeShadowScale {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(0.8);
+    opacity: 0.28;
+  }
+}
+
+.empty-state-title {
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.empty-state-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  max-width: 300px;
+  line-height: 1.45;
+  margin: 0 auto;
+}
+
+.empty-state-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 18px;
+  flex-wrap: wrap;
 }
 
 .empty-state-icon {
@@ -2628,11 +2732,11 @@ svg[fill="none"] path:not([fill*="#"]):not([fill*="url"]):not([fill*="var"]) {
 .spinner {
   width: 28px;
   height: 28px;
-  border: 3px solid rgba(255, 255, 255, 0.1);
+  border: 3px solid var(--ring-track, rgba(148, 163, 184, 0.22));
   border-top-color: var(--accent);
   border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  margin: 30px auto;
+  animation: spin 0.7s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  margin: 24px auto;
 }
 
 @keyframes spin {

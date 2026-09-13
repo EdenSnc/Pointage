@@ -161,6 +161,8 @@ import {
   IconFlame,
 } from './icons';
 
+import { EmptyStateIllustration } from './EmptyStateIllustration';
+
 function renderFamilyIcon(familyId: string, size = 14) {
   switch (familyId) {
     case 'trousses':
@@ -1515,9 +1517,12 @@ function HomeScreen({
             )}
 
             {matchedBills.length === 0 && matchedGlobalLines.length === 0 ? (
-              <div className="card text-center text-xs text-muted py-4">
-                Aucun bon ni article correspondant à « {homeSearch} »
-              </div>
+              <EmptyStateIllustration
+                type="search"
+                size={140}
+                title="Aucun résultat"
+                subtitle={`Aucun bon ni article ne correspond à « ${homeSearch} »`}
+              />
             ) : (
               matchedGlobalLines.slice(0, 30).map((line) => {
                 const parentBill = bills.find((b) => b.id === line.billId);
@@ -1559,26 +1564,32 @@ function HomeScreen({
             )}
           </div>
         ) : displayBills.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">
-              {billFilter === 'active' ? <IconBox size={46} /> : <IconClipboard size={46} />}
-            </div>
-            <p>
-              {billFilter === 'active'
+          <EmptyStateIllustration
+            type={billFilter === 'active' ? 'warning' : 'archive'}
+            size={180}
+            title={
+              billFilter === 'active'
                 ? 'Aucun bon de livraison actif'
-                : 'Aucun bon archivé dans l’historique'}
-            </p>
-            {billFilter === 'active' && (
-              <div className="flex gap-2 justify-center mt-4">
-                <button className="btn btn-primary" onClick={() => nav('/import')}>
-                  <IconImport size={18} /> Importer des BL
-                </button>
-                <button className="btn btn-secondary" onClick={() => setShowManualBillModal(true)}>
-                  <IconPlus size={16} /> Nouveau BL
-                </button>
-              </div>
-            )}
-          </div>
+                : 'Aucun bon archivé'
+            }
+            subtitle={
+              billFilter === 'active'
+                ? 'Importez vos bordereaux ou créez-en un pour lancer vos réceptions et préparations.'
+                : 'L’historique des bons clôturés apparaîtra dans cette section.'
+            }
+            action={
+              billFilter === 'active' ? (
+                <>
+                  <button className="btn btn-primary" onClick={() => nav('/import')}>
+                    <IconImport size={18} /> Importer des BL
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => setShowManualBillModal(true)}>
+                    <IconPlus size={16} /> Nouveau BL
+                  </button>
+                </>
+              ) : undefined
+            }
+          />
         ) : (
           <>
             {clientGroups.map(group => {
@@ -5629,9 +5640,12 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             </button>
           </div>
         ) : displayLines.length === 0 && (
-          <div className="empty-state">
-            <p>Aucune ligne trouvée dans ce bon</p>
-          </div>
+          <EmptyStateIllustration
+            type={search ? 'search' : 'warning'}
+            size={160}
+            title={search ? 'Aucun article correspondant' : 'Aucune ligne dans ce bon'}
+            subtitle={search ? `Aucun article ne correspond à « ${search} ».` : 'Ce bon ne contient pas encore d’articles enregistrés.'}
+          />
         )}
 
         {/* Cross-bill matches from sibling bills of the same seller/client */}
@@ -11059,9 +11073,16 @@ function HistoryScreen() {
         ))}
 
         {filteredBills.length === 0 && (
-          <div className="empty-state">
-            <p>Aucun bon {tab === 'active' ? 'actif' : 'archivé'}</p>
-          </div>
+          <EmptyStateIllustration
+            type={tab === 'active' ? 'warning' : 'archive'}
+            size={160}
+            title={`Aucun bon ${tab === 'active' ? 'actif' : 'archivé'}`}
+            subtitle={
+              tab === 'active'
+                ? 'Aucun bordereau de livraison en cours de pointage.'
+                : 'Aucun bordereau dans les archives.'
+            }
+          />
         )}
       </div>
     </>

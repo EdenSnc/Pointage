@@ -4,6 +4,7 @@ import { ConcentricStageRings } from './ConcentricStageRings';
 import { WarehouseProcessFlow } from './WarehouseProcessFlow';
 import { TruckLoadingDiagram } from './TruckLoadingDiagram';
 import { StageDistributionBar } from './StageDistributionBar';
+import { EmptyStateIllustration } from './EmptyStateIllustration';
 
 describe('Apple Glass Visual Components Test Suite', () => {
   describe('ConcentricStageRings', () => {
@@ -134,6 +135,57 @@ describe('Apple Glass Visual Components Test Suite', () => {
       expect(html).toContain('Conformes');
       expect(html).toContain('Manquants');
       expect(html).toContain('Excédent');
+    });
+  });
+
+  describe('EmptyStateIllustration', () => {
+    it('renders 3D isometric box and warning badge matching reference design', () => {
+      const html = renderToString(
+        <EmptyStateIllustration
+          type="warning"
+          title="Aucun bon de livraison actif"
+          subtitle="Importez vos bordereaux pour démarrer."
+        />
+      );
+
+      expect(html).toContain('empty-state');
+      expect(html).toContain('empty-state-illustration');
+      expect(html).toContain('empty-floating-badge');
+      expect(html).toContain('empty-badge-shadow');
+      expect(html).toContain('Aucun bon de livraison actif');
+      expect(html).toContain('Importez vos bordereaux pour démarrer.');
+      expect(html).toContain('var(--empty-box-left-1');
+      expect(html).toContain('var(--empty-box-right-1');
+    });
+
+    it('renders different badge types and actions properly', () => {
+      const searchHtml = renderToString(
+        <EmptyStateIllustration
+          type="search"
+          size={140}
+          title="Aucun résultat"
+          subtitle="Recherche infructueuse"
+        />
+      );
+      expect(searchHtml).toContain('badgeGrad_search');
+      expect(searchHtml).toContain('Aucun résultat');
+
+      const archiveHtml = renderToString(
+        <EmptyStateIllustration
+          type="archive"
+          title="Aucun bon archivé"
+        />
+      );
+      expect(archiveHtml).toContain('badgeGrad_archive');
+
+      const actionHtml = renderToString(
+        <EmptyStateIllustration
+          type="plus"
+          action={<button className="btn btn-primary">Créer</button>}
+        />
+      );
+      expect(actionHtml).toContain('empty-state-actions');
+      expect(actionHtml).toContain('Créer');
     });
   });
 });
