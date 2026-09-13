@@ -19,6 +19,11 @@ import {
   IconPhone,
   IconBox,
   IconHistory,
+  IconBell,
+  IconBuilding,
+  IconMapPin,
+  IconUsers,
+  IconAlertTriangle,
 } from './icons';
 
 interface DechargementModalProps {
@@ -247,7 +252,7 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
     // Native browser push notification
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       try {
-        new Notification(`🚨 APPEL DÉCHARGEMENT : ${activeSession.dockZone}`, {
+        new Notification(`APPEL DÉCHARGEMENT : ${activeSession.dockZone}`, {
           body: `${activeSession.title} (${activeSession.truckPlate || 'Camion'}). Présentez-vous immédiatement au quai !`,
           icon: '/favicon.ico',
         });
@@ -271,7 +276,7 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
     }
 
     setShowDispatchModal(false);
-    onToast(`🚨 Appel déchargement diffusé aux équipes pour le ${activeSession.dockZone}`);
+    onToast(`Appel déchargement diffusé aux équipes pour le ${activeSession.dockZone}`);
     setActiveSession((prev) => (prev ? { ...prev, lastBroadcastAt: now, broadcastToAll } : null));
   };
 
@@ -280,7 +285,7 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
     const teamText = broadcastToAll
       ? 'TOUS LES PRÉPARATEURS & MANUTENTIONNAIRES'
       : selectedWorkers.join(', ') || 'Équipe Quai';
-    const text = `🚨 *APPEL DÉCHARGEMENT QUAI (URGENT)*\n📍 *Emplacement :* ${activeSession.dockZone}\n🚛 *Arrivage :* ${activeSession.title} (${activeSession.truckPlate || 'Camion'})\n👥 *Équipe appelée :* ${teamText}\n📦 *Cartons prévus :* ~${activeSession.estimatedCartons}\n${customCallMessage ? `💬 *Consigne :* ${customCallMessage}\n` : ''}👉 *Merci de vous présenter immédiatement au quai pour la descente.*`;
+    const text = `*APPEL DÉCHARGEMENT QUAI (URGENT)*\n• Emplacement : ${activeSession.dockZone}\n• Arrivage : ${activeSession.title} (${activeSession.truckPlate || 'Camion'})\n• Équipe appelée : ${teamText}\n• Cartons prévus : ~${activeSession.estimatedCartons}\n${customCallMessage ? `• Consigne : ${customCallMessage}\n` : ''}→ Merci de vous présenter immédiatement au quai pour la descente.`;
     return `https://wa.me/?text=${encodeURIComponent(text)}`;
   };
 
@@ -301,7 +306,7 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
 
   const getWhatsAppReportUrl = () => {
     if (!activeSession) return '';
-    const text = `📦 *RAPPORT DE RÉCEPTION / DÉCHARGEMENT QUAI*\n📍 *Quai :* ${activeSession.dockZone}\n🚛 *Arrivage :* ${activeSession.title}\n🔢 *Matricule :* ${activeSession.truckPlate || 'N/A'}\n👤 *Transporteur :* ${activeSession.carrierName || 'N/A'}\n🏭 *Fournisseur :* ${activeSession.supplierName || 'N/A'}\n📦 *Cartons déchargés :* ${activeSession.unloadedCartons} / ${activeSession.estimatedCartons} (${activeSession.estimatedCartons > 0 ? Math.round((activeSession.unloadedCartons / activeSession.estimatedCartons) * 100) : 100}%)\n⚠️ *Cartons abîmés :* ${activeSession.damagedCartons} ${activeSession.damagePhotos && activeSession.damagePhotos.length > 0 ? `(${activeSession.damagePhotos.length} photos enregistrées)` : ''}\n👥 *Équipe :* ${activeSession.assignedWorkers?.join(', ') || 'Équipe dépôt'}\n⏱️ *Statut :* Clôturé le ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+    const text = `*RAPPORT DE RÉCEPTION / DÉCHARGEMENT QUAI*\n• Quai : ${activeSession.dockZone}\n• Arrivage : ${activeSession.title}\n• Matricule : ${activeSession.truckPlate || 'N/A'}\n• Transporteur : ${activeSession.carrierName || 'N/A'}\n• Fournisseur : ${activeSession.supplierName || 'N/A'}\n• Cartons déchargés : ${activeSession.unloadedCartons} / ${activeSession.estimatedCartons} (${activeSession.estimatedCartons > 0 ? Math.round((activeSession.unloadedCartons / activeSession.estimatedCartons) * 100) : 100}%)\n• Cartons abîmés : ${activeSession.damagedCartons} ${activeSession.damagePhotos && activeSession.damagePhotos.length > 0 ? `(${activeSession.damagePhotos.length} photos enregistrées)` : ''}\n• Équipe : ${activeSession.assignedWorkers?.join(', ') || 'Équipe dépôt'}\n• Statut : Clôturé le ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
     return `https://wa.me/?text=${encodeURIComponent(text)}`;
   };
 
@@ -436,12 +441,14 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
                       <div className="font-extrabold text-base text-accent">
                         {activeSession.title}
                       </div>
-                      <div className="text-xs font-semibold text-muted mt-0.5">
-                        📍 {activeSession.dockZone} • {activeSession.truckPlate ? `Immat: ${activeSession.truckPlate}` : 'Camion non immatriculé'}
+                      <div className="text-xs font-semibold text-muted mt-0.5 flex items-center gap-1">
+                        <IconMapPin size={12} className="text-accent shrink-0" />
+                        <span>{activeSession.dockZone} • {activeSession.truckPlate ? `Immat: ${activeSession.truckPlate}` : 'Camion non immatriculé'}</span>
                       </div>
                       {activeSession.supplierName && (
-                        <div className="text-[11px] text-muted">
-                          🏭 Provenance: {activeSession.supplierName}
+                        <div className="text-[11px] text-muted flex items-center gap-1 mt-0.5">
+                          <IconBuilding size={11} className="shrink-0" />
+                          <span>Provenance: {activeSession.supplierName}</span>
                         </div>
                       )}
                     </div>
@@ -455,7 +462,7 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
                         color: activeSession.status === 'completed' ? 'var(--accent)' : '#60a5fa',
                       }}
                     >
-                      {activeSession.status === 'completed' ? '✓ Terminé' : 'En cours'}
+                      {activeSession.status === 'completed' ? 'Terminé' : 'En cours'}
                     </span>
                   </div>
 
@@ -473,7 +480,7 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
                       onClick={() => setShowDispatchModal(true)}
                     >
                       <IconMegaphone size={16} />
-                      <span>📢 Appel Déchargement Quai (Amazon-Style)</span>
+                      <span>Appel Déchargement Quai</span>
                     </button>
                   </div>
                 </div>
@@ -652,8 +659,9 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
                       <span>Clôturer Réception</span>
                     </button>
                   ) : (
-                    <div className="text-xs font-bold text-accent text-center flex-1">
-                      ✓ Réception terminée
+                    <div className="text-xs font-bold text-accent text-center flex-1 inline-flex items-center justify-center gap-1.5">
+                      <IconCheck size={14} />
+                      <span>Réception terminée</span>
                     </div>
                   )}
 
@@ -801,7 +809,14 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
                         );
                       }}
                     >
-                      {isChecked ? `✓ ${op}` : op}
+                      {isChecked ? (
+                        <span className="inline-flex items-center gap-1">
+                          <IconCheck size={11} />
+                          <span>{op}</span>
+                        </span>
+                      ) : (
+                        op
+                      )}
                     </button>
                   );
                 })}
@@ -910,14 +925,15 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
           >
             <div className="flex items-center gap-2 mb-2 font-black text-amber-500 text-sm uppercase tracking-wider">
               <IconMegaphone size={20} />
-              <span>Appel Déchargement Quai (Amazon-Style)</span>
+              <span>Appel Déchargement Quai</span>
             </div>
             <div className="text-xs text-muted mb-3">
               Déclenche une sirène quai, une alerte vibration et une notification à tous les préparateurs pour converger vers le quai.
             </div>
 
-            <div className="p-2.5 mb-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs font-bold">
-              📍 Destination : {activeSession.dockZone} • {activeSession.title}
+            <div className="p-2.5 mb-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs font-bold flex items-center gap-1">
+              <IconMapPin size={13} className="text-amber-500 shrink-0" />
+              <span>Destination : {activeSession.dockZone} • {activeSession.title}</span>
             </div>
 
             <div className="mb-3">
@@ -925,19 +941,21 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
               <div className="flex gap-2">
                 <button
                   type="button"
-                  className={`btn btn-xs flex-1 ${broadcastToAll ? 'btn-primary' : 'btn-secondary'}`}
+                  className={`btn btn-xs flex-1 inline-flex items-center justify-center gap-1 ${broadcastToAll ? 'btn-primary' : 'btn-secondary'}`}
                   style={{ borderRadius: 9999 }}
                   onClick={() => setBroadcastToAll(true)}
                 >
-                  📢 Tout le dépôt
+                  <IconMegaphone size={12} />
+                  <span>Tout le dépôt</span>
                 </button>
                 <button
                   type="button"
-                  className={`btn btn-xs flex-1 ${!broadcastToAll ? 'btn-primary' : 'btn-secondary'}`}
+                  className={`btn btn-xs flex-1 inline-flex items-center justify-center gap-1 ${!broadcastToAll ? 'btn-primary' : 'btn-secondary'}`}
                   style={{ borderRadius: 9999 }}
                   onClick={() => setBroadcastToAll(false)}
                 >
-                  👥 Équipe choisie
+                  <IconUsers size={12} />
+                  <span>Équipe choisie</span>
                 </button>
               </div>
             </div>
@@ -959,7 +977,14 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
                           );
                         }}
                       >
-                        {checked ? `✓ ${op}` : op}
+                        {checked ? (
+                          <span className="inline-flex items-center gap-1">
+                            <IconCheck size={11} />
+                            <span>{op}</span>
+                          </span>
+                        ) : (
+                          op
+                        )}
                       </button>
                     );
                   })}
@@ -970,7 +995,7 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
             <div className="flex flex-col gap-2 mt-4">
               <button
                 type="button"
-                className="btn btn-sm w-full font-black text-xs"
+                className="btn btn-sm w-full font-black text-xs inline-flex items-center justify-center gap-2"
                 style={{
                   background: 'linear-gradient(135deg, #f59e0b, #d97706)',
                   color: '#000',
@@ -979,7 +1004,8 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
                 }}
                 onClick={handleDispatchWorkerCall}
               >
-                🚨 Diffuser l'alerte maintenant
+                <IconBell size={16} />
+                <span>Diffuser l'alerte maintenant</span>
               </button>
 
               <a

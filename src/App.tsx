@@ -147,7 +147,45 @@ import {
   IconMegaphone,
   IconBell,
   IconZap,
+  IconStore,
+  IconBus,
+  IconUsers,
+  IconPackage,
+  IconFileText,
+  IconChat,
+  IconBook,
+  IconBackpack,
+  IconRuler,
+  IconPalette,
+  IconCalculator,
+  IconTrendingUp,
+  IconFlame,
 } from './icons';
+
+function renderFamilyIcon(familyId: string, size = 14) {
+  switch (familyId) {
+    case 'trousses':
+      return <IconFileText size={size} />;
+    case 'sacs':
+      return <IconBackpack size={size} />;
+    case 'stylos':
+    case 'gommes':
+    case 'colles':
+      return <IconPencil size={size} />;
+    case 'cahiers':
+      return <IconBook size={size} />;
+    case 'classeurs':
+      return <IconFolder size={size} />;
+    case 'regles':
+      return <IconRuler size={size} />;
+    case 'calculatrices':
+      return <IconCalculator size={size} />;
+    case 'peinture':
+      return <IconPalette size={size} />;
+    default:
+      return <IconPackage size={size} />;
+  }
+}
 
 import {
   loadOperatorsRoster,
@@ -358,14 +396,14 @@ export default function App() {
           }}
         >
           <div className="flex items-center gap-2 truncate">
-            <span style={{ fontSize: '1.2rem' }}>🚨</span>
+            <IconBell size={18} style={{ color: '#000', flexShrink: 0 }} />
             <span className="truncate">
               APPEL DÉCHARGEMENT : {activeDockCall.dockZone} • {activeDockCall.title} ({activeDockCall.truckPlate || 'Camion'})
             </span>
           </div>
           <button
             type="button"
-            className="btn btn-xs"
+            className="btn btn-xs flex items-center gap-1"
             style={{
               background: '#000',
               color: '#f59e0b',
@@ -376,11 +414,12 @@ export default function App() {
             }}
             onClick={() => {
               playSuccessChime();
-              showToast('✓ Présence confirmée au déchargement quai', setToast);
+              showToast('Présence confirmée au déchargement quai', setToast);
               setActiveDockCall(null);
             }}
           >
-            ✓ J'arrive
+            <IconCheck size={13} />
+            <span>J'arrive</span>
           </button>
         </div>
       )}
@@ -1259,57 +1298,68 @@ function HomeScreen({
       <div className="app-content">
 
         {/* Quick Tools: Remontées Magasin, Navette Chauffeurs & Déchargement Quai */}
-        <div className="grid grid-cols-3 gap-1.5 mb-3">
+        <div className="grid grid-cols-3 gap-2.5 mb-4">
           <button
             type="button"
-            className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
+            className="btn btn-sm btn-secondary flex items-center justify-center gap-1.5"
             style={{
-              borderRadius: 12,
-              background: 'rgba(234, 179, 8, 0.1)',
-              borderColor: 'rgba(234, 179, 8, 0.3)',
+              borderRadius: 16,
+              background: 'rgba(234, 179, 8, 0.08)',
+              borderColor: 'rgba(234, 179, 8, 0.25)',
               color: '#eab308',
               fontWeight: 700,
-              fontSize: '0.72rem',
-              padding: '6px 4px',
+              fontSize: '0.75rem',
+              padding: '10px 6px',
+              minHeight: 44,
+              backdropFilter: 'blur(16px)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.1)',
             }}
             onClick={() => setShowStoreDemandModal(true)}
             title="Noter et suivre les demandes des vendeurs en magasins / surfaces"
           >
-            <span>🏪 Demandes</span>
+            <IconStore size={15} />
+            <span>Demandes</span>
           </button>
           <button
             type="button"
-            className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
+            className="btn btn-sm btn-secondary flex items-center justify-center gap-1.5"
             style={{
-              borderRadius: 12,
-              background: 'rgba(59, 130, 246, 0.1)',
-              borderColor: 'rgba(59, 130, 246, 0.3)',
+              borderRadius: 16,
+              background: 'rgba(59, 130, 246, 0.08)',
+              borderColor: 'rgba(59, 130, 246, 0.25)',
               color: '#3b82f6',
               fontWeight: 700,
-              fontSize: '0.72rem',
-              padding: '6px 4px',
+              fontSize: '0.75rem',
+              padding: '10px 6px',
+              minHeight: 44,
+              backdropFilter: 'blur(16px)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.1)',
             }}
             onClick={() => setShowStaffNavetteModal(true)}
             title="Voir les trajets des chauffeurs et places disponibles pour les ouvriers"
           >
-            <span>🚐 Navette</span>
+            <IconBus size={15} />
+            <span>Navette</span>
           </button>
           <button
             type="button"
-            className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
+            className="btn btn-sm btn-secondary flex items-center justify-center gap-1.5"
             style={{
-              borderRadius: 12,
-              background: 'rgba(245, 158, 11, 0.14)',
-              borderColor: 'rgba(245, 158, 11, 0.35)',
+              borderRadius: 16,
+              background: 'rgba(245, 158, 11, 0.10)',
+              borderColor: 'rgba(245, 158, 11, 0.3)',
               color: '#f59e0b',
               fontWeight: 800,
-              fontSize: '0.72rem',
-              padding: '6px 4px',
+              fontSize: '0.75rem',
+              padding: '10px 6px',
+              minHeight: 44,
+              backdropFilter: 'blur(16px)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.1)',
             }}
             onClick={() => setShowDechargementModal(true)}
             title="Gérer les arrivées camions, pointage déchargement et appel préparateurs"
           >
-            <IconTruck size={14} />
+            <IconTruck size={15} />
             <span>Déchargement</span>
           </button>
         </div>
@@ -2226,7 +2276,8 @@ function BillCard({
                 }}
                 title={bill.commercialNote}
               >
-                📋 Note
+                <IconClipboard size={10} />
+                <span>Note</span>
               </span>
             )}
             {bill.bcNumber && (
@@ -3199,7 +3250,7 @@ function BatchContainerModal({
             }}
           >
             <div className="flex items-center gap-2">
-              <span style={{ fontSize: '1.2rem' }}>🖊️</span>
+              <IconPencil size={18} style={{ color: 'var(--warning)', flexShrink: 0 }} />
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
                   Marquage Feutre sur le carton
@@ -4280,7 +4331,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               gap: '10px',
             }}
           >
-            <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>📋</span>
+            <IconClipboard size={18} style={{ color: '#ca8a04', flexShrink: 0, marginTop: 1 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: '#ca8a04', letterSpacing: '0.05em' }}>
                 Note Commerciale & Consignes
@@ -4993,7 +5044,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               boxShadow: '0 4px 12px rgba(239, 68, 68, 0.12)',
             }}
           >
-            <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>⛔</span>
+            <IconBan size={18} style={{ color: 'var(--danger)', flexShrink: 0, marginTop: 1 }} />
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 800, color: 'var(--danger)', fontSize: '0.84rem' }}>
                 Réf {refCheckResult.numericValue} : ABSENT de cette commande ! (Zapper directement)
@@ -5064,7 +5115,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                         }}
                         onClick={() => setSelectedFamilyFilter(isFamActive ? null : fam.id)}
                       >
-                        <span>{fam.icon}</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>{renderFamilyIcon(fam.id)}</span>
                         <span>{fam.name}</span>
                         <span className="badge" style={{ fontSize: '0.65rem', padding: '1px 6px' }}>
                           {fam.lineCount} art
@@ -5439,7 +5490,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                         width: 'fit-content',
                       }}
                     >
-                      <span>📋</span>
+                      <IconClipboard size={11} style={{ flexShrink: 0 }} />
                       <span className="truncate">{line.commercialNote}</span>
                     </div>
                   )}
@@ -6706,7 +6757,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 gap: '8px',
               }}
             >
-              <span style={{ fontSize: '1.1rem' }}>📋</span>
+              <IconClipboard size={18} style={{ color: '#ca8a04', flexShrink: 0 }} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', color: '#ca8a04' }}>
                   Consigne commerciale article
@@ -8710,7 +8761,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             </span>
             {effectiveBatch > 0 && (
               <span style={{ fontWeight: 700, color: 'var(--accent)', fontSize: '0.75rem' }}>
-                ➔ Nouveau : {afterAdding} pcs
+                Nouveau : {afterAdding} pcs
               </span>
             )}
           </div>

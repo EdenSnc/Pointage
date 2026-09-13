@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import type { Bill, OrderLine, TransportContainer, CountEvent, ShipmentTrip } from './types';
 import { createAndDispatchTrip, calculateDockStock } from './shipmentTrips';
-import { IconBox, IconCheck, IconTruck, IconUser, IconX } from './icons';
+import { IconBox, IconCheck, IconTruck, IconUser, IconX, IconBus } from './icons';
 import { playSuccessChime, hapticTap } from './audio';
 
 interface TripDispatchModalProps {
@@ -551,16 +551,17 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
 
         {/* Navette & Itinéraire Chauffeur (Entraide transport dépôt) */}
         <div
-          className="mb-3 p-2.5"
+          className="mb-3 p-3"
           style={{
-            borderRadius: 14,
+            borderRadius: 'var(--radius-card, 20px)',
             background: 'rgba(59, 130, 246, 0.08)',
             border: '1px solid rgba(59, 130, 246, 0.25)',
           }}
         >
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#3b82f6' }}>
-              🚐 Navette & Itinéraire Chauffeur
+            <span className="text-xs font-bold uppercase tracking-wider inline-flex items-center gap-1.5" style={{ color: '#3b82f6' }}>
+              <IconBus size={14} />
+              <span>Navette & Itinéraire Chauffeur</span>
             </span>
             <span className="text-[10px] text-muted">Covoiturage ouvriers dépôt</span>
           </div>

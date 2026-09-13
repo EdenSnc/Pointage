@@ -1,7 +1,18 @@
 import React from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
-import { IconX, IconTruck, IconUser, IconPhone, IconClock, IconMapPin } from './icons';
+import {
+  IconX,
+  IconTruck,
+  IconUser,
+  IconPhone,
+  IconClock,
+  IconMapPin,
+  IconBus,
+  IconSparkles,
+  IconUsers,
+  IconChat,
+} from './icons';
 
 interface StaffNavetteModalProps {
   isOpen: boolean;
@@ -48,14 +59,16 @@ export const StaffNavetteModal: React.FC<StaffNavetteModalProps> = ({ isOpen, on
           backgroundColor: 'var(--bg-surface)',
           border: '1px solid var(--glass-border-subtle)',
           boxShadow: 'var(--shadow-xl)',
-          borderRadius: 'var(--radius-lg)',
+          borderRadius: 'var(--radius-modal, 26px)',
+          backdropFilter: 'var(--glass-blur)',
           padding: 20,
         }}
       >
         <div className="flex justify-between items-center mb-3">
           <div>
             <h2 className="text-base font-bold flex items-center gap-2">
-              <span>🚐 Navette & Covoiturage Chauffeurs</span>
+              <IconBus size={18} className="text-accent" />
+              <span>Navette & Covoiturage Chauffeurs</span>
               <span className="badge badge-exact text-xs">{activeTrips.length}</span>
             </h2>
             <div className="text-xs text-muted">
@@ -69,14 +82,15 @@ export const StaffNavetteModal: React.FC<StaffNavetteModalProps> = ({ isOpen, on
 
         {/* Informational banner */}
         <div
-          className="p-3 mb-3 rounded-xl flex items-start gap-2.5 text-xs"
+          className="p-3.5 mb-3 flex items-start gap-2.5 text-xs"
           style={{
-            background: 'rgba(59, 130, 246, 0.1)',
-            border: '1px solid rgba(59, 130, 246, 0.3)',
+            background: 'rgba(59, 130, 246, 0.08)',
+            border: '1px solid rgba(59, 130, 246, 0.22)',
+            borderRadius: 'var(--radius-card, 20px)',
             color: 'var(--text-primary)',
           }}
         >
-          <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>💡</span>
+          <IconSparkles size={18} className="text-blue-400 shrink-0 mt-0.5" />
           <div>
             <div className="font-bold text-blue-400 mb-0.5">Entraide Transport Ouvriers / Dépôt</div>
             <div>
@@ -108,10 +122,12 @@ export const StaffNavetteModal: React.FC<StaffNavetteModalProps> = ({ isOpen, on
               return (
                 <div
                   key={t.id}
-                  className="p-3 rounded-xl transition-all"
+                  className="p-3.5 transition-all"
                   style={{
                     background: 'var(--bg-card)',
                     border: hasSeats ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border)',
+                    borderRadius: 'var(--radius-card, 20px)',
+                    backdropFilter: 'var(--glass-blur)',
                   }}
                 >
                   <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -125,14 +141,22 @@ export const StaffNavetteModal: React.FC<StaffNavetteModalProps> = ({ isOpen, on
                           {t.truckPlate || 'Fourgon'}
                         </span>
                         <span
-                          className="badge text-[10px] font-bold ml-auto"
+                          className="badge text-[10px] font-bold ml-auto inline-flex items-center gap-1"
                           style={{
                             borderRadius: 9999,
+                            padding: '3px 8px',
                             background: hasSeats ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
                             color: hasSeats ? '#10b981' : '#ef4444',
                           }}
                         >
-                          {hasSeats ? `💺 ${seats} place${seats > 1 ? 's' : ''} libre${seats > 1 ? 's' : ''}` : 'Cabine complète'}
+                          {hasSeats ? (
+                            <>
+                              <IconUsers size={11} />
+                              <span>{seats} place{seats > 1 ? 's' : ''} libre{seats > 1 ? 's' : ''}</span>
+                            </>
+                          ) : (
+                            <span>Cabine complète</span>
+                          )}
                         </span>
                       </div>
 
@@ -159,7 +183,7 @@ export const StaffNavetteModal: React.FC<StaffNavetteModalProps> = ({ isOpen, on
                         <a
                           href={`tel:${phone}`}
                           className="btn btn-xs btn-secondary flex items-center justify-center gap-1.5 flex-1"
-                          style={{ borderRadius: 10, textDecoration: 'none' }}
+                          style={{ borderRadius: 'var(--radius-button, 14px)', textDecoration: 'none', minHeight: 34 }}
                         >
                           <IconPhone size={12} />
                           <span>Appeler ({phone})</span>
@@ -170,14 +194,16 @@ export const StaffNavetteModal: React.FC<StaffNavetteModalProps> = ({ isOpen, on
                           rel="noreferrer"
                           className="btn btn-xs flex items-center justify-center gap-1.5 flex-1"
                           style={{
-                            borderRadius: 10,
+                            borderRadius: 'var(--radius-button, 14px)',
                             background: '#25D366',
                             color: '#fff',
                             textDecoration: 'none',
                             fontWeight: 700,
+                            minHeight: 34,
                           }}
                         >
-                          <span>💬 WhatsApp</span>
+                          <IconChat size={13} />
+                          <span>WhatsApp</span>
                         </a>
                       </>
                     ) : (

@@ -2,7 +2,20 @@ import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
 import type { StoreDemand, StoreDemandSignalType } from './types';
-import { IconX, IconPlus, IconShare, IconCamera, IconTrash } from './icons';
+import {
+  IconX,
+  IconPlus,
+  IconShare,
+  IconCamera,
+  IconTrash,
+  IconFlame,
+  IconAlertTriangle,
+  IconSparkles,
+  IconPackage,
+  IconCheck,
+  IconChat,
+  IconBuilding,
+} from './icons';
 
 interface StoreDemandModalProps {
   isOpen: boolean;
@@ -122,21 +135,21 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
   const getSignalBadge = (type: StoreDemandSignalType) => {
     switch (type) {
       case 'high_demand':
-        return { label: '🔥 Forte Demande', bg: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' };
+        return { label: 'Forte Demande', icon: <IconFlame size={12} />, bg: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' };
       case 'out_of_stock':
-        return { label: '⚠️ Rupture Urgente', bg: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' };
+        return { label: 'Rupture Urgente', icon: <IconAlertTriangle size={12} />, bg: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' };
       case 'model_request':
-        return { label: '💡 Modèle Réclamé', bg: 'rgba(168, 85, 247, 0.15)', color: '#a855f7' };
+        return { label: 'Modèle Réclamé', icon: <IconSparkles size={12} />, bg: 'rgba(168, 85, 247, 0.15)', color: '#a855f7' };
       case 'replenish_urgent':
-        return { label: '📦 Réassort Immédiat', bg: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' };
+        return { label: 'Réassort Immédiat', icon: <IconPackage size={12} />, bg: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' };
       default:
-        return { label: 'Signal', bg: 'rgba(107, 114, 128, 0.15)', color: '#6b7280' };
+        return { label: 'Signal', icon: <IconSparkles size={12} />, bg: 'rgba(107, 114, 128, 0.15)', color: '#6b7280' };
     }
   };
 
   const handleShareWhatsApp = () => {
     if (filteredDemands.length === 0) return;
-    let msg = `*📋 REMONTÉES DE DEMANDE & RÉASSORT MAGASINS (SURFACE)*\n`;
+    let msg = `*REMONTÉES DE DEMANDE & RÉASSORT MAGASINS (SURFACE)*\n`;
     msg += `Date : ${new Date().toLocaleDateString('fr-FR')}\n`;
     msg += `------------------------------------\n\n`;
 
@@ -269,10 +282,10 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
                   value={signalType}
                   onChange={(e) => setSignalType(e.target.value as StoreDemandSignalType)}
                 >
-                  <option value="high_demand">🔥 Forte Demande</option>
-                  <option value="out_of_stock">⚠️ Rupture Urgente</option>
-                  <option value="model_request">💡 Modèle / Variante Réclamé</option>
-                  <option value="replenish_urgent">📦 Demande de Réassort</option>
+                  <option value="high_demand">Forte Demande</option>
+                  <option value="out_of_stock">Rupture Urgente</option>
+                  <option value="model_request">Modèle / Variante Réclamé</option>
+                  <option value="replenish_urgent">Demande de Réassort</option>
                 </select>
               </div>
             </div>
@@ -355,10 +368,10 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
                   />
                   <button
                     type="button"
-                    className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 text-[10px]"
+                    className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 text-[10px] flex items-center justify-center w-4 h-4 shadow-sm"
                     onClick={() => setImageUrl(null)}
                   >
-                    ✕
+                    <IconX size={10} />
                   </button>
                 </div>
               )}
@@ -391,27 +404,30 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
           </button>
           <button
             type="button"
-            className={`btn btn-xs ${filterType === 'high_demand' ? 'btn-primary' : 'btn-secondary'}`}
+            className={`btn btn-xs flex items-center gap-1 ${filterType === 'high_demand' ? 'btn-primary' : 'btn-secondary'}`}
             style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 8px' }}
             onClick={() => setFilterType('high_demand')}
           >
-            🔥 Forte Demande
+            <IconFlame size={12} />
+            <span>Forte Demande</span>
           </button>
           <button
             type="button"
-            className={`btn btn-xs ${filterType === 'out_of_stock' ? 'btn-primary' : 'btn-secondary'}`}
+            className={`btn btn-xs flex items-center gap-1 ${filterType === 'out_of_stock' ? 'btn-primary' : 'btn-secondary'}`}
             style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 8px' }}
             onClick={() => setFilterType('out_of_stock')}
           >
-            ⚠️ Ruptures
+            <IconAlertTriangle size={12} />
+            <span>Ruptures</span>
           </button>
           <button
             type="button"
-            className={`btn btn-xs ${filterType === 'replenish_urgent' ? 'btn-primary' : 'btn-secondary'}`}
+            className={`btn btn-xs flex items-center gap-1 ${filterType === 'replenish_urgent' ? 'btn-primary' : 'btn-secondary'}`}
             style={{ borderRadius: 9999, fontSize: '0.72rem', padding: '3px 8px' }}
             onClick={() => setFilterType('replenish_urgent')}
           >
-            📦 Réassort
+            <IconPackage size={12} />
+            <span>Réassort</span>
           </button>
         </div>
 
@@ -456,26 +472,29 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
               return (
                 <div
                   key={d.id}
-                  className="p-3 rounded-xl transition-all"
+                  className="p-3.5 transition-all"
                   style={{
                     background: 'var(--bg-card)',
                     border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-card, 20px)',
+                    backdropFilter: 'var(--glass-blur)',
                   }}
                 >
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span
-                          className="badge text-[10px] font-bold"
-                          style={{ background: badge.bg, color: badge.color, borderRadius: 9999 }}
+                          className="badge text-[10px] font-bold inline-flex items-center gap-1"
+                          style={{ background: badge.bg, color: badge.color, borderRadius: 9999, padding: '3px 8px' }}
                         >
-                          {badge.label}
+                          {badge.icon}
+                          <span>{badge.label}</span>
                         </span>
                         <span className="font-bold text-xs" style={{ color: 'var(--text-primary)' }}>
                           {d.client}
                         </span>
                       </div>
-                      <div className="font-bold text-sm mt-1">{d.designation}</div>
+                      <div className="font-bold text-sm mt-1.5">{d.designation}</div>
                       {d.productReference && (
                         <div className="text-xs text-muted font-mono mt-0.5">
                           Réf: {d.productReference}
@@ -486,7 +505,7 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
                       <img
                         src={d.imageUrl}
                         alt="Photo"
-                        style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }}
+                        style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 'var(--radius-button, 14px)', flexShrink: 0 }}
                       />
                     )}
                   </div>
@@ -499,27 +518,32 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
 
                   {d.note && (
                     <div
-                      className="text-xs p-1.5 rounded mt-1.5"
+                      className="text-xs p-2 rounded-xl mt-2 flex items-start gap-1.5"
                       style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}
                     >
-                      💬 {d.note}
+                      <IconChat size={13} className="shrink-0 mt-0.5 text-muted" />
+                      <span>{d.note}</span>
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--border)] text-[11px] text-muted">
+                  <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-[var(--border)] text-[11px] text-muted">
                     <span>Par {d.reportedBy || 'Dépôt'} • {new Date(d.createdAt).toLocaleDateString('fr-FR')}</span>
                     <div className="flex items-center gap-1.5">
                       {d.status === 'pending' ? (
                         <button
                           type="button"
-                          className="btn btn-xs btn-ghost text-emerald-500 font-bold"
-                          style={{ padding: '2px 6px', fontSize: '0.7rem' }}
+                          className="btn btn-xs btn-ghost text-emerald-500 font-bold inline-flex items-center gap-1"
+                          style={{ padding: '3px 8px', fontSize: '0.72rem', borderRadius: 9999 }}
                           onClick={() => handleUpdateStatus(d.id!, 'treated')}
                         >
-                          ✓ Traité
+                          <IconCheck size={12} />
+                          <span>Traité</span>
                         </button>
                       ) : (
-                        <span className="text-emerald-500 font-bold text-[10px]">Traité ✓</span>
+                        <span className="text-emerald-500 font-bold text-[11px] inline-flex items-center gap-1">
+                          <IconCheck size={12} />
+                          <span>Traité</span>
+                        </span>
                       )}
                       <button
                         type="button"

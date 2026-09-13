@@ -39,61 +39,61 @@ const FAMILY_DEFINITIONS: { id: string; name: string; icon: string; keywords: st
   {
     id: 'trousses',
     name: 'Trousses & Plumiers',
-    icon: '👝',
+    icon: 'pouch',
     keywords: ['trousse', 'plumier', 'fourre-tout', 'fourretout'],
   },
   {
     id: 'sacs',
     name: 'Sacs & Cartables',
-    icon: '🎒',
+    icon: 'backpack',
     keywords: ['sac', 'cartable', 'sac a dos', 'valise', 'besace', 'sacoche'],
   },
   {
     id: 'stylos',
     name: 'Stylos, Feutres & Écriture',
-    icon: '🖊️',
+    icon: 'pen',
     keywords: ['stylo', 'feutre', 'marqueur', 'surligneur', 'roller', 'crayon', 'mine', 'bille', 'plume'],
   },
   {
     id: 'cahiers',
     name: 'Cahiers, Papier & Registres',
-    icon: '📒',
+    icon: 'book',
     keywords: ['cahier', 'registre', 'bloc', 'papier', 'ramette', 'feuillet', 'dessin', 'chemise carton'],
   },
   {
     id: 'classeurs',
     name: 'Classeurs & Rangement',
-    icon: '📁',
+    icon: 'folder',
     keywords: ['classeur', 'chemise', 'archive', 'pochette', 'lutin', 'separateur', 'porte document'],
   },
   {
     id: 'gommes',
     name: 'Gommes, Tailles & Correction',
-    icon: '✏️',
+    icon: 'eraser',
     keywords: ['gomme', 'taille crayon', 'taille', 'correcteur', 'blanco', 'effaceur', 'ruban corr'],
   },
   {
     id: 'colles',
     name: 'Colles & Adhésifs',
-    icon: '🧪',
+    icon: 'glue',
     keywords: ['colle', 'scotch', 'adhesif', 'ruban adhesif', 'stick'],
   },
   {
     id: 'regles',
     name: 'Règles & Géométrie',
-    icon: '📐',
+    icon: 'ruler',
     keywords: ['regle', 'equerre', 'rapporteur', 'compas', 'trace lettre', 'decimetre', 'double decimetre'],
   },
   {
     id: 'calculatrices',
     name: 'Calculatrices',
-    icon: '🧮',
+    icon: 'calculator',
     keywords: ['calculatrice', 'scientifique', 'scolaire', 'bureau'],
   },
   {
     id: 'peinture',
     name: 'Peinture, Arts & Couleurs',
-    icon: '🎨',
+    icon: 'palette',
     keywords: ['peinture', 'gouache', 'aquarelle', 'pinceau', 'palette', 'pate a modeler', 'acrylique', 'coloriage'],
   },
 ];
@@ -123,7 +123,7 @@ export function detectProductFamily(designation: string): { id: string; name: st
       }
     }
   }
-  return { id: 'divers', name: 'Autres Articles', icon: '📦' };
+  return { id: 'divers', name: 'Autres Articles', icon: 'package' };
 }
 
 /**
@@ -342,8 +342,8 @@ export function checkReferenceInBill(
   );
 
   const skipReason = hasDecadeCluster
-    ? `⛔ Réf ${num} : Série ${decadeStart}-${decadeEnd} présente mais Réf ${num} est absent de cette commande ! (Zapper)`
-    : `⛔ Réf ${num} : AUCUN article dans cette commande ! (Zapper directement)`;
+    ? `Réf ${num} : Série ${decadeStart}-${decadeEnd} présente mais Réf ${num} est absent de cette commande (Zapper)`
+    : `Réf ${num} : AUCUN article dans cette commande ! (Zapper directement)`;
 
   let familyContext = '';
   const trousseFam = struct.families.find((f) => f.id === 'trousses');
