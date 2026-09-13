@@ -4209,7 +4209,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                   : 'BC'}
               </span>
             )}
-            {bill.bcNumber && (
+            {bill.bcNumber && bill.bcNumber !== bill.billNumber && !bill.billNumber.includes(bill.bcNumber) && (
               <span
                 style={{
                   fontSize: '0.62rem',
@@ -4338,15 +4338,8 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               ))}
             </div>
           ) : (
-            <div className="text-[11px] text-muted flex items-center justify-between">
-              <span>Ajoutez des photos des modèles exacts ou motifs pour les vendeurs et chauffeurs</span>
-              <button
-                type="button"
-                className="btn btn-xs btn-ghost text-accent font-bold"
-                onClick={() => billPhotoInputRef.current?.click()}
-              >
-                Prendre photo
-              </button>
+            <div className="text-xs text-muted" style={{ lineHeight: 1.45 }}>
+              Ajoutez des photos des modèles ou motifs pour guider les préparateurs et chauffeurs.
             </div>
           )}
         </div>
@@ -5102,18 +5095,22 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         {/* Selection Toolbar when in multi-select mode */}
         {(isSelectionMode || selectedLineIds.size > 0) && (
           <div
-            className="selection-toolbar flex items-center justify-between p-2 mb-2"
+            className="selection-toolbar mb-2 flex items-center justify-between gap-1.5"
             style={{
-              background: 'rgba(16, 185, 129, 0.1)',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid rgba(16, 185, 129, 0.25)',
+              padding: '6px 10px',
+              background: 'rgba(16, 185, 129, 0.08)',
+              borderRadius: '14px',
+              border: '1px solid rgba(16, 185, 129, 0.22)',
+              overflowX: 'auto',
+              scrollbarWidth: 'none',
+              whiteSpace: 'nowrap',
             }}
           >
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1 flex-shrink-0">
               <button
                 type="button"
                 className="btn btn-xs btn-ghost"
-                style={{ fontWeight: 700, color: 'var(--accent)' }}
+                style={{ fontWeight: 700, color: 'var(--accent)', padding: '3px 8px' }}
                 onClick={() => {
                   const allDisplayedIds = displayLines.map((l) => l.id!).filter(Boolean);
                   const allSelected =
@@ -5126,13 +5123,13 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                 }}
               >
                 {displayLines.length > 0 && displayLines.every((l) => selectedLineIds.has(l.id!))
-                  ? 'Tout décocher'
-                  : `Tout cocher (${displayLines.length})`}
+                  ? 'Décocher'
+                  : `Tout (${displayLines.length})`}
               </button>
               <button
                 type="button"
                 className="btn btn-xs btn-ghost text-warning"
-                style={{ fontWeight: 700 }}
+                style={{ fontWeight: 700, padding: '3px 8px' }}
                 onClick={() => {
                   const shortIds = displayLines
                     .filter((l) => {
@@ -5152,19 +5149,25 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                 Manquants
               </button>
             </div>
-            <span className="text-xs font-bold" style={{ color: 'var(--accent)' }}>
-              {selectedLineIds.size} sélectionné{selectedLineIds.size > 1 ? 's' : ''}
-            </span>
-            <button
-              type="button"
-              className="btn btn-xs btn-ghost text-muted"
-              onClick={() => {
-                setIsSelectionMode(false);
-                setSelectedLineIds(new Set());
-              }}
-            >
-              Fermer
-            </button>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <span
+                className="badge badge-accent font-bold"
+                style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: 9999 }}
+              >
+                {selectedLineIds.size} sél.
+              </span>
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost text-muted"
+                style={{ padding: '3px 8px' }}
+                onClick={() => {
+                  setIsSelectionMode(false);
+                  setSelectedLineIds(new Set());
+                }}
+              >
+                Fermer
+              </button>
+            </div>
           </div>
         )}
 
@@ -5692,20 +5695,37 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
       {selectedLineIds.size > 0 ? (
         <div className="batch-action-bar">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="badge badge-accent font-bold" style={{ fontSize: '0.85rem', padding: '4px 10px' }}>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <span
+                className="badge badge-accent font-bold flex items-center justify-center"
+                style={{
+                  fontSize: '0.82rem',
+                  minWidth: 26,
+                  height: 26,
+                  borderRadius: 9999,
+                  padding: '0 7px',
+                }}
+              >
                 {selectedLineIds.size}
               </span>
-              <span className="text-xs font-semibold text-secondary">
-                article{selectedLineIds.size > 1 ? 's' : ''} sélectionné{selectedLineIds.size > 1 ? 's' : ''}
+              <span className="text-xs font-bold text-secondary">
+                sél.
               </span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-1.5 flex-1 justify-end min-w-0">
               {stage === 'pointage' && (
                 <button
                   type="button"
-                  className="btn btn-sm btn-secondary flex items-center gap-1"
-                  style={{ fontWeight: 700 }}
+                  className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
+                  style={{
+                    fontWeight: 700,
+                    fontSize: '0.78rem',
+                    height: 38,
+                    borderRadius: 9999,
+                    padding: '0 10px',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}
                   onClick={async () => {
                     const selectedLines = activeLinesPool.filter((l) => selectedLineIds.has(l.id!));
                     const res = await batchAssignContainerAndCount(selectedLines, 'pointage', null, {
@@ -5718,27 +5738,43 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                     setIsSelectionMode(false);
                   }}
                 >
-                  <IconCheck size={14} /> Pointer Tout
+                  <IconCheck size={13} />
+                  <span>Valider</span>
                 </button>
               )}
               <button
                 type="button"
-                className="btn btn-sm btn-secondary flex items-center gap-1"
-                style={{ fontWeight: 700 }}
+                className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
+                style={{
+                  fontWeight: 700,
+                  fontSize: '0.78rem',
+                  height: 38,
+                  borderRadius: 9999,
+                  padding: '0 10px',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
                 onClick={() => setShowBatchTransferModal(true)}
                 title="Transférer les articles sélectionnés vers une autre étape"
               >
-                <IconTransfer size={14} />
+                <IconTransfer size={13} />
                 <span>Changer d'étape</span>
               </button>
               <button
                 type="button"
-                className="btn btn-primary flex items-center gap-1.5"
-                style={{ padding: '8px 14px', fontSize: '0.85rem', fontWeight: 700 }}
+                className="btn btn-sm btn-primary flex items-center justify-center gap-1.5 font-bold"
+                style={{
+                  fontSize: '0.78rem',
+                  height: 38,
+                  borderRadius: 9999,
+                  padding: '0 12px',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
                 onClick={() => setShowBatchModal(true)}
               >
-                <IconBag size={15} />
-                <span>Mettre en Colis</span>
+                <IconBag size={14} />
+                <span>En Colis</span>
               </button>
             </div>
           </div>
@@ -5844,7 +5880,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         </div>
       )}
-      {showScrollTop && (
+      {showScrollTop && selectedLineIds.size === 0 && !isSelectionMode && (
         <button
           type="button"
           className="scroll-top-fab"
@@ -7508,26 +7544,38 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             if (!desc) return null;
             return (
               <div
-                className="mb-2.5 px-2.5 py-1.5 font-mono text-xs"
+                className="font-mono text-xs"
                 style={{
                   background: 'var(--bg-surface)',
                   borderRadius: '12px',
                   border: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
                   color: 'var(--accent)',
                   fontWeight: 700,
+                  padding: '8px 12px',
+                  marginBottom: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
                 }}
               >
-                {desc}
+                <IconBox size={14} style={{ flexShrink: 0 }} />
+                <span>{desc}</span>
               </div>
             );
           })()}
 
           {/* Multi-Tier Nested Packaging Calculator Toggle */}
-          <div className="mb-2.5">
+          <div style={{ marginBottom: '12px' }}>
             <button
               type="button"
               className={`btn btn-xs ${showMultiTierCalc ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1.5`}
-              style={{ fontSize: '0.72rem', borderRadius: '9999px', padding: '3px 10px', maxWidth: '100%', whiteSpace: 'normal', textAlign: 'left' }}
+              style={{
+                fontSize: '0.75rem',
+                borderRadius: '9999px',
+                padding: '6px 12px',
+                maxWidth: '100%',
+                fontWeight: 600,
+              }}
               onClick={() => {
                 const next = !showMultiTierCalc;
                 setShowMultiTierCalc(next);
@@ -7539,7 +7587,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 }
               }}
             >
-              <IconLayers size={12} style={{ flexShrink: 0 }} />
+              <IconLayers size={13} style={{ flexShrink: 0 }} />
               <span>Carton Composé (pots × pièces)</span>
             </button>
           </div>

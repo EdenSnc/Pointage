@@ -15,6 +15,7 @@ import {
   IconCheck,
   IconChat,
   IconBuilding,
+  IconStore,
 } from './icons';
 
 interface StoreDemandModalProps {
