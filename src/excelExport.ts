@@ -21,7 +21,7 @@ import type {
 import { sumStageEvents } from './logic';
 import { formatDzdAmountInWords, numberToWordsFr } from './frenchNumberToWords';
 
-export type DocumentExportType = 'auto' | 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande';
+export type DocumentExportType = 'auto' | 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | 'proforma';
 
 export interface FinalBillOptions {
   stage?: Stage;
@@ -111,6 +111,7 @@ export function buildFinalBillRows(
       totalTtc,
       status,
       observation,
+      commercialNote: line.commercialNote || null,
     });
   }
 
@@ -136,18 +137,17 @@ export function compileFinalBillData(
     totalOrderedQty += r.orderedQty;
     totalActualQty += r.actualQty;
     totalDiffQty += r.diffQty;
-    if (r.unitPrice != null) {
+
+    if (r.unitPrice !== null && r.unitPrice > 0) {
+      pricedRowsCount++;
       const lineHt = Math.round((r.actualQty * r.unitPrice + Number.EPSILON) * 100) / 100;
       totalHt = Math.round((totalHt + lineHt + Number.EPSILON) * 100) / 100;
-      const lineDisc = r.discountPercent || 0;
-      if (lineDisc > 0) {
-        const discVal = Math.round((lineHt * (lineDisc / 100) + Number.EPSILON) * 100) / 100;
-        totalRemise = Math.round((totalRemise + discVal + Number.EPSILON) * 100) / 100;
-      }
-      pricedRowsCount++;
-    }
-    if (r.totalTtc != null) {
-      totalAmountTtc = Math.round((totalAmountTtc + r.totalTtc + Number.EPSILON) * 100) / 100;
+
+      const discountRate = (r.discountPercent || 0) / 100;
+      const lineRemise = Math.round((lineHt * discountRate + Number.EPSILON) * 100) / 100;
+      totalRemise = Math.round((totalRemise + lineRemise + Number.EPSILON) * 100) / 100;
+
+      totalAmountTtc = Math.round((totalAmountTtc + (r.totalTtc || 0) + Number.EPSILON) * 100) / 100;
     }
   }
 
@@ -181,6 +181,7 @@ export function compileFinalBillData(
     ai: (bill as any).ai || null,
     bcNumber: (bill as any).bcNumber || null,
     documentType: (bill as any).documentType || null,
+    commercialNote: (bill as any).commercialNote || null,
     preparedBy: (bill as any).preparedBy || null,
     loadedBy: (bill as any).loadedBy || null,
     checkedBy: (bill as any).checkedBy || null,
@@ -209,7 +210,7 @@ export function compileFinalBillData(
 export function resolveDocumentType(
   data: FinalBillExportData,
   overrideType?: DocumentExportType
-): 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' {
+): 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | 'proforma' {
   if (overrideType && overrideType !== 'auto') {
     return overrideType;
   }
@@ -218,6 +219,11 @@ export function resolveDocumentType(
   }
 
   const billNo = (data.billNumber || '').toUpperCase().trim();
+
+  // Proforma / Devis identifiers
+  if (billNo.startsWith('PRO') || billNo.includes('PROFORMA') || billNo.includes('DEVIS') || billNo.includes('COTATION')) {
+    return 'proforma';
+  }
 
   // Invoice identifiers: Invoice, SAJ, FACT, FA
   if (billNo.startsWith('INV') || billNo.includes('SAJ') || billNo.includes('FACT')) {
@@ -261,8 +267,11 @@ const thinBorder = {
 export function createInvoiceWorkbook(data: FinalBillExportData): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
 
+  const isProforma = data.documentType === 'proforma' || (data.billNumber || '').toUpperCase().includes('PROFORMA') || (data.billNumber || '').toUpperCase().includes('DEVIS');
+  const docTitle = isProforma ? `Facture Proforma ${data.billNumber || ''}`.trim() : `Invoice ${data.billNumber || 'SAJ/2026/5435'}`;
+
   const wsData: (string | number | null | object)[][] = [
-    [`Invoice ${data.billNumber || 'SAJ/2026/5435'}`, '', '', '', '', '', `Bir El Djir , le : ${data.date || ''}`],
+    [docTitle, '', '', '', '', '', `Bir El Djir , le : ${data.date || ''}`],
     ['', '', '', '', `Client : ${data.client || 'Client Inconnu'}`],
     [`Par: ${data.agentName || 'ShowOr'}`, '', '', '', data.clientAddress ? `${data.clientAddress}` : ''],
     ['', '', '', '', 'ORAN'],
@@ -832,6 +841,7 @@ export function createFinalBillWorkbook(
   const docType = resolveDocumentType(data, targetType);
   switch (docType) {
     case 'invoice':
+    case 'proforma':
       return createInvoiceWorkbook(data);
     case 'bl_official':
       return createDeliveryNoteWorkbook(data);
@@ -858,6 +868,7 @@ export function downloadFinalBillExcel(
 
   let defaultPrefix = 'BL_FINAL';
   if (docType === 'invoice') defaultPrefix = 'FACTURE';
+  else if (docType === 'proforma') defaultPrefix = 'PROFORMA';
   else if (docType === 'bl_official') defaultPrefix = 'BL_OFFICIEL';
   else if (docType === 'bl_workshop') defaultPrefix = 'BL_ATELIER';
   else if (docType === 'bon_commande') defaultPrefix = 'BC_COMMANDE';
@@ -898,6 +909,8 @@ export function formatFinalBillWhatsAppMessage(
   let docHeader = 'FACTURE ET BON DE RECEPTION DEFINITIF (POINTAGE SURFACE)';
   if (docType === 'invoice') {
     docHeader = 'FACTURE COMMERCIALE (SAJ / SHOWOR)';
+  } else if (docType === 'proforma') {
+    docHeader = 'FACTURE PROFORMA / DEVIS ESTIMATIF';
   } else if (docType === 'bl_official') {
     docHeader = 'BON DE LIVRAISON OFFICIEL (SARL S.B.M IMP/EXP)';
   } else if (docType === 'bl_workshop') {
@@ -911,6 +924,9 @@ export function formatFinalBillWhatsAppMessage(
   msg += `N° Document : *${data.billNumber || 'Sans Numéro'}*\n`;
   if (data.bcNumber) {
     msg += `N° Bon de Commande (BC) : *${data.bcNumber}*\n`;
+  }
+  if (data.commercialNote) {
+    msg += `Note commerciale : *${data.commercialNote}*\n`;
   }
   msg += `Date : ${data.date || ''}\n`;
   if (data.preparedBy || data.loadedBy || data.checkedBy) {

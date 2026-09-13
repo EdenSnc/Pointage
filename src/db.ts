@@ -17,6 +17,7 @@ import type {
   ProductProfile,
   AuditEvent,
   ShipmentTrip,
+  StoreDemand,
 } from './types';
 import { decomposeTimestamp, detectWilaya } from './wilayas';
 
@@ -32,6 +33,7 @@ export class PointageDB extends Dexie {
   productProfiles!: Table<ProductProfile, number>;
   auditEvents!: Table<AuditEvent, number>;
   shipmentTrips!: Table<ShipmentTrip, number>;
+  storeDemands!: Table<StoreDemand, number>;
 
   constructor() {
     super('pointage-surface-db');
@@ -98,6 +100,11 @@ export class PointageDB extends Dexie {
       orderLines:
         '++id, billId, no, reference, ean, status, originalReference, originalEan, *referenceAliases, historicalReference',
       productProfiles: '++id, reference, normalizedDesignation',
+    });
+
+    // Version 5: Store Demand & Replenishment Signals (Remontées Magasin)
+    this.version(5).stores({
+      storeDemands: '++id, client, signalType, status, productReference, createdAt',
     });
   }
 }

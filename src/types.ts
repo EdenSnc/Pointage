@@ -12,7 +12,13 @@ export type PointageOutcome = 'accepted' | 'damaged_accepted' | 'damaged_refused
 
 export type SearchMode = 'smart' | 'no' | 'ref' | 'ean' | 'name';
 
-export type ChangeReason = 'official_change' | 'bill_correction' | 'other';
+export type ChangeReason =
+  | 'official_change'
+  | 'bill_correction'
+  | 'other'
+  | 'out_of_stock'
+  | 'client_requested'
+  | 'packing_adjustment';
 
 export type WarehouseZone =
   | 'CH_NW'
@@ -105,6 +111,9 @@ export interface ShipmentTrip {
   isLastTrip?: boolean;
   notes?: string | null;
   dispatchedAt?: string | null;
+  driverPhone?: string | null;
+  destinationRoute?: string | null;
+  availableSeats?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -127,7 +136,9 @@ export interface Bill {
   ai?: string | null;
   discountPercent?: number | null;
   bcNumber?: string | null;
-  documentType?: 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | null;
+  documentType?: 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | 'proforma' | null;
+  commercialNote?: string | null;
+  imageUrl?: string | null;
   // Stage Operator Accountability
   preparedBy?: string | null;
   preparedAt?: string | null;
@@ -196,6 +207,7 @@ export interface OrderLine {
   reallocationNote?: string | null;
   shortageResolvedAsPartial?: boolean | null;
   imageUrl?: string | null;
+  commercialNote?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -296,6 +308,7 @@ export interface ImportLineJSON {
   colisage?: string | null;
   discountPercent?: number | null;
   packagesRaw?: string | null;
+  commercialNote?: string | null;
 }
 
 export interface ImportBillJSON {
@@ -318,7 +331,8 @@ export interface ImportBillJSON {
   totalAvecRemise?: number | null;
   discountPercent?: number | null;
   bcNumber?: string | null;
-  documentType?: 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | null;
+  documentType?: 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | 'proforma' | null;
+  commercialNote?: string | null;
   lines?: ImportLineJSON[];
 }
 
@@ -345,6 +359,7 @@ export interface FinalBillRow {
   totalTtc: number | null; // actualQty * (unitPrice || 0)
   status: FinalBillRowStatus;
   observation: string;
+  commercialNote?: string | null;
 }
 
 export interface FinalBillExportData {
@@ -359,7 +374,8 @@ export interface FinalBillExportData {
   rc?: string | null;
   ai?: string | null;
   bcNumber?: string | null;
-  documentType?: 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | null;
+  documentType?: 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | 'proforma' | null;
+  commercialNote?: string | null;
   preparedBy?: string | null;
   loadedBy?: string | null;
   checkedBy?: string | null;
@@ -397,4 +413,22 @@ export interface LineDiscrepancy {
   isShort: boolean;
   isOver: boolean;
   isModified: boolean;
+}
+
+export type StoreDemandSignalType = 'high_demand' | 'out_of_stock' | 'model_request' | 'replenish_urgent';
+
+export interface StoreDemand {
+  id?: number;
+  client: string; // Surface / Store name (ex: "BLEU BLANC NAKHIL")
+  wilaya?: string | null;
+  productReference?: string | null;
+  designation: string;
+  signalType: StoreDemandSignalType;
+  requestedQty?: number | null;
+  note?: string | null; // ex: "Les clients réclament la variante à roulettes"
+  reportedBy?: string | null; // Operator, chauffeur, or vendor
+  status: 'pending' | 'treated' | 'ordered' | 'dismissed';
+  imageUrl?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

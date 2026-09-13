@@ -141,6 +141,9 @@ export async function createAndDispatchTrip(params: {
   isLastTrip?: boolean;
   notes?: string | null;
   groupedBillIds?: number[];
+  driverPhone?: string | null;
+  destinationRoute?: string | null;
+  availableSeats?: number | null;
 }): Promise<ShipmentTrip> {
   const existing = await getBillTrips(params.billId);
   const maxTripNum = existing.reduce((max, t) => Math.max(max, t.tripNumber), 0);
@@ -179,6 +182,9 @@ export async function createAndDispatchTrip(params: {
     driverName: params.driverName?.trim() || null,
     truckPlate: params.truckPlate?.trim() || null,
     operatorName: params.operatorName?.trim() || null,
+    driverPhone: params.driverPhone?.trim() || null,
+    destinationRoute: params.destinationRoute?.trim() || null,
+    availableSeats: typeof params.availableSeats === 'number' ? params.availableSeats : null,
     containerIds: params.containerIds,
     lineQuantities: resolvedLineQuantities,
     totalUnits,

@@ -247,7 +247,7 @@ export async function importBills(
         const unitPrice = typeof rawPrice === 'number' && !isNaN(rawPrice) && rawPrice >= 0 ? rawPrice : null;
 
         // Duplicate prevention using dedicated deduplication engine
-        const isDuplicate = existingLines.some((el) =>
+        const duplicateMatch = existingLines.find((el) =>
           isDuplicateLine(
             {
               no: cleanNo,
@@ -261,7 +261,12 @@ export async function importBills(
           )
         );
 
-        if (!isDuplicate) {
+        if (duplicateMatch) {
+          if (lineData.commercialNote && !duplicateMatch.commercialNote) {
+            duplicateMatch.commercialNote = String(lineData.commercialNote).trim();
+            await db.orderLines.update(duplicateMatch.id!, { commercialNote: duplicateMatch.commercialNote });
+          }
+        } else {
           const finalNo = cleanNo || String(existingLines.length + addedForThisBill + 1);
           const designation = lineData.designation?.trim() || (ref ? `Réf: ${ref}` : `Article ${finalNo}`);
 
@@ -308,6 +313,7 @@ export async function importBills(
             warehouseZone: matchedProfile?.warehouseZone ?? null,
             imageUrl: matchedProfile?.imageUrl ?? null,
             packagesRaw: lineData.packagesRaw != null ? String(lineData.packagesRaw) : null,
+            commercialNote: lineData.commercialNote ? String(lineData.commercialNote).trim() : null,
             referenceAliases: aliases,
             historicalReference: historicalRef,
             createdAt: now,
@@ -329,6 +335,10 @@ export async function importBills(
       }
       if (billData.documentType && !matchingBill.documentType) {
         matchingBill.documentType = billData.documentType;
+        updatedBillMeta = true;
+      }
+      if (billData.commercialNote && !matchingBill.commercialNote) {
+        matchingBill.commercialNote = billData.commercialNote;
         updatedBillMeta = true;
       }
 
@@ -386,6 +396,7 @@ export async function importBills(
         discountPercent: billData.discountPercent != null ? billData.discountPercent : null,
         bcNumber: billData.bcNumber || null,
         documentType: billData.documentType || null,
+        commercialNote: billData.commercialNote || null,
         createdAt: now,
         updatedAt: now,
       };
@@ -448,6 +459,7 @@ export async function importBills(
           warehouseZone: matchedProfile?.warehouseZone ?? null,
           imageUrl: matchedProfile?.imageUrl ?? null,
           packagesRaw: lineData.packagesRaw != null ? String(lineData.packagesRaw) : null,
+          commercialNote: lineData.commercialNote ? String(lineData.commercialNote).trim() : null,
           referenceAliases: aliases,
           historicalReference: historicalRef,
           createdAt: now,

@@ -92,6 +92,9 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
   const [customPlate, setCustomPlate] = useState<string>('');
   const [operatorName, setOperatorName] = useState<string>(activeOperator || 'Mohamed');
   const [notes, setNotes] = useState<string>('');
+  const [driverPhone, setDriverPhone] = useState<string>('');
+  const [destinationRoute, setDestinationRoute] = useState<string>(bill.wilaya || 'Bir El Djir / Oran');
+  const [availableSeats, setAvailableSeats] = useState<number>(1);
   const [isLastTrip, setIsLastTrip] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
@@ -180,6 +183,9 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
         driverName: resolvedDriver,
         truckPlate: resolvedPlate,
         operatorName,
+        driverPhone,
+        destinationRoute,
+        availableSeats,
         containerIds: selectedContainerIds,
         lineQuantities: tripLineQuantities,
         isLastTrip,
@@ -543,6 +549,67 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
           </div>
         </div>
 
+        {/* Navette & Itinéraire Chauffeur (Entraide transport dépôt) */}
+        <div
+          className="mb-3 p-2.5"
+          style={{
+            borderRadius: 14,
+            background: 'rgba(59, 130, 246, 0.08)',
+            border: '1px solid rgba(59, 130, 246, 0.25)',
+          }}
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#3b82f6' }}>
+              🚐 Navette & Itinéraire Chauffeur
+            </span>
+            <span className="text-[10px] text-muted">Covoiturage ouvriers dépôt</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <div>
+              <label className="text-[10px] font-bold text-muted uppercase block mb-0.5">
+                Quartiers / Trajet
+              </label>
+              <input
+                type="text"
+                className="input input-xs w-full"
+                placeholder="Ex: Bir El Djir -> Maraval"
+                value={destinationRoute}
+                onChange={(e) => setDestinationRoute(e.target.value)}
+                style={{ fontSize: '0.75rem', borderRadius: 8 }}
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-muted uppercase block mb-0.5">
+                N° Tél Chauffeur
+              </label>
+              <input
+                type="tel"
+                className="input input-xs w-full"
+                placeholder="05 / 06 / 07..."
+                value={driverPhone}
+                onChange={(e) => setDriverPhone(e.target.value)}
+                style={{ fontSize: '0.75rem', borderRadius: 8 }}
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted text-[11px]">Places passagers libres :</span>
+            <div className="flex items-center gap-1">
+              {[0, 1, 2].map((cnt) => (
+                <button
+                  key={cnt}
+                  type="button"
+                  className={`btn btn-xs ${availableSeats === cnt ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ padding: '2px 8px', fontSize: '0.72rem', borderRadius: 9999 }}
+                  onClick={() => setAvailableSeats(cnt)}
+                >
+                  {cnt === 0 ? 'Complet (0)' : `${cnt} place${cnt > 1 ? 's' : ''}`}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* Multi-Commande / Multi-Acheteur: Group other active orders into this same vehicle trip */}
         {(() => {
           const candidateBills = (allActiveBills || []).filter(
@@ -617,7 +684,7 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
                           <div className="text-[10px] text-muted truncate">{b.client}</div>
                         </div>
                       </div>
-                      <span className="text-[10px] text-muted font-mono">{b.totalLines || 0} art.</span>
+                      <span className="text-[10px] text-muted font-mono">{(b as any).totalLines ? `${(b as any).totalLines} art.` : ''}</span>
                     </label>
                   );
                 })}

@@ -3,7 +3,7 @@
 // ============================================================
 
 import React, { useState, useRef, useEffect } from 'react';
-import { HashRouter, Routes, Route, useNavigate, useParams, useSearchParams, useLocation, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, useNavigate, useParams, useSearchParams, Navigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
 import { scheduleVaultMirror, autoRecoverFromVaultIfEmpty } from './offlineVault';
@@ -59,7 +59,6 @@ import {
   parsePackagingString,
   formatPackagingEquivalence,
   getPackHierarchyDescription,
-  calcNestedPackOuter,
   serializeCountsForQR,
   parseQRSyncPayload,
   planQRMerge,
@@ -93,7 +92,6 @@ import type {
 } from './types';
 
 import {
-  BrandLogo,
   BrandWordmark,
   IconScan,
   IconImport,
@@ -145,8 +143,6 @@ import {
   IconMapPin,
   IconSparkles,
   IconClock,
-  IconMaximize,
-  IconMinimize,
   IconHistory,
 } from './icons';
 
@@ -194,6 +190,8 @@ import { OnboardingWalkthrough } from './OnboardingWalkthrough';
 import { providerRegistry } from './ai/providerRegistry';
 import { ErrorBoundary } from './ErrorBoundary';
 import { SettingsModal } from './SettingsModal';
+import { StoreDemandModal } from './StoreDemandModal';
+import { StaffNavetteModal } from './StaffNavetteModal';
 import { FastScanQuantityCard } from './FastScanQuantityCard';
 import { ConformityDonutChart } from './ConformityDonutChart';
 import { ConcentricStageRings } from './ConcentricStageRings';
@@ -1017,6 +1015,8 @@ function HomeScreen({
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [showManualBillModal, setShowManualBillModal] = useState(false);
+  const [showStoreDemandModal, setShowStoreDemandModal] = useState(false);
+  const [showStaffNavetteModal, setShowStaffNavetteModal] = useState(false);
   const [showQuantities, setShowQuantities] = useState(() => localStorage.getItem('pointage_show_quantities') === 'true');
   const [activeOperator, setActiveOperatorState] = useState(() => getActiveOperator());
   const [operators, setOperators] = useState(() => loadOperatorsRoster());
@@ -1180,6 +1180,40 @@ function HomeScreen({
       </header>
 
       <div className="app-content">
+
+        {/* Quick Tools: Remontées Magasin & Navette Chauffeurs */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <button
+            type="button"
+            className="btn btn-sm btn-secondary flex items-center justify-center gap-1.5"
+            style={{
+              borderRadius: 12,
+              background: 'rgba(234, 179, 8, 0.1)',
+              borderColor: 'rgba(234, 179, 8, 0.3)',
+              color: '#eab308',
+              fontWeight: 700,
+            }}
+            onClick={() => setShowStoreDemandModal(true)}
+            title="Noter et suivre les demandes des vendeurs en magasins / surfaces"
+          >
+            <span>🏪 Remontées Magasin</span>
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm btn-secondary flex items-center justify-center gap-1.5"
+            style={{
+              borderRadius: 12,
+              background: 'rgba(59, 130, 246, 0.1)',
+              borderColor: 'rgba(59, 130, 246, 0.3)',
+              color: '#3b82f6',
+              fontWeight: 700,
+            }}
+            onClick={() => setShowStaffNavetteModal(true)}
+            title="Voir les trajets des chauffeurs et places disponibles pour les ouvriers"
+          >
+            <span>🚐 Navette Chauffeurs</span>
+          </button>
+        </div>
 
         {/* BL Filter Tabs */}
         <div className="flex gap-2 mb-3">
@@ -1514,6 +1548,19 @@ function HomeScreen({
         isOpen={!!billToArchive}
         onClose={() => setBillToArchive(null)}
         onConfirm={handleConfirmArchive}
+      />
+
+      <StoreDemandModal
+        isOpen={showStoreDemandModal}
+        onClose={() => setShowStoreDemandModal(false)}
+        knownClients={Array.from(new Set(bills.map((b) => b.client).filter(Boolean)))}
+        activeOperator={activeOperator}
+        onToast={(m) => showToast(m, setToast)}
+      />
+
+      <StaffNavetteModal
+        isOpen={showStaffNavetteModal}
+        onClose={() => setShowStaffNavetteModal(false)}
       />
     </>
   );
@@ -2047,6 +2094,8 @@ function BillCard({
               >
                 {bill.documentType === 'invoice'
                   ? 'Facture'
+                  : bill.documentType === 'proforma'
+                  ? 'Proforma / Devis'
                   : bill.documentType === 'bl_official'
                   ? 'BL Officiel'
                   : bill.documentType === 'bl_workshop'
@@ -2056,6 +2105,25 @@ function BillCard({
             )}
           </div>
           <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto no-scrollbar mt-1.5 py-0.5">
+            {bill.commercialNote && (
+              <span
+                style={{
+                  fontSize: '0.62rem',
+                  fontWeight: 700,
+                  padding: '1px 6px',
+                  borderRadius: '9999px',
+                  background: 'rgba(234, 179, 8, 0.16)',
+                  color: '#ca8a04',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                  flexShrink: 0,
+                }}
+                title={bill.commercialNote}
+              >
+                📋 Note
+              </span>
+            )}
             {bill.bcNumber && (
               <span
                 style={{
@@ -3016,6 +3084,30 @@ function BatchContainerModal({
           </div>
         </div>
 
+        {/* Felt-Pen Marker Guidance */}
+        {selectedContainerObj && (
+          <div
+            className="mb-3 p-2.5 rounded-xl flex items-center justify-between"
+            style={{
+              background: 'rgba(234, 179, 8, 0.12)',
+              border: '1px dashed rgba(234, 179, 8, 0.45)',
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <span style={{ fontSize: '1.2rem' }}>🖊️</span>
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-amber-500">
+                  Marquage Feutre sur le carton
+                </div>
+                <div className="font-bold text-sm text-primary">
+                  {client ? `${client} — ` : ''}{selectedContainerObj.label}
+                </div>
+              </div>
+            </div>
+            <span className="text-[10px] text-muted font-bold">À ÉCRIRE EN GROS</span>
+          </div>
+        )}
+
         {/* Section 2: Mode de Quantité */}
         <div className="mb-3 pt-2" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
           <div className="text-xs font-bold text-muted mb-2">2. Quantité à valider :</div>
@@ -3297,6 +3389,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedLineIds, setSelectedLineIds] = useState<Set<number>>(new Set());
   const [showBatchModal, setShowBatchModal] = useState(false);
+  const [showBatchTransferModal, setShowBatchTransferModal] = useState(false);
   const [showTripDispatchModal, setShowTripDispatchModal] = useState(false);
   const [showOverviewDiagrams, setShowOverviewDiagrams] = useState(() => {
     return localStorage.getItem('pointage_show_overview_diagrams') !== 'false';
@@ -3906,6 +3999,8 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               >
                 {bill.documentType === 'invoice'
                   ? 'Facture'
+                  : bill.documentType === 'proforma'
+                  ? 'Proforma / Devis'
                   : bill.documentType === 'bl_official'
                   ? 'BL Officiel'
                   : bill.documentType === 'bl_workshop'
@@ -3957,6 +4052,32 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
       </header>
 
       <div className="app-content">
+        {/* Commercial Note Banner */}
+        {bill.commercialNote && (
+          <div
+            style={{
+              marginBottom: '14px',
+              padding: '10px 14px',
+              borderRadius: '12px',
+              background: 'rgba(234, 179, 8, 0.12)',
+              border: '1px solid rgba(234, 179, 8, 0.35)',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px',
+            }}
+          >
+            <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>📋</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: '#ca8a04', letterSpacing: '0.05em' }}>
+                Note Commerciale & Consignes
+              </div>
+              <div style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px', whiteSpace: 'pre-wrap' }}>
+                {bill.commercialNote}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Collapsible Overview Header Pill (Compact pill when collapsed, integrated card when expanded) */}
         {!showOverviewDiagrams ? (
           <div
@@ -4817,7 +4938,39 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                       </button>
                     </div>
                   )}
-                  <div className="line-designation">{line.designation}</div>
+                  <div className="line-designation" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {(line.imageUrl || (line.reference && profileMap.get(line.reference)?.imageUrl)) && (
+                      <img
+                        src={line.imageUrl || (line.reference ? profileMap.get(line.reference)?.imageUrl : '') || ''}
+                        alt="Photo"
+                        style={{
+                          width: 30,
+                          height: 30,
+                          objectFit: 'cover',
+                          borderRadius: 6,
+                          border: '1px solid var(--border)',
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
+                    <span>{line.designation}</span>
+                  </div>
+
+                  {line.commercialNote && (
+                    <div
+                      className="flex items-center gap-1.5 mt-1 text-xs font-semibold"
+                      style={{
+                        background: 'rgba(234, 179, 8, 0.14)',
+                        color: '#ca8a04',
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        width: 'fit-content',
+                      }}
+                    >
+                      <span>📋</span>
+                      <span className="truncate">{line.commercialNote}</span>
+                    </div>
+                  )}
 
                   {/* Warehouse Location Zone Badge (Hidden in pointage, read-only in chargement, editable in preparation) */}
                   {stage !== 'pointage' && (() => {
@@ -5252,6 +5405,21 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         />
       )}
 
+      <TransferStageModal
+        isOpen={showBatchTransferModal}
+        onClose={() => setShowBatchTransferModal(false)}
+        billId={billId}
+        lineIds={Array.from(selectedLineIds)}
+        initialFromStage={stage}
+        initialToStage={stage === 'preparation' ? 'chargement' : 'preparation'}
+        onSuccess={(units, linesCount, from, to) => {
+          showToast(`${units} unités (${linesCount} articles) transférées vers ${to}`, setToast);
+          setSelectedLineIds(new Set());
+          setIsSelectionMode(false);
+          setShowBatchTransferModal(false);
+        }}
+      />
+
       {zoneModalLine && (
         <WarehouseZoneModal
           isOpen={Boolean(zoneModalLine)}
@@ -5387,8 +5555,6 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const [showSubModal, setShowSubModal] = useState(false);
   const [subSearch, setSubSearch] = useState('');
   const [selectedSubLine, setSelectedSubLine] = useState<OrderLine | null>(null);
-  const [substituteQty, setSubstituteQty] = useState<string>('');
-  const [substituteNotifyClient, setSubstituteNotifyClient] = useState(true);
 
   // Direct edit of orderedQty (with reason tracking)
   const [editingQty, setEditingQty] = useState(false);
@@ -5400,6 +5566,59 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   const [showLegacyModal, setShowLegacyModal] = useState(false);
   const [replenishQtyInput, setReplenishQtyInput] = useState<number>(1);
   const [showPackagingHelp, setShowPackagingHelp] = useState(false);
+
+  const [activeOperator, setActiveOperatorState] = useState(() => getActiveOperator());
+  const [operators, setOperators] = useState(() => loadOperatorsRoster());
+  const [showOperatorModal, setShowOperatorModal] = useState(false);
+  const [showQuantities, setShowQuantities] = useState(() => localStorage.getItem('pointage_show_quantities') === 'true');
+
+  const [crossBillOptions, setCrossBillOptions] = useState<CrossBillPreparedStockOption[]>([]);
+  const [selectedCrossBillOption, setSelectedCrossBillOption] = useState<CrossBillPreparedStockOption | null>(null);
+
+  const [subPaidAdvance, setSubPaidAdvance] = useState(false);
+  const [subNotifyClient, setSubNotifyClient] = useState(true);
+  const [subCustomNote, setSubCustomNote] = useState('');
+
+  const [editingField, setEditingField] = useState<'designation' | 'reference' | 'ean' | 'no' | 'page' | null>(null);
+  const [editFieldVal, setEditFieldVal] = useState('');
+
+  const productPhotoInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleProductPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 800;
+        let width = img.width;
+        let height = img.height;
+        if (width > height && width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+
+        await db.orderLines.update(lineId, { imageUrl: dataUrl });
+        if (line?.reference) {
+          await saveProductProfile(line.reference, { imageUrl: dataUrl });
+        }
+        showToast("Photo de l'article enregistrée", setToast);
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSelectOperator = (op: string) => {
     setActiveOperator(op);
@@ -5802,7 +6021,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
         {/* Product card */}
         <div className="card">
           <div className="flex items-start gap-3">
-            {/* Dedicated Product / Carton Photo Spot (Ready for DB) */}
+            {/* Dedicated Product / Carton Photo Spot (Interactive) */}
             <div
               style={{
                 width: 72,
@@ -5817,9 +6036,19 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 flexShrink: 0,
                 overflow: 'hidden',
                 position: 'relative',
+                cursor: 'pointer',
               }}
-              title={line.imageUrl || profile?.imageUrl ? line.designation : 'Emplacement photo carton / produit (Prêt pour base de données)'}
+              onClick={() => productPhotoInputRef.current?.click()}
+              title="Prendre ou changer la photo du produit / carton"
             >
+              <input
+                ref={productPhotoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={{ display: 'none' }}
+                onChange={handleProductPhotoUpload}
+              />
               {(line.imageUrl || profile?.imageUrl) ? (
                 <img
                   src={line.imageUrl || profile?.imageUrl || ''}
@@ -5828,9 +6057,9 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 />
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: 4, textAlign: 'center' }}>
-                  <IconBox size={22} style={{ color: 'var(--accent)', opacity: 0.85 }} />
+                  <IconCamera size={22} style={{ color: 'var(--accent)', opacity: 0.85 }} />
                   <span style={{ fontSize: '0.56rem', fontWeight: 700, color: 'var(--text-muted)', lineHeight: 1.1 }}>
-                    Photo Carton
+                    + Photo
                   </span>
                 </div>
               )}
@@ -5896,6 +6125,32 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
               </div>
             </div>
           </div>
+
+          {line.commercialNote && (
+            <div
+              style={{
+                marginTop: '10px',
+                padding: '8px 12px',
+                borderRadius: '10px',
+                background: 'rgba(234, 179, 8, 0.12)',
+                border: '1px solid rgba(234, 179, 8, 0.35)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <span style={{ fontSize: '1.1rem' }}>📋</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', color: '#ca8a04' }}>
+                  Consigne commerciale article
+                </div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {line.commercialNote}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div
             className="flex items-center gap-1.5 mt-2.5 pt-2 overflow-x-auto no-scrollbar flex-nowrap"
             style={{ borderTop: '1px solid var(--glass-border-subtle)' }}

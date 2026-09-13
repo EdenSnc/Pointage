@@ -11,24 +11,27 @@ TYPOLOGIE DES DOCUMENTS:
 - "bl_official": Bon de Livraison officiel avec en-tête complet (ex: "SARL S.B.M IMP/EXP"), colonnes Référence, EAN 13 chiffres et lien BC.
 - "bl_workshop": Bon de Livraison de préparation d'atelier (ex: "BL/OU126/03608") avec colonnes Référence, LOT, Packages et annotations au stylo.
 - "bon_commande": Bon de Commande client (ex: "BC:03885").
+- "proforma": Facture Proforma, Devis estimatif, Cotation ou Offre de prix (ex: "PROFORMA", "FACTURE PROFORMA", "DEVIS").
 
 RÈGLES CRITIQUES D'EXTRACTION:
 1. "billNumber": le numéro du document (ex: "Invoice SAJ/2026/5435", "BL/OU126/03615", "BL/OU126/03608", "BC/0U126/03835"). Si absent, utilise "NOTE-MANUSCRITE".
 2. "bcNumber": si un numéro de Bon de Commande est mentionné (ex: "BLEU BLANC NAKHIL N° BC:03885" -> "03885"), extrais-le.
-3. "documentType": "invoice" | "bl_official" | "bl_workshop" | "bon_commande".
-4. "client": nom du client (ex: "BLEU BLANC NAKHIL").
-5. "date": date au format YYYY-MM-DD (ex: "2026-09-06").
-6. "lines": liste ordonnée de tous les articles :
+3. "documentType": "invoice" | "bl_official" | "bl_workshop" | "bon_commande" | "proforma".
+4. "commercialNote": consignes ou remarques du commercial ou du client (ex: annotations manuscrites du commercial, "Livrer avant 12h", "Paiement à terme", "Prévoir modèle rouge si dispo"). Si aucune note, null.
+5. "client": nom du client (ex: "BLEU BLANC NAKHIL").
+6. "date": date au format YYYY-MM-DD (ex: "2026-09-06").
+7. "lines": liste ordonnée de tous les articles :
    - "no": numéro de ligne séquentiel ("1", "2", "3"...).
    - "page": numéro de page (défaut 1).
    - "reference": LA RÉFÉRENCE OU LE CODE ARTICLE (ex: "71662", "29129", "70380/84"). Dans les factures, la colonne s'intitule "CODE".
    - "ean": code-barres à 13 chiffres si présent dans la colonne "EAN" (ex: "6941782115831"), sinon null.
    - "designation": nom complet de l'article (ex: "SAC A DOS MOYEN 22 L 4 MO 71662").
+   - "commercialNote": remarque ou consigne spécifique à cette ligne (ex: "Couleur noir uniquement", "Offert en échantillon", annotation stylo sur l'article). Si absent, null.
    - "quantity": quantité numérique entière. TOUJOURS exprimée dans la plus petite unité (pièces/stylos/unités), JAMAIS en cartons ou boîtes. ATTENTION : si le document comporte des annotations manuscrites d'atelier au stylo (ex: "-1" ou "-2" en marge, ou un nombre biffé), déduis la quantité corrigée finale réelle.
    - "unitPrice": prix unitaire HT numérique (colonne "PU", ex: 3332.50). Si absent, null.
    - "packagesRaw": colisage ou conditionnement (colonne "Packages", "Colisage" ou "Qté/Carton", ex: "0,04", "50,00", "1CT/50").
    - "discountPercent": remise ligne en % (colonne "Rem(%)" ou "Rem. Paiement(%)", ex: 15.0), sinon null.
-7. TOTAUX & CADRE FINANCIER (si présents sur facture) :
+8. TOTAUX & CADRE FINANCIER (si présents sur facture ou proforma) :
    - "totalHt": total HT brut (ex: 32209.00).
    - "totalHtNet": total HT net après remise (ex: 30718.67).
    - "totalRemise": montant total de la remise (ex: 1490.33).
@@ -47,6 +50,7 @@ FORMAT JSON REQUIS:
       "billNumber": "Invoice SAJ/2026/5435",
       "bcNumber": "03885",
       "documentType": "invoice",
+      "commercialNote": "Livraison matinale demandée par le client",
       "client": "BLEU BLANC NAKHIL",
       "date": "2026-09-06",
       "agentName": "ShowOr",
@@ -67,6 +71,7 @@ FORMAT JSON REQUIS:
           "reference": "71662",
           "ean": "6941782115565",
           "designation": "SAC A DOS MOYEN 22 L 4 MO 71662",
+          "commercialNote": "Modèle noir de préférence",
           "quantity": 3,
           "unitPrice": 3332.50,
           "packagesRaw": "50,00"
