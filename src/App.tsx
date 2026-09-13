@@ -53,7 +53,6 @@ import {
   calcDiscrepancy,
   calcBillProgress,
   getStageTotals,
-  calcClosestPackRecommendation,
   isDimensionInDesignation,
   getStageProblemLines,
   parsePackagingString,
@@ -6471,29 +6470,6 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     scheduleVaultMirror(300);
   };
 
-  const handleApplyPackQty = (qty: number, packsCount: number, pSize?: number | null, isLooseOnly?: boolean) => {
-    hapticTap('medium');
-    playSuccessChime();
-    if (useDirectEntry) {
-      setDirectTotal(String(qty));
-    } else {
-      if (isLooseOnly) {
-        setLoose(qty);
-        setOuterCount(0);
-        setInnerCount(0);
-      } else if (pSize === innerPack) {
-        setInnerCount(packsCount);
-        setOuterCount(0);
-        setLoose(0);
-      } else {
-        setOuterCount(packsCount);
-        setInnerCount(0);
-        setLoose(0);
-      }
-    }
-    showToast(`Quantité réglée à ${qty} pièces (${packsCount} colis)`, setToast);
-  };
-
   const handleClearPackaging = async () => {
     setOuterPack(null);
     setInnerPack(null);
@@ -7333,149 +7309,6 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         )}
 
-        {/* Nearest-Pack Recommendation if Discrepancy Exists */}
-        {(innerPack || outerPack) && showQuantities && disc.remaining > 0 && (() => {
-          const activePack = innerPack || outerPack;
-          if (!activePack || activePack <= 1) return null;
-          const rec = calcClosestPackRecommendation(disc.remaining, activePack);
-          if (!rec) return null;
-
-          return (
-            <div
-              className="card mb-3 p-3"
-              style={{
-                background: 'var(--bg-surface)',
-                borderRadius: '18px',
-                border: '1px solid var(--border)',
-              }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-xs font-bold text-muted flex items-center gap-1.5">
-                  <IconBox size={14} style={{ color: 'var(--accent)' }} />
-                  <span>COLISAGE DU RELIQUAT ({disc.remaining} pcs) :</span>
-                </div>
-                <span
-                  className="badge"
-                  style={{
-                    fontSize: '0.68rem',
-                    padding: '2px 6px',
-                    background: rec.isExactMultiple ? 'rgba(34, 197, 94, 0.15)' : 'rgba(37, 99, 235, 0.15)',
-                    color: rec.isExactMultiple ? 'var(--success)' : 'var(--accent)',
-                    border: `1px solid ${rec.isExactMultiple ? 'rgba(34, 197, 94, 0.3)' : 'rgba(37, 99, 235, 0.3)'}`,
-                    fontWeight: 700,
-                  }}
-                >
-                  {rec.isExactMultiple ? 'Multiple exact' : 'Règle du plus proche'}
-                </span>
-              </div>
-
-              {rec.isExactMultiple ? (
-                <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
-                  <div className="flex items-center gap-1.5 font-bold" style={{ color: 'var(--success)' }}>
-                    <IconBox size={14} />
-                    <span>{rec.closestPacks} × Colis ({activePack} pcs) = {rec.closestQty} pcs</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-xs btn-primary flex items-center gap-1"
-                    onClick={() => handleApplyPackQty(rec.closestQty, rec.closestPacks, activePack)}
-                  >
-                    <IconCheck size={12} /> Appliquer {rec.closestQty} pcs
-                  </button>
-                </div>
-              ) : (
-                <div>
-                  <div
-                    className="p-2 mb-2 flex items-center justify-between gap-2 flex-wrap"
-                    style={{
-                      background: rec.closestAction === 'round_down'
-                        ? 'rgba(234, 179, 8, 0.10)'
-                        : 'rgba(37, 99, 235, 0.10)',
-                      border: `1px solid ${rec.closestAction === 'round_down' ? 'rgba(234, 179, 8, 0.3)' : 'rgba(37, 99, 235, 0.3)'}`,
-                      borderRadius: 'var(--radius-sm)',
-                    }}
-                  >
-                    <div>
-                      <div className="text-xs font-extrabold flex items-center gap-1.5">
-                        <span style={{ color: rec.closestAction === 'round_down' ? 'var(--warning)' : 'var(--accent)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                          <IconSparkles size={14} />
-                          <span>Recommandé : {rec.closestPacks} Colis = {rec.closestQty} pcs</span>
-                        </span>
-                        <span
-                          style={{
-                            fontSize: '0.68rem',
-                            fontWeight: 700,
-                            padding: '2px 8px',
-                            borderRadius: '9999px',
-                            background: rec.closestAction === 'round_down' ? 'rgba(234, 179, 8, 0.2)' : 'rgba(37, 99, 235, 0.2)',
-                            color: rec.closestAction === 'round_down' ? 'var(--warning)' : 'var(--accent)',
-                          }}
-                        >
-                          {rec.closestDiff < 0 ? `${rec.closestDiff} fraq retiré` : `+${rec.closestDiff} pcs (+1 colis)`}
-                        </span>
-                      </div>
-                      <div className="text-xs text-muted mt-0.5">
-                        Au plus proche ({Math.abs(rec.closestDiff)} pcs d'écart)
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="btn btn-xs btn-primary flex items-center gap-1"
-                      style={{ fontWeight: 800, padding: '4px 10px' }}
-                      onClick={() => handleApplyPackQty(rec.closestQty, rec.closestPacks, activePack)}
-                      title="Pré-remplir la quantité au plus proche"
-                    >
-                      <span>Appliquer {rec.closestQty} pcs</span>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 flex-wrap text-xs">
-                    <button
-                      type="button"
-                      className={`btn btn-xs ${rec.closestAction === 'round_down' ? 'btn-secondary' : 'btn-ghost'}`}
-                      style={{
-                        fontSize: '0.7rem',
-                        border: rec.closestAction === 'round_down' ? '1px solid var(--border)' : '1px dashed var(--border)',
-                      }}
-                      onClick={() => handleApplyPackQty(rec.lowerQty, rec.lowerPacks, activePack)}
-                    >
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <IconBox size={12} /> {rec.lowerPacks} Colis ({rec.lowerQty} pcs)
-                      </span>
-                      <span className="text-muted ml-1">({rec.lowerDiff} pcs)</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`btn btn-xs ${rec.closestAction === 'round_up' ? 'btn-secondary' : 'btn-ghost'}`}
-                      style={{
-                        fontSize: '0.7rem',
-                        border: rec.closestAction === 'round_up' ? '1px solid var(--border)' : '1px dashed var(--border)',
-                      }}
-                      onClick={() => handleApplyPackQty(rec.upperQty, rec.upperPacks, activePack)}
-                    >
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <IconBox size={12} /> {rec.upperPacks} Colis ({rec.upperQty} pcs)
-                      </span>
-                      <span className="text-muted ml-1">(+{rec.upperDiff} pcs)</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className="btn btn-xs btn-ghost text-muted"
-                      style={{ fontSize: '0.7rem' }}
-                      onClick={() => handleApplyPackQty(disc.remaining, 0, activePack, true)}
-                    >
-                      Fraq exact ({disc.remaining} pcs)
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
         {/* Stage tabs for counting */}
         <div className="stage-tabs">
           {(['preparation', 'chargement', 'pointage'] as Stage[]).map((s) => (
@@ -7704,7 +7537,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 className="input flex-shrink-0"
                 type="number"
                 inputMode="numeric"
-                placeholder="ex: 2500"
+                placeholder="0"
                 value={outerPack ?? ''}
                 onChange={(e) => {
                   const val = e.target.value.trim();
@@ -7747,7 +7580,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 className="input flex-shrink-0"
                 type="number"
                 inputMode="numeric"
-                placeholder="ex: 50"
+                placeholder="0"
                 value={innerPack ?? ''}
                 onChange={(e) => {
                   const val = e.target.value.trim();
@@ -8110,43 +7943,22 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 -{activeField === 'unit' ? 5 : 2}
               </button>
 
-              {/* STRICT BLIND COUNT: Only show SOLDE / AU PLUS PROCHE when quantities are VISIBLE */}
-              {showQuantities && disc.remaining > 0 && (() => {
-                const activePack = innerPack || outerPack;
-                const rec = activePack && activePack > 1 ? calcClosestPackRecommendation(disc.remaining, activePack) : null;
-                return (
-                  <>
-                    {rec && !rec.isExactMultiple && (
-                      <button
-                        type="button"
-                        className="btn btn-xs flex items-center gap-1"
-                        style={{
-                          background: 'rgba(37, 99, 235, 0.15)',
-                          border: '1px solid rgba(37, 99, 235, 0.35)',
-                          color: 'var(--accent)',
-                          fontWeight: 700,
-                        }}
-                        onClick={() => handleApplyPackQty(rec.closestQty, rec.closestPacks, activePack)}
-                        title={`Régler au plus proche : ${rec.closestQty} pcs (${rec.closestPacks} colis)`}
-                      >
-                        <IconBox size={13} /> AU PLUS PROCHE ({rec.closestQty})
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="btn btn-xs btn-primary flex items-center gap-1"
-                      onClick={() => {
-                        hapticTap('medium');
-                        playExactMatchChime();
-                        if (useDirectEntry) setDirectTotal(String(disc.remaining));
-                        else setLoose(disc.remaining);
-                      }}
-                    >
-                      <IconBolt size={13} /> SOLDE ({disc.remaining})
-                    </button>
-                  </>
-                );
-              })()}
+              {/* STRICT BLIND COUNT: Only show SOLDE when quantities are VISIBLE */}
+              {showQuantities && disc.remaining > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-xs btn-primary flex items-center gap-1"
+                  onClick={() => {
+                    hapticTap('medium');
+                    playExactMatchChime();
+                    if (useDirectEntry) setDirectTotal(String(disc.remaining));
+                    else setLoose(disc.remaining);
+                  }}
+                  title="Régler exactement la quantité restante à préparer"
+                >
+                  <IconBolt size={13} /> SOLDE ({disc.remaining})
+                </button>
+              )}
             </div>
           </div>
 
