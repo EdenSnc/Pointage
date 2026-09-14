@@ -325,7 +325,9 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
         <div className="mb-3">
           <div className="flex justify-between items-center mb-1.5">
             <label className="text-xs font-bold text-muted uppercase tracking-wider">
-              1. Colis embarqués dans ce voyage ({selectedContainerIds.length}/{availableContainers.length})
+              {availableContainers.length > 0
+                ? `1. Colis embarqués dans ce voyage (${selectedContainerIds.length}/${availableContainers.length} colis)`
+                : '1. Conditionnement du voyage'}
             </label>
             {availableContainers.length > 1 && (
               <div className="flex gap-2">
@@ -360,8 +362,8 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
               <div className="flex items-center gap-2">
                 <IconBox size={16} style={{ color: 'var(--accent)' }} />
                 <div>
-                  <div className="font-bold text-accent">Expédition directe en Fraq</div>
-                  <div className="text-muted text-[11px]">Tous les articles chargés sont inclus ({tripUnits} pcs).</div>
+                  <div className="font-bold text-accent">Expédition directe en vrac (sans colisage)</div>
+                  <div className="text-muted text-[11px]">Tous les articles chargés pour ce voyage sont inclus ({tripUnits} pcs).</div>
                 </div>
               </div>
               <span className="badge badge-exact font-bold font-mono text-xs">{tripUnits} pcs</span>
