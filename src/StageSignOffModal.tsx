@@ -231,6 +231,7 @@ export function StageSignOffModal({
           <button
             type="button"
             className="btn btn-secondary flex-1"
+            style={{ minHeight: 44, borderRadius: 14 }}
             onClick={onClose}
             disabled={isSubmitting}
           >
@@ -238,12 +239,13 @@ export function StageSignOffModal({
           </button>
           <button
             type="button"
-            className="btn btn-primary flex-1 flex items-center justify-center gap-1"
+            className="btn btn-primary flex-1 flex items-center justify-center gap-1 font-bold"
+            style={{ minHeight: 44, borderRadius: 14 }}
             onClick={handleConfirm}
             disabled={isSubmitting || !selectedOp}
           >
-            <IconCheck size={16} />
-            <span>{isSubmitting ? 'Attribution...' : `Signer : ${selectedOp}`}</span>
+            <IconCheck size={16} style={{ flexShrink: 0 }} />
+            <span className="truncate">{isSubmitting ? 'Attribution...' : `Signer : ${selectedOp}`}</span>
           </button>
         </div>
       </div>

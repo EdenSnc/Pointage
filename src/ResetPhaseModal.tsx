@@ -218,6 +218,8 @@ export function ResetPhaseModal({
               padding: '12px 16px',
               fontWeight: 800,
               fontSize: '0.88rem',
+              minHeight: 48,
+              textAlign: 'center',
               boxShadow: '0 4px 18px rgba(239, 68, 68, 0.4)',
               cursor: isResetting ? 'not-allowed' : 'pointer',
               opacity: isResetting ? 0.7 : 1,
@@ -225,7 +227,7 @@ export function ResetPhaseModal({
             onClick={handleConfirm}
             disabled={isResetting}
           >
-            <IconUndo size={16} />
+            <IconUndo size={16} style={{ flexShrink: 0 }} />
             <span>{isResetting ? 'Réinitialisation en cours...' : `Confirmer la réinitialisation (${stageUnitsCount} pièce${stageUnitsCount > 1 ? 's' : ''})`}</span>
           </button>
 
@@ -237,6 +239,8 @@ export function ResetPhaseModal({
               padding: '11px 16px',
               fontWeight: 700,
               fontSize: '0.85rem',
+              minHeight: 44,
+              textAlign: 'center',
             }}
             onClick={onClose}
             disabled={isResetting}

@@ -3247,11 +3247,12 @@ function BatchContainerModal({
         <button
           type="button"
           className="btn btn-primary btn-full btn-lg mt-2 flex items-center justify-center gap-2"
+          style={{ minHeight: 48, borderRadius: 14 }}
           disabled={targetContainerId === 'unselected' || isSubmitting}
           onClick={handleConfirm}
         >
-          <IconCheck size={18} />
-          <span>
+          <IconCheck size={18} style={{ flexShrink: 0 }} />
+          <span className="truncate">
             {isSubmitting
               ? 'Enregistrement...'
               : targetContainerId === 'unselected'
@@ -3400,18 +3401,23 @@ function TransferStageModal({
 
         {/* Actions */}
         <div className="flex gap-2">
-          <button type="button" className="btn btn-secondary flex-1" onClick={onClose}>
+          <button
+            type="button"
+            className="btn btn-secondary flex-1"
+            style={{ minHeight: 44, borderRadius: 14 }}
+            onClick={onClose}
+          >
             Annuler
           </button>
           <button
             type="button"
-            className="btn btn-primary flex-1 flex items-center justify-center gap-1.5"
+            className="btn btn-primary flex-1 flex items-center justify-center gap-1.5 font-bold"
             disabled={fromStage === toStage || isSubmitting}
             onClick={handleConfirm}
-            style={{ fontWeight: 700 }}
+            style={{ minHeight: 44, borderRadius: 14 }}
           >
-            <IconTransfer size={15} />
-            <span>{isSubmitting ? 'Transfert...' : `Bascule vers ${STAGE_LABELS[toStage]}`}</span>
+            <IconTransfer size={15} style={{ flexShrink: 0 }} />
+            <span className="truncate">{isSubmitting ? 'Transfert...' : `Vers ${STAGE_LABELS[toStage]}`}</span>
           </button>
         </div>
       </div>
@@ -4298,15 +4304,15 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             borderRadius: 16,
           }}
         >
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <div className="flex items-center gap-1.5 font-bold text-xs">
-              <IconCamera size={15} style={{ color: 'var(--accent)' }} />
-              <span>Photos Commande & Modèles demandés ({(bill.billPhotos || []).length})</span>
+          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+            <div className="flex items-center gap-1.5 font-bold text-xs min-w-0">
+              <IconCamera size={15} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+              <span>Photos Commande & Modèles ({(bill.billPhotos || []).length})</span>
             </div>
             <button
               type="button"
-              className="btn btn-xs btn-primary flex items-center gap-1 font-bold"
-              style={{ borderRadius: 9999, padding: '3px 10px' }}
+              className="btn btn-xs btn-primary flex items-center gap-1 font-bold flex-shrink-0"
+              style={{ borderRadius: 9999, padding: '4px 11px', minHeight: 30 }}
               onClick={() => billPhotoInputRef.current?.click()}
             >
               <IconPlus size={12} />
@@ -4348,7 +4354,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               ))}
             </div>
           ) : (
-            <div className="text-xs text-muted" style={{ lineHeight: 1.45 }}>
+            <div className="text-xs text-muted mt-1" style={{ lineHeight: 1.45 }}>
               Ajoutez des photos des modèles ou motifs pour guider les préparateurs et chauffeurs.
             </div>
           )}
@@ -4771,9 +4777,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         </div>
 
         {/* Consolidated Ergonomic Controls Row (Generous Touch Targets & Clean Spacing) */}
-        <div className="bill-controls-row">
-          {/* Left Cluster: Sort Mode, Colis, Eye, Multi-Select */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+        {/* Consolidated Ergonomic Controls Toolbar (Zero Cutout, High Visibility) */}
+        <div className="bill-controls-toolbar">
+          {/* Group 1: Display & Filter Controls */}
+          <div className="bill-controls-group">
             {/* Sort Mode Button (Parcours Prohibited in Pointage) */}
             <button
               type="button"
@@ -4850,8 +4857,8 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               className="control-pill control-pill-secondary"
               style={{
                 borderRadius: '50%',
-                width: 32,
-                height: 32,
+                width: 34,
+                height: 34,
                 padding: 0,
               }}
               onClick={() => {
@@ -4862,25 +4869,6 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               aria-label={showQuantities ? 'Masquer les quantités attendues' : 'Afficher les quantités attendues'}
             >
               {showQuantities ? <IconEye size={15} style={{ color: 'var(--accent)' }} /> : <IconEyeOff size={15} />}
-            </button>
-
-            {/* Selection Mode Toggle */}
-            <button
-              type="button"
-              className={`control-pill ${isSelectionMode || selectedLineIds.size > 0 ? 'control-pill-primary' : 'control-pill-secondary'}`}
-              onClick={() => {
-                hapticTap('medium');
-                if (isSelectionMode || selectedLineIds.size > 0) {
-                  setIsSelectionMode(false);
-                  setSelectedLineIds(new Set());
-                } else {
-                  setIsSelectionMode(true);
-                }
-              }}
-              title="Sélection multiple d'articles"
-            >
-              <IconCheck size={12} />
-              <span>{isSelectionMode || selectedLineIds.size > 0 ? `Sélec (${selectedLineIds.size})` : 'Sélec'}</span>
             </button>
 
             {/* Mental Shortcuts (Plages & Familles) Toggle */}
@@ -4898,54 +4886,78 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             </button>
           </div>
 
-          {/* Right Cluster: Line Counter, Reset, and Sign-off Buttons */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            {/* Line Counter Badge */}
-            <span
-              className="line-counter-pill"
-              title="Nombre de lignes affichées / total"
-            >
-              {searchScope === 'all'
-                ? `${displayLines.length}/${entityLines?.length || displayLines.length}`
-                : `${displayLines.length}/${lines.length}`}
-            </span>
-
-            {/* Stage Reset Button */}
-            {billStageUnitTotals[stage] > 0 && (
-              <button
-                type="button"
-                className="control-pill"
-                style={{
-                  background: 'rgba(239, 68, 68, 0.12)',
-                  color: 'var(--danger)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                }}
-                onClick={() => {
-                  hapticTap('medium');
-                  setShowResetPhaseModal(true);
-                }}
-                title="Remettre à zéro les comptages de l'étape active"
+          {/* Group 2: Actions, Selection & Milestones */}
+          <div className="bill-controls-group bill-controls-actions">
+            {/* Left side: Line Counter & Selection toggle */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span
+                className="line-counter-pill"
+                title="Nombre de lignes affichées / total"
               >
-                <IconUndo size={12} />
-                <span>Réinit</span>
-              </button>
-            )}
+                {searchScope === 'all'
+                  ? `${displayLines.length}/${entityLines?.length || displayLines.length}`
+                  : `${displayLines.length}/${lines.length}`}
+              </span>
 
-            {/* Stage Sign-off / Valider Button */}
-            {stage === 'preparation' && (
+              {/* Selection Mode Toggle */}
               <button
                 type="button"
-                className="control-pill control-pill-primary"
+                className={`control-pill ${isSelectionMode || selectedLineIds.size > 0 ? 'control-pill-primary' : 'control-pill-secondary'}`}
                 onClick={() => {
                   hapticTap('medium');
-                  setShowStageSignOffModal(true);
+                  if (isSelectionMode || selectedLineIds.size > 0) {
+                    setIsSelectionMode(false);
+                    setSelectedLineIds(new Set());
+                  } else {
+                    setIsSelectionMode(true);
+                  }
                 }}
-                title="Valider et signer la préparation"
+                title="Sélection multiple d'articles"
               >
                 <IconCheck size={12} />
-                <span>Signer</span>
+                <span>{isSelectionMode || selectedLineIds.size > 0 ? `Sélec (${selectedLineIds.size})` : 'Sélection'}</span>
               </button>
-            )}
+            </div>
+
+            {/* Right side: Reset & Primary Sign-off Milestone */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {/* Stage Reset Button */}
+              {billStageUnitTotals[stage] > 0 && (
+                <button
+                  type="button"
+                  className="control-pill"
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.12)',
+                    color: 'var(--danger)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                  }}
+                  onClick={() => {
+                    hapticTap('medium');
+                    setShowResetPhaseModal(true);
+                  }}
+                  title="Remettre à zéro les comptages de l'étape active"
+                >
+                  <IconUndo size={12} />
+                  <span>Réinit</span>
+                </button>
+              )}
+
+              {/* Stage Sign-off / Valider Button (Milestone CTA) */}
+              {stage === 'preparation' && (
+                <button
+                  type="button"
+                  className="control-pill control-pill-accent"
+                  onClick={() => {
+                    hapticTap('medium');
+                    setShowStageSignOffModal(true);
+                  }}
+                  title="Valider et signer la préparation"
+                >
+                  <IconCheck size={13} />
+                  <span>Signer</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -5707,7 +5719,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
       {/* Floating Batch Action Bar when items are selected */}
       {selectedLineIds.size > 0 ? (
         <div className="batch-action-bar">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-1.5 flex-shrink-0">
               <span
                 className="badge badge-accent font-bold flex items-center justify-center"
@@ -5725,11 +5737,11 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                 sél.
               </span>
             </div>
-            <div className="flex items-center gap-1.5 flex-1 justify-end min-w-0">
+            <div className="flex items-center gap-1.5 flex-1 justify-end min-w-0 flex-wrap">
               {stage === 'pointage' && (
                 <button
                   type="button"
-                  className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
+                  className="btn btn-sm btn-secondary flex items-center justify-center gap-1 flex-shrink-0"
                   style={{
                     fontWeight: 700,
                     fontSize: '0.78rem',
@@ -5737,7 +5749,6 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                     borderRadius: 9999,
                     padding: '0 10px',
                     whiteSpace: 'nowrap',
-                    flexShrink: 0,
                   }}
                   onClick={async () => {
                     const selectedLines = activeLinesPool.filter((l) => selectedLineIds.has(l.id!));
@@ -5757,32 +5768,30 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               )}
               <button
                 type="button"
-                className="btn btn-sm btn-secondary flex items-center justify-center gap-1"
+                className="btn btn-sm btn-secondary flex items-center justify-center gap-1 flex-shrink-0"
                 style={{
                   fontWeight: 700,
                   fontSize: '0.78rem',
                   height: 38,
                   borderRadius: 9999,
-                  padding: '0 10px',
+                  padding: '0 11px',
                   whiteSpace: 'nowrap',
-                  flexShrink: 0,
                 }}
                 onClick={() => setShowBatchTransferModal(true)}
                 title="Transférer les articles sélectionnés vers une autre étape"
               >
                 <IconTransfer size={13} />
-                <span>Changer d'étape</span>
+                <span>Transférer</span>
               </button>
               <button
                 type="button"
-                className="btn btn-sm btn-primary flex items-center justify-center gap-1.5 font-bold"
+                className="btn btn-sm btn-primary flex items-center justify-center gap-1.5 font-bold flex-shrink-0"
                 style={{
                   fontSize: '0.78rem',
                   height: 38,
                   borderRadius: 9999,
                   padding: '0 12px',
                   whiteSpace: 'nowrap',
-                  flexShrink: 0,
                 }}
                 onClick={() => setShowBatchModal(true)}
               >
@@ -7412,7 +7421,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
           })()}
 
           {/* Multi-Tier Nested Packaging Calculator Toggle */}
-          <div style={{ marginBottom: '12px' }}>
+          <div style={{ marginTop: '8px', marginBottom: '12px' }}>
             <button
               type="button"
               className={`btn btn-xs ${showMultiTierCalc ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1.5`}
@@ -7422,6 +7431,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 padding: '6px 12px',
                 maxWidth: '100%',
                 fontWeight: 600,
+                minHeight: 34,
               }}
               onClick={() => {
                 const next = !showMultiTierCalc;
@@ -8625,12 +8635,12 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             onClick={() => handleAddCount()}
             disabled={isSubmitting || effectiveBatch <= 0 || line.status !== 'active'}
           >
-            <IconCheck size={18} />
+            <IconCheck size={18} style={{ flexShrink: 0 }} />
             <span style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
               {isSubmitting
                 ? 'Enregistré !'
                 : effectiveBatch > 0
-                ? `+${effectiveBatch} pcs • Valider`
+                ? `+${effectiveBatch.toLocaleString('fr-FR')} pcs • Valider`
                 : 'Valider'}
             </span>
           </button>
@@ -8647,7 +8657,7 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
                 }
               }}
               title={effectiveBatch > 0 ? `Enregistrer et passer à l'article suivant N°${nextLine.no}` : `Passer à l'article suivant N°${nextLine.no}`}
-              style={{ padding: '0 14px', fontWeight: 800, flexShrink: 0 }}
+              style={{ padding: '0 12px', fontWeight: 800, flexShrink: 0 }}
             >
               <span>N°{nextLine.no}</span>
               <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>›</span>

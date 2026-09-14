@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
 import {
@@ -20,6 +20,14 @@ interface StaffNavetteModalProps {
 }
 
 export const StaffNavetteModal: React.FC<StaffNavetteModalProps> = ({ isOpen, onClose }) => {
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth <= 640 : false));
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 640);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   const trips = useLiveQuery(() => db.shipmentTrips.reverse().sortBy('dispatchedAt'), []) || [];
 
   if (!isOpen) return null;
@@ -43,7 +51,7 @@ export const StaffNavetteModal: React.FC<StaffNavetteModalProps> = ({ isOpen, on
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 16,
+        padding: isMobile ? 8 : 16,
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -61,7 +69,7 @@ export const StaffNavetteModal: React.FC<StaffNavetteModalProps> = ({ isOpen, on
           boxShadow: 'var(--shadow-xl)',
           borderRadius: 'var(--radius-modal, 26px)',
           backdropFilter: 'var(--glass-blur)',
-          padding: 20,
+          padding: isMobile ? '16px 14px' : 20,
         }}
       >
         <div className="flex justify-between items-center mb-4">

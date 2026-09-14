@@ -327,7 +327,7 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
         display: 'flex',
         alignItems: isMobile ? 'stretch' : 'center',
         justifyContent: 'center',
-        padding: isMobile ? 0 : 16,
+        padding: isMobile ? 8 : 16,
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -345,7 +345,7 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
           border: '1px solid var(--border)',
           boxShadow: 'var(--shadow-xl)',
           backdropFilter: 'var(--glass-blur)',
-          padding: 20,
+          padding: isMobile ? '16px 14px' : 20,
           display: 'flex',
           flexDirection: 'column',
         }}
@@ -394,7 +394,7 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
           <button
             type="button"
             className={`btn btn-xs flex-1 ${activeTab === 'current' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.78rem', height: 34 }}
+            style={{ borderRadius: 9999, fontSize: '0.78rem', height: 34, minWidth: 0, padding: '0 4px', whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('current')}
           >
             En cours
@@ -402,7 +402,7 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
           <button
             type="button"
             className={`btn btn-xs flex-1 ${activeTab === 'new' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.78rem', height: 34 }}
+            style={{ borderRadius: 9999, fontSize: '0.78rem', height: 34, minWidth: 0, padding: '0 4px', whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('new')}
           >
             + Arrivée
@@ -410,7 +410,7 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
           <button
             type="button"
             className={`btn btn-xs flex-1 ${activeTab === 'history' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.78rem', height: 34 }}
+            style={{ borderRadius: 9999, fontSize: '0.78rem', height: 34, minWidth: 0, padding: '0 4px', whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('history')}
           >
             Historique ({sessions.length})

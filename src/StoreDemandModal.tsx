@@ -38,6 +38,13 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('pending');
   const [isAdding, setIsAdding] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth <= 640 : false));
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 640);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // Form states
   const [client, setClient] = useState(initialClient || '');
@@ -180,7 +187,7 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 16,
+        padding: isMobile ? 8 : 16,
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -198,7 +205,7 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
           boxShadow: 'var(--shadow-xl)',
           borderRadius: 'var(--radius-modal, 26px)',
           backdropFilter: 'var(--glass-blur)',
-          padding: 20,
+          padding: isMobile ? '16px 14px' : 20,
         }}
       >
         <div className="flex justify-between items-center mb-3.5">
