@@ -9976,6 +9976,8 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
                   >
                     {resolvedDocType === 'invoice'
                       ? 'Facture SAJ'
+                      : resolvedDocType === 'proforma'
+                      ? 'Proforma / Devis'
                       : resolvedDocType === 'bl_official'
                       ? 'BL Officiel'
                       : resolvedDocType === 'bl_workshop'
@@ -9997,6 +9999,13 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
                     onClick={() => setExportDocFormat('invoice')}
                   >
                     Facture
+                  </button>
+                  <button
+                    type="button"
+                    className={`seg-btn ${exportDocFormat === 'proforma' ? 'active' : ''}`}
+                    onClick={() => setExportDocFormat('proforma')}
+                  >
+                    Proforma
                   </button>
                   <button
                     type="button"

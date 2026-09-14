@@ -264,10 +264,15 @@ const thinBorder = {
  * Columns: N° | CODE | Désignation | QTÉ | Colisage | Qté/Carton | PU | MONTANT HT | TVA | Rem(%) | Rem. Paiement(%)
  * Includes full 7-line totals block and legal amount in words.
  */
-export function createInvoiceWorkbook(data: FinalBillExportData): XLSX.WorkBook {
+export function createInvoiceWorkbook(
+  data: FinalBillExportData,
+  isProformaOverride?: boolean
+): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
 
-  const isProforma = data.documentType === 'proforma' || (data.billNumber || '').toUpperCase().includes('PROFORMA') || (data.billNumber || '').toUpperCase().includes('DEVIS');
+  const isProforma = isProformaOverride !== undefined
+    ? isProformaOverride
+    : data.documentType === 'proforma' || (data.billNumber || '').toUpperCase().includes('PROFORMA') || (data.billNumber || '').toUpperCase().includes('DEVIS');
   const docTitle = isProforma ? `Facture Proforma ${data.billNumber || ''}`.trim() : `Invoice ${data.billNumber || 'SAJ/2026/5435'}`;
 
   const wsData: (string | number | null | object)[][] = [
@@ -841,8 +846,9 @@ export function createFinalBillWorkbook(
   const docType = resolveDocumentType(data, targetType);
   switch (docType) {
     case 'invoice':
+      return createInvoiceWorkbook(data, false);
     case 'proforma':
-      return createInvoiceWorkbook(data);
+      return createInvoiceWorkbook(data, true);
     case 'bl_official':
       return createDeliveryNoteWorkbook(data);
     case 'bl_workshop':
