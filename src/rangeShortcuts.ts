@@ -154,70 +154,159 @@ export interface ReferenceCheckResult {
 }
 
 /**
- * Clusters a list of numeric references into ranges (e.g. 620-629, 650-659, 680-699)
+ * Clusters numeric references into intuitive human mental shortcuts (e.g. "Série 600", "Série 650", "Série 730").
+ * Only produces a shortcut when multiple items (>= 2) share a recognizable decade or hundred.
+ * Never produces arbitrary arithmetic ranges (e.g. "71636 - 71651") or 1-item fake series.
+ * Returns an empty array if there is no clear, natural mental shortcut.
  */
 export function clusterNumericReferences(
   rawItems: ({ num: number; lineId?: number } | number)[]
 ): NumericRangeCluster[] {
   if (rawItems.length === 0) return [];
 
-  const items = rawItems.map((item) =>
-    typeof item === 'number' ? { num: item, lineId: item } : { num: item.num, lineId: item.lineId ?? item.num }
-  );
+  const items = rawItems
+    .map((item) =>
+      typeof item === 'number'
+        ? { num: item, lineId: item }
+        : { num: item.num, lineId: item.lineId ?? item.num }
+    )
+    .filter((item) => Number.isFinite(item.num) && item.num >= 0);
 
-  const sorted = [...items].sort((a, b) => a.num - b.num);
+  // A single item is never a series or a shortcut.
+  if (items.length < 2) {
+    return [];
+  }
+
+  // 1. Group items by exact decade: Math.floor(num / 10) * 10
+  // e.g. 731, 734 -> 730; 653, 658 -> 650; 552 -> 550
+  const decadeMap = new Map<number, { min: number; max: number; lineIds: number[] }>();
+  for (const item of items) {
+    const dec = Math.floor(item.num / 10) * 10;
+    if (!decadeMap.has(dec)) {
+      decadeMap.set(dec, { min: item.num, max: item.num, lineIds: [] });
+    }
+    const d = decadeMap.get(dec)!;
+    d.min = Math.min(d.min, item.num);
+    d.max = Math.max(d.max, item.num);
+    d.lineIds.push(item.lineId);
+  }
+
+  // If ALL items belong to the same exact decade (e.g. all in 730's, all in 650's)
+  if (decadeMap.size === 1) {
+    const dec = Array.from(decadeMap.keys())[0];
+    const d = decadeMap.get(dec)!;
+    return [
+      {
+        min: d.min,
+        max: d.max,
+        label: `Série ${dec}`,
+        count: d.lineIds.length,
+        lineIds: d.lineIds,
+      },
+    ];
+  }
+
+  // 2. Group items by exact hundred: Math.floor(num / 100) * 100
+  // e.g. 612, 650 -> 600; 71600, 71636, 71651 -> 71600
+  const hundredMap = new Map<number, { min: number; max: number; lineIds: number[] }>();
+  for (const item of items) {
+    const hund = Math.floor(item.num / 100) * 100;
+    if (!hundredMap.has(hund)) {
+      hundredMap.set(hund, { min: item.num, max: item.num, lineIds: [] });
+    }
+    const h = hundredMap.get(hund)!;
+    h.min = Math.min(h.min, item.num);
+    h.max = Math.max(h.max, item.num);
+    h.lineIds.push(item.lineId);
+  }
+
+  // If ALL items belong to the same hundred (e.g. "all in 600", "all in 500", "all in 71600")
+  if (hundredMap.size === 1) {
+    const hund = Array.from(hundredMap.keys())[0];
+    const h = hundredMap.get(hund)!;
+
+    // If within this hundred, items cleanly separate into multiple distinct decades with >= 2 items each
+    // (e.g. 3 items in 620 and 2 items in 650):
+    const strongDecades = Array.from(decadeMap.entries()).filter(([_, d]) => d.lineIds.length >= 2);
+    const totalInStrongDecades = strongDecades.reduce((sum, [_, d]) => sum + d.lineIds.length, 0);
+
+    // Only split into sub-decades if strong decades account for ALL items
+    if (strongDecades.length >= 2 && totalInStrongDecades === items.length) {
+      return strongDecades
+        .sort((a, b) => a[0] - b[0])
+        .map(([dec, d]) => ({
+          min: d.min,
+          max: d.max,
+          label: `Série ${dec}`,
+          count: d.lineIds.length,
+          lineIds: d.lineIds,
+        }));
+    }
+
+    // Otherwise, the entire family forms one clear hundred series (e.g. "Série 71600", "Série 600", "Série 500")
+    return [
+      {
+        min: h.min,
+        max: h.max,
+        label: `Série ${hund}`,
+        count: h.lineIds.length,
+        lineIds: h.lineIds,
+      },
+    ];
+  }
+
+  // 3. If items span multiple hundreds, only keep strong clusters with >= 2 items
   const clusters: NumericRangeCluster[] = [];
+  const usedLineIds = new Set<number>();
 
-  let currentCluster: { min: number; max: number; lineIds: number[] } | null = null;
-
-  for (const item of sorted) {
-    if (!currentCluster) {
-      currentCluster = { min: item.num, max: item.num, lineIds: [item.lineId] };
-      continue;
-    }
-
-    // If both belong to the exact same decade (e.g. 620-629)
-    const isSameDecade = Math.floor(item.num / 10) === Math.floor(currentCluster.max / 10);
-    const isClose = item.num - currentCluster.max <= (item.num >= 10000 ? 25 : 5);
-
-    if (isSameDecade || isClose) {
-      currentCluster.max = item.num;
-      currentCluster.lineIds.push(item.lineId);
-    } else {
-      // Finalize previous cluster
-      clusters.push(formatCluster(currentCluster));
-      currentCluster = { min: item.num, max: item.num, lineIds: [item.lineId] };
+  // Check strong decades (>= 2 items, e.g. Série 650, Série 730)
+  const sortedDecades = Array.from(decadeMap.entries()).sort((a, b) => a[0] - b[0]);
+  for (const [dec, d] of sortedDecades) {
+    if (d.lineIds.length >= 2) {
+      clusters.push({
+        min: d.min,
+        max: d.max,
+        label: `Série ${dec}`,
+        count: d.lineIds.length,
+        lineIds: d.lineIds,
+      });
+      d.lineIds.forEach((id) => usedLineIds.add(id));
     }
   }
 
-  if (currentCluster) {
-    clusters.push(formatCluster(currentCluster));
+  // For items not in a strong decade, check if they form a strong hundred (>= 2 items)
+  const remainingItems = items.filter((i) => !usedLineIds.has(i.lineId));
+  if (remainingItems.length >= 2) {
+    const remHundredMap = new Map<number, { min: number; max: number; lineIds: number[] }>();
+    for (const item of remainingItems) {
+      const hund = Math.floor(item.num / 100) * 100;
+      if (!remHundredMap.has(hund)) {
+        remHundredMap.set(hund, { min: item.num, max: item.num, lineIds: [] });
+      }
+      const h = remHundredMap.get(hund)!;
+      h.min = Math.min(h.min, item.num);
+      h.max = Math.max(h.max, item.num);
+      h.lineIds.push(item.lineId);
+    }
+
+    for (const [hund, h] of remHundredMap.entries()) {
+      if (h.lineIds.length >= 2) {
+        clusters.push({
+          min: h.min,
+          max: h.max,
+          label: `Série ${hund}`,
+          count: h.lineIds.length,
+          lineIds: h.lineIds,
+        });
+      }
+    }
   }
 
+  clusters.sort((a, b) => a.min - b.min);
+
+  // If items are completely scattered without >= 2 items in any series, return []
+  // (No illogical or single-item ranges shown)
   return clusters;
-}
-
-function formatCluster(c: { min: number; max: number; lineIds: number[] }): NumericRangeCluster {
-  const decadeStart = Math.floor(c.min / 10) * 10;
-  const decadeEnd = decadeStart + 9;
-  const isSameDecade = Math.floor(c.min / 10) === Math.floor(c.max / 10);
-
-  let label = '';
-  if (isSameDecade && decadeStart >= 10) {
-    label = `Série ${decadeStart}-${decadeEnd}`;
-  } else if (c.min === c.max) {
-    label = `Réf ${c.min}`;
-  } else {
-    label = `${c.min} - ${c.max}`;
-  }
-
-  return {
-    min: c.min,
-    max: c.max,
-    label,
-    count: c.lineIds.length,
-    lineIds: c.lineIds,
-  };
 }
 
 /**
@@ -342,7 +431,7 @@ export function checkReferenceInBill(
   );
 
   const skipReason = hasDecadeCluster
-    ? `Réf ${num} : Série ${decadeStart}-${decadeEnd} présente mais Réf ${num} est absent de cette commande (Zapper)`
+    ? `Réf ${num} : Série ${decadeStart} présente mais Réf ${num} est absent de cette commande (Zapper)`
     : `Réf ${num} : AUCUN article dans cette commande ! (Zapper directement)`;
 
   let familyContext = '';

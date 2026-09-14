@@ -20,19 +20,60 @@ describe('Mental Shortcuts & Range Engine', () => {
     expect(extractNumericReference(null)).toBeNull();
   });
 
-  it('clusters numbers into decades and series', () => {
-    const numbers = [620, 621, 625, 652, 658, 680, 695];
-    const clusters = clusterNumericReferences(numbers);
+  it('clusters numbers into decades and series without illogical or 1-item ranges', () => {
+    // All in 600s: 620, 621, 625, 652, 658, 680, 695 form Série 600 (7 items)
+    const allSixHundreds = [620, 621, 625, 652, 658, 680, 695];
+    const clustersHundred = clusterNumericReferences(allSixHundreds);
 
-    expect(clusters.length).toBe(4);
-    expect(clusters[0].label).toBe('Série 620-629');
-    expect(clusters[0].count).toBe(3);
-    expect(clusters[1].label).toBe('Série 650-659');
-    expect(clusters[1].count).toBe(2);
-    expect(clusters[2].label).toBe('Série 680-689');
-    expect(clusters[2].count).toBe(1);
-    expect(clusters[3].label).toBe('Série 690-699');
-    expect(clusters[3].count).toBe(1);
+    expect(clustersHundred.length).toBe(1);
+    expect(clustersHundred[0].label).toBe('Série 600');
+    expect(clustersHundred[0].count).toBe(7);
+
+    // Multiple distinct decades across hundreds
+    const multiDecades = [520, 521, 525, 652, 658, 780, 781];
+    const clustersDecades = clusterNumericReferences(multiDecades);
+
+    expect(clustersDecades.length).toBe(3);
+    expect(clustersDecades[0].label).toBe('Série 520');
+    expect(clustersDecades[0].count).toBe(3);
+    expect(clustersDecades[1].label).toBe('Série 650');
+    expect(clustersDecades[1].count).toBe(2);
+    expect(clustersDecades[2].label).toBe('Série 780');
+    expect(clustersDecades[2].count).toBe(2);
+  });
+
+  it('handles user requested mental shortcuts: all in 600, all in 730s, 71600 series and scattered items', () => {
+    // 1. User screenshot: 71600, 71636, 71651 -> clean single Série 71600
+    const backpacks = clusterNumericReferences([71600, 71636, 71651]);
+    expect(backpacks.length).toBe(1);
+    expect(backpacks[0].label).toBe('Série 71600');
+    expect(backpacks[0].count).toBe(3);
+
+    // 2. All in 600
+    const sixHundreds = clusterNumericReferences([610, 625, 680]);
+    expect(sixHundreds.length).toBe(1);
+    expect(sixHundreds[0].label).toBe('Série 600');
+    expect(sixHundreds[0].count).toBe(3);
+
+    // 3. All in 730s
+    const sevenThirties = clusterNumericReferences([731, 734, 739]);
+    expect(sevenThirties.length).toBe(1);
+    expect(sevenThirties[0].label).toBe('Série 730');
+    expect(sevenThirties[0].count).toBe(3);
+
+    // 4. All in X50s (e.g. 653, 658)
+    const fiftyDecade = clusterNumericReferences([653, 658]);
+    expect(fiftyDecade.length).toBe(1);
+    expect(fiftyDecade[0].label).toBe('Série 650');
+    expect(fiftyDecade[0].count).toBe(2);
+
+    // 5. Scattered references with no pattern -> no weird illogical ranges!
+    const scattered = clusterNumericReferences([102, 540, 891]);
+    expect(scattered).toEqual([]);
+
+    // 6. Single item -> no 1-item range!
+    const single = clusterNumericReferences([620]);
+    expect(single).toEqual([]);
   });
 
   it('detects product families from French stationery keywords', () => {
@@ -43,7 +84,7 @@ describe('Mental Shortcuts & Range Engine', () => {
     expect(detectProductFamily('Article Divers Inconnu').id).toBe('divers');
   });
 
-  it('analyzes bill range structure and groups by families and series', () => {
+  it('analyzes bill range structure and groups by families and clean series', () => {
     const testLines: OrderLine[] = [
       {
         id: 1,
@@ -86,12 +127,10 @@ describe('Mental Shortcuts & Range Engine', () => {
     const structure = analyzeBillRangeStructure(testLines);
     expect(structure.families.length).toBe(1);
     expect(structure.families[0].id).toBe('trousses');
-    expect(structure.families[0].numericRanges.length).toBe(3);
-    expect(structure.families[0].numericRanges.map((r) => r.label)).toEqual([
-      'Série 620-629',
-      'Série 650-659',
-      'Série 680-689',
-    ]);
+    // All 4 trousses are in the 600s
+    expect(structure.families[0].numericRanges.length).toBe(1);
+    expect(structure.families[0].numericRanges[0].label).toBe('Série 600');
+    expect(structure.families[0].numericRanges[0].count).toBe(4);
     expect(structure.families[0].totalOrderedUnits).toBe(215);
   });
 

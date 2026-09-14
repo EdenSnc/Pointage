@@ -5055,7 +5055,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                       border: `1px solid ${isFamActive ? 'var(--accent)' : 'var(--glass-border-subtle)'}`,
                     }}
                   >
-                    <div className="flex items-center justify-between gap-1 mb-1.5">
+                    <div className={`flex items-center justify-between gap-1 ${fam.numericRanges.length > 0 ? 'mb-2' : ''}`}>
                       <button
                         type="button"
                         className="flex items-center gap-1.5 font-bold text-xs text-left"
@@ -5079,36 +5079,38 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                       </span>
                     </div>
 
-                    {/* Series / Plages chips */}
-                    <div className="flex flex-wrap gap-1">
-                      {fam.numericRanges.map((cluster) => {
-                        const isClusterActive = selectedRangeCluster?.label === cluster.label;
-                        return (
-                          <button
-                            key={cluster.label}
-                            type="button"
-                            className={`btn btn-xs ${isClusterActive ? 'btn-primary' : 'btn-secondary'}`}
-                            style={{
-                              borderRadius: 9999,
-                              fontSize: '0.68rem',
-                              padding: '2px 8px',
-                              fontWeight: 700,
-                            }}
-                            onClick={() => {
-                              if (isClusterActive) {
-                                setSelectedRangeCluster(null);
-                              } else {
-                                setSelectedRangeCluster(cluster);
-                                setSelectedFamilyFilter(fam.id);
-                              }
-                            }}
-                            title={`Filtrer uniquement sur ${cluster.label}`}
-                          >
-                            <span>{cluster.label} ({cluster.count})</span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                    {/* Series / Plages chips — only rendered if there is a real mental shortcut */}
+                    {fam.numericRanges.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-0.5">
+                        {fam.numericRanges.map((cluster) => {
+                          const isClusterActive = selectedRangeCluster?.label === cluster.label;
+                          return (
+                            <button
+                              key={cluster.label}
+                              type="button"
+                              className={`btn btn-xs ${isClusterActive ? 'btn-primary' : 'btn-secondary'}`}
+                              style={{
+                                borderRadius: 9999,
+                                fontSize: '0.70rem',
+                                padding: '3px 10px',
+                                fontWeight: 700,
+                              }}
+                              onClick={() => {
+                                if (isClusterActive) {
+                                  setSelectedRangeCluster(null);
+                                } else {
+                                  setSelectedRangeCluster(cluster);
+                                  setSelectedFamilyFilter(fam.id);
+                                }
+                              }}
+                              title={`Filtrer uniquement sur ${cluster.label}`}
+                            >
+                              <span>{cluster.label} ({cluster.count})</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}
