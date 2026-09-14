@@ -29,6 +29,23 @@ export class ErrorBoundary extends Component<Props, State> {
     this.setState({ hasError: false, error: null });
   };
 
+  handlePurgeAndReload = async () => {
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+    } catch {
+      // ignore
+    }
+    window.location.hash = '#/';
+    window.location.reload();
+  };
+
   render() {
     if (this.state.hasError) {
       return (
@@ -51,13 +68,20 @@ export class ErrorBoundary extends Component<Props, State> {
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary, #94a3b8)', marginBottom: 16 }}>
             {this.state.error?.message || "Une erreur inattendue s'est produite lors du rendu."}
           </p>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button
               className="btn btn-primary btn-sm"
+              onClick={this.handlePurgeAndReload}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <IconUndo size={15} /> Actualiser l'application
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
               onClick={this.handleReset}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              <IconUndo size={15} /> Réessayer
+              Réessayer
             </button>
             <button
               className="btn btn-secondary btn-sm"

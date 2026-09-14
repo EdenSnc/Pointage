@@ -1677,24 +1677,26 @@ function HomeScreen({
         onConfirm={handleConfirmArchive}
       />
 
-      <StoreDemandModal
-        isOpen={showStoreDemandModal}
-        onClose={() => setShowStoreDemandModal(false)}
-        knownClients={Array.from(new Set(bills.map((b) => b.client).filter(Boolean)))}
-        activeOperator={activeOperator}
-        onToast={(m) => showToast(m, setToast)}
-      />
+      <ErrorBoundary fallbackTitle="Erreur d'affichage du module">
+        <StoreDemandModal
+          isOpen={showStoreDemandModal}
+          onClose={() => setShowStoreDemandModal(false)}
+          knownClients={Array.from(new Set(bills.map((b) => b.client).filter(Boolean)))}
+          activeOperator={activeOperator}
+          onToast={(m) => showToast(m, setToast)}
+        />
 
-      <StaffNavetteModal
-        isOpen={showStaffNavetteModal}
-        onClose={() => setShowStaffNavetteModal(false)}
-      />
+        <StaffNavetteModal
+          isOpen={showStaffNavetteModal}
+          onClose={() => setShowStaffNavetteModal(false)}
+        />
 
-      <DechargementModal
-        isOpen={showDechargementModal}
-        onClose={() => setShowDechargementModal(false)}
-        onToast={(m) => showToast(m, setToast)}
-      />
+        <DechargementModal
+          isOpen={showDechargementModal}
+          onClose={() => setShowDechargementModal(false)}
+          onToast={(m) => showToast(m, setToast)}
+        />
+      </ErrorBoundary>
     </>
   );
 }

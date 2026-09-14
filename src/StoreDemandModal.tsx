@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
 import type { StoreDemand, StoreDemandSignalType } from './types';
@@ -37,13 +37,6 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('pending');
   const [isAdding, setIsAdding] = useState(false);
-  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth <= 640 : false));
-
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth <= 640);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
 
   // Form states
   const [client, setClient] = useState(initialClient || '');
@@ -186,14 +179,14 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: isMobile ? 8 : 16,
+        padding: 'clamp(8px, 2vw, 16px)',
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        className="card"
+        className="modal-content card"
         style={{
           width: '100%',
           maxWidth: 520,
@@ -204,7 +197,7 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
           boxShadow: 'var(--shadow-xl)',
           borderRadius: 'var(--radius-modal, 26px)',
           backdropFilter: 'var(--glass-blur)',
-          padding: isMobile ? '16px 14px' : 20,
+          padding: 'clamp(14px, 3vw, 20px)',
         }}
       >
         <div className="flex justify-between items-center mb-3.5">
