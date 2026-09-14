@@ -384,11 +384,12 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
 
         {/* Tab Navigation — Apple Segmented Style */}
         <div
-          className="flex gap-1 mb-3.5 p-1"
+          className="flex gap-1 p-1"
           style={{
             background: 'var(--bg-input)',
             border: '1px solid var(--border)',
             borderRadius: 9999,
+            marginBottom: 24,
           }}
         >
           <button
@@ -672,13 +673,22 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
                 </div>
               </>
             ) : (
-              <div className="text-center p-8 text-muted">
-                <IconBox size={38} style={{ opacity: 0.35, margin: '0 auto 8px' }} />
-                <div className="font-bold text-sm">Aucun déchargement en cours</div>
+              <div
+                className="text-center text-muted"
+                style={{
+                  padding: '36px 16px 28px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <IconBox size={44} style={{ opacity: 0.35, margin: '0 auto 12px' }} />
+                <div className="font-bold text-sm" style={{ marginBottom: 16 }}>Aucun déchargement en cours</div>
                 <button
                   type="button"
-                  className="btn btn-sm btn-primary mt-3 font-bold"
-                  style={{ borderRadius: 9999, minHeight: 40, padding: '0 20px' }}
+                  className="btn btn-sm btn-primary font-bold"
+                  style={{ borderRadius: 9999, minHeight: 42, padding: '0 22px' }}
                   onClick={() => setActiveTab('new')}
                 >
                   + Nouvelle arrivée camion
@@ -843,7 +853,19 @@ export const DechargementModal: React.FC<DechargementModalProps> = ({
         {activeTab === 'history' && (
           <div className="flex flex-col gap-2">
             {sessions.length === 0 ? (
-              <div className="text-center p-6 text-muted text-xs">Aucune réception archivée</div>
+              <div
+                className="text-center text-muted text-xs"
+                style={{
+                  padding: '36px 16px 28px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <IconTruck size={40} style={{ opacity: 0.35, margin: '0 auto 10px' }} />
+                <span className="font-semibold text-sm">Aucune réception archivée</span>
+              </div>
             ) : (
               sessions.map((s) => (
                 <div

@@ -212,7 +212,7 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
         </div>
 
         {/* Action bar: Add new & WhatsApp share */}
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center gap-2" style={{ marginBottom: 16 }}>
           <button
             type="button"
             className={`btn btn-xs ${isAdding ? 'btn-secondary' : 'btn-primary'} flex items-center gap-1.5`}
@@ -391,7 +391,10 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
         )}
 
         {/* Filter pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1.5 mb-2.5">
+        <div
+          className="flex items-center gap-1.5 overflow-x-auto no-scrollbar"
+          style={{ paddingBottom: 6, marginBottom: 14 }}
+        >
           <button
             type="button"
             className={`btn btn-xs ${filterType === 'all' ? 'btn-primary' : 'btn-secondary'}`}
@@ -431,17 +434,18 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
 
         {/* Status filter segmented bar */}
         <div
-          className="flex gap-1 mb-3 p-0.5"
+          className="flex gap-1 p-1"
           style={{
             background: 'var(--bg-input)',
             border: '1px solid var(--border)',
             borderRadius: 9999,
+            marginBottom: 24,
           }}
         >
           <button
             type="button"
             className={`btn btn-xs flex-1 ${filterStatus === 'pending' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.74rem', height: 28 }}
+            style={{ borderRadius: 9999, fontSize: '0.74rem', height: 30 }}
             onClick={() => setFilterStatus('pending')}
           >
             En attente
@@ -449,7 +453,7 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
           <button
             type="button"
             className={`btn btn-xs flex-1 ${filterStatus === 'treated' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.74rem', height: 28 }}
+            style={{ borderRadius: 9999, fontSize: '0.74rem', height: 30 }}
             onClick={() => setFilterStatus('treated')}
           >
             Traités
@@ -457,7 +461,7 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
           <button
             type="button"
             className={`btn btn-xs flex-1 ${filterStatus === 'all' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ borderRadius: 9999, fontSize: '0.74rem', height: 28 }}
+            style={{ borderRadius: 9999, fontSize: '0.74rem', height: 30 }}
             onClick={() => setFilterStatus('all')}
           >
             Tous
@@ -466,8 +470,18 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
 
         {/* List of items */}
         {filteredDemands.length === 0 ? (
-          <div className="text-center py-8 text-muted text-xs">
-            Aucune remontée enregistrée pour ce filtre.
+          <div
+            className="text-center text-muted"
+            style={{
+              padding: '36px 16px 28px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <IconStore size={42} style={{ opacity: 0.35, marginBottom: 12 }} />
+            <div className="font-semibold text-sm">Aucune remontée enregistrée pour ce filtre</div>
           </div>
         ) : (
           <div className="flex flex-col gap-2.5">

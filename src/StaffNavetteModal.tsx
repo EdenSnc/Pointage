@@ -1,15 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
 import {
   IconX,
-  IconTruck,
   IconUser,
   IconPhone,
   IconClock,
   IconMapPin,
   IconBus,
-  IconSparkles,
   IconUsers,
   IconChat,
 } from './icons';
@@ -20,14 +18,6 @@ interface StaffNavetteModalProps {
 }
 
 export const StaffNavetteModal: React.FC<StaffNavetteModalProps> = ({ isOpen, onClose }) => {
-  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth <= 640 : false));
-
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth <= 640);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-
   const trips = useLiveQuery(() => db.shipmentTrips.reverse().sortBy('dispatchedAt'), []) || [];
 
   if (!isOpen) return null;
@@ -51,14 +41,14 @@ export const StaffNavetteModal: React.FC<StaffNavetteModalProps> = ({ isOpen, on
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: isMobile ? 8 : 16,
+        padding: 'clamp(8px, 2vw, 16px)',
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        className="card"
+        className="modal-content card"
         style={{
           width: '100%',
           maxWidth: 520,
@@ -69,7 +59,7 @@ export const StaffNavetteModal: React.FC<StaffNavetteModalProps> = ({ isOpen, on
           boxShadow: 'var(--shadow-xl)',
           borderRadius: 'var(--radius-modal, 26px)',
           backdropFilter: 'var(--glass-blur)',
-          padding: isMobile ? '16px 14px' : 20,
+          padding: 'clamp(14px, 3vw, 20px)',
         }}
       >
         <div className="flex justify-between items-center mb-4">
@@ -84,9 +74,18 @@ export const StaffNavetteModal: React.FC<StaffNavetteModalProps> = ({ isOpen, on
         </div>
 
         {activeTrips.length === 0 ? (
-          <div className="text-center py-10 text-muted text-xs">
-            <IconBus size={34} style={{ margin: '0 auto 8px', opacity: 0.35 }} />
-            <div className="font-semibold">Aucun départ prévu aujourd'hui</div>
+          <div
+            className="text-center text-muted"
+            style={{
+              padding: '36px 16px 28px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <IconBus size={42} style={{ margin: '0 auto 12px', opacity: 0.35 }} />
+            <div className="font-semibold text-sm">Aucun départ prévu aujourd'hui</div>
           </div>
         ) : (
           <div className="flex flex-col gap-2.5">
