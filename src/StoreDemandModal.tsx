@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db';
 import type { StoreDemand, StoreDemandSignalType } from './types';
@@ -14,7 +14,6 @@ import {
   IconPackage,
   IconCheck,
   IconChat,
-  IconBuilding,
   IconStore,
 } from './icons';
 
