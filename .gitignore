@@ -25,4 +25,5 @@ dist-ssr
 testing_day_one/
 testing_day_two/
 screenshots/
-
+test-results/
+playwright-report/

@@ -5721,10 +5721,10 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         ) : displayLines.length === 0 && (
           <EmptyStateIllustration
-            type={search ? 'search' : 'warning'}
+            type={searchQuery ? 'search' : 'warning'}
             size={160}
-            title={search ? 'Aucun article correspondant' : 'Aucune ligne dans ce bon'}
-            subtitle={search ? `Aucun article ne correspond à « ${search} ».` : 'Ce bon ne contient pas encore d’articles enregistrés.'}
+            title={searchQuery ? 'Aucun article correspondant' : 'Aucune ligne dans ce bon'}
+            subtitle={searchQuery ? `Aucun article ne correspond à « ${searchQuery} ».` : 'Ce bon ne contient pas encore d’articles enregistrés.'}
           />
         )}
 

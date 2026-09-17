@@ -100,4 +100,9 @@ export default defineConfig({
     port: 5173,
     allowedHosts: true,
   },
+  test: {
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**'],
+  },
 });
+
