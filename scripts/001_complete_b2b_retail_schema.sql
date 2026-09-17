@@ -267,6 +267,10 @@ CREATE TABLE IF NOT EXISTS b2b_documents (
   -- Financial Consistency Invariant: Total_TTC = Total_HT + Total_TVA - Remise
   CONSTRAINT chk_doc_ttc_balance CHECK (
     total_ttc = ROUND(total_ht + total_tva - discount_amount, 2)
+  ),
+  -- Discount Invariant: Remise cannot exceed gross total (prevents negative TTC)
+  CONSTRAINT chk_doc_discount_limit CHECK (
+    discount_amount <= ROUND(total_ht + total_tva, 2)
   )
 );
 

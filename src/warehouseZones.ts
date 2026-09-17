@@ -178,7 +178,10 @@ export function normalizeZoneCode(code: string | null | undefined): string | nul
     const parsed = parseZoneCodes(trimmed);
     return parsed.length > 0 ? parsed.join(', ') : null;
   }
-  return LEGACY_ZONE_MAP[trimmed] || trimmed;
+  const upper = trimmed.toUpperCase();
+  const canonical = WAREHOUSE_ZONES.find((z) => z.code === upper);
+  if (canonical) return canonical.code;
+  return LEGACY_ZONE_MAP[trimmed] || LEGACY_ZONE_MAP[upper] || trimmed;
 }
 
 export function getZoneInfo(code: string | null | undefined): WarehouseZoneOption | null {
@@ -391,7 +394,9 @@ export function findSimilarProductLocations(
           id: -1,
           billId: -1,
           no: '',
+          originalNo: '',
           page: null,
+          originalPage: null,
           reference: ref,
           originalReference: ref,
           ean: null,
@@ -401,8 +406,14 @@ export function findSimilarProductLocations(
           orderedQty: 0,
           originalOrderedQty: 0,
           status: 'active',
+          outerPackSize: null,
+          innerPackSize: null,
           warehouseZone: prof.warehouseZone,
-        },
+          packagesRaw: null,
+          referenceAliases: [],
+          createdAt: '',
+          updatedAt: '',
+        } as OrderLine,
         zone: prof.warehouseZone,
         num: extractNumericReference(ref),
         family: detectProductFamily(prof.normalizedDesignation || ''),
@@ -446,10 +457,12 @@ export function findSimilarProductLocations(
 
   // Strategy 2: Check same family / category
   if (targetFamily.id !== 'divers') {
-    const sameFamily = candidates.filter((c) => c.family.id === targetFamily.id);
+    const sameFamily: Array<(typeof candidates)[number]> = candidates.filter(
+      (c) => c.family.id === targetFamily.id
+    );
     if (sameFamily.length > 0) {
       // Find the most frequent zone in this family
-      const zoneCounts = new Map<string, { count: number; sample: (typeof sameFamily)[0] }>();
+      const zoneCounts = new Map<string, { count: number; sample: (typeof candidates)[number] }>();
       for (const item of sameFamily) {
         const pz = parseZoneCodes(item.zone)[0] || item.zone;
         const curr = zoneCounts.get(pz) || { count: 0, sample: item };
