@@ -13,6 +13,7 @@ import {
   IconCheck,
   IconZap,
   IconScan,
+  IconTrash,
 } from './icons';
 import { findNormalBackCamera } from './logic';
 import { opticalScannerCoordinator, type CatalogItemLookups } from './opticalScannerEngine';
@@ -437,9 +438,9 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.82)',
-        backdropFilter: 'blur(8px)',
-        zIndex: 990,
+        backgroundColor: 'rgba(0, 0, 0, 0.72)',
+        backdropFilter: 'blur(12px)',
+        zIndex: 960,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -453,59 +454,82 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
         className="card"
         style={{
           width: '100%',
-          maxWidth: 620,
-          maxHeight: '92vh',
+          maxWidth: 480,
+          maxHeight: '90vh',
           borderRadius: 24,
           overflowY: 'auto',
           backgroundColor: 'var(--bg-surface)',
           border: '1px solid var(--border)',
           boxShadow: 'var(--shadow-xl)',
-          padding: 24,
+          padding: '20px 20px 24px',
           display: 'flex',
           flexDirection: 'column',
-          gap: 16,
+          gap: 14,
         }}
       >
-        {/* Header */}
-        <div className="flex justify-between items-center pb-2 border-b border-[var(--border)]">
-          <div className="flex items-center gap-3">
+        {/* Header - Apple Liquid Glass Style */}
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-2.5" style={{ minWidth: 0 }}>
             <div
               style={{
-                width: 42,
-                height: 42,
+                width: 38,
+                height: 38,
                 borderRadius: 14,
-                background: 'rgba(16, 185, 129, 0.15)',
+                background: 'rgba(16, 185, 129, 0.14)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: 'var(--accent)',
+                flexShrink: 0,
               }}
             >
-              <IconCompass size={24} />
+              <IconCompass size={22} />
             </div>
-            <div>
-              <h2 className="font-extrabold text-base tracking-tight text-white flex items-center gap-2">
-                Cartographie Rapide & Emplacements
+            <div style={{ minWidth: 0 }}>
+              <h2
+                className="font-bold text-xs uppercase tracking-wider text-accent"
+                style={{ margin: 0, color: 'var(--accent)' }}
+              >
+                Cartographie Rapide &amp; Emplacements
               </h2>
-              <p className="text-xs text-[var(--text-muted)]">
-                Scannez un code-barres ou tapez une référence pour assigner sa zone
-              </p>
+              <div
+                className="font-semibold text-sm truncate"
+                style={{ color: 'var(--text-primary)', marginTop: 1 }}
+              >
+                Assignation d&apos;Emplacement Rayon
+              </div>
+              <div className="text-xs text-muted">
+                Scannez ou recherchez un produit
+              </div>
             </div>
           </div>
           <button
             type="button"
+            className="btn btn-ghost btn-xs btn-icon"
+            style={{ borderRadius: 9999, color: 'var(--text-muted)' }}
             onClick={onClose}
-            className="p-2 rounded-xl text-[var(--text-muted)] hover:text-white hover:bg-[var(--bg-hover)] transition-colors"
+            aria-label="Fermer"
             title="Fermer (Échap)"
           >
-            <IconX size={20} />
+            <IconX size={18} />
           </button>
         </div>
 
-        {/* Scan / Search Bar with Camera Trigger */}
+        {/* Unified Search & Camera Pill Bar */}
         <div className="relative">
-          <div className="flex items-center gap-2 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl px-3.5 py-2.5 focus-within:border-[var(--accent)] transition-all">
-            <IconScan size={22} className="text-[var(--accent)] flex-shrink-0" />
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              borderRadius: 9999,
+              padding: '4px 6px 4px 14px',
+              transition: 'border-color 0.2s ease',
+            }}
+          >
+            <IconScan size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
             <input
               ref={inputRef}
               type="text"
@@ -516,11 +540,26 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
               }}
               onKeyDown={handleSearchKeyDown}
               placeholder="Scanner code-barres EAN ou taper référence..."
-              className="bg-transparent text-white text-sm w-full outline-none placeholder:text-[var(--text-muted)] font-mono"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                width: '100%',
+                fontSize: '0.85rem',
+                color: 'var(--text-primary)',
+                fontFamily: 'inherit',
+              }}
             />
             {isSearching && (
-              <span className="text-[10px] text-[var(--accent)] animate-pulse font-mono flex-shrink-0">
-                Recherche...
+              <span
+                style={{
+                  fontSize: '0.7rem',
+                  color: 'var(--accent)',
+                  fontWeight: 600,
+                  flexShrink: 0,
+                }}
+              >
+                ...
               </span>
             )}
             {searchQuery && !isSearching && (
@@ -531,90 +570,205 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
                   setSearchResults([]);
                   inputRef.current?.focus();
                 }}
-                className="text-[var(--text-muted)] hover:text-white p-1"
+                className="btn btn-ghost btn-xs btn-icon"
+                style={{ borderRadius: 9999, color: 'var(--text-muted)', padding: 4 }}
+                title="Effacer"
               >
-                <IconX size={16} />
+                <IconX size={14} />
               </button>
             )}
-            {/* Camera Toggle Button */}
+            {/* Apple Camera Toggle Pill Button */}
             <button
               type="button"
               onClick={() => setIsCameraActive((prev) => !prev)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex-shrink-0 shadow-sm ${
-                isCameraActive
-                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 hover:bg-rose-500/30'
-                  : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30'
-              }`}
+              className="btn btn-xs flex items-center gap-1"
+              style={{
+                borderRadius: 9999,
+                fontSize: '0.75rem',
+                padding: '5px 12px',
+                fontWeight: 700,
+                flexShrink: 0,
+                background: isCameraActive ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                color: isCameraActive ? 'var(--danger)' : 'var(--accent)',
+                border: `1px solid ${isCameraActive ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
+              }}
               title="Activer la caméra pour scanner code-barres ou référence imprimée"
             >
-              <span>📷</span>
-              <span>{isCameraActive ? 'Fermer Cam' : 'Caméra'}</span>
+              <span>{isCameraActive ? '✕ Fermer Cam' : '📷 Caméra'}</span>
             </button>
           </div>
 
-          {/* Inline Smartphone Camera Viewfinder (Barcode + Carton Reference OCR) */}
+          {/* Smartphone Camera Viewfinder */}
           {isCameraActive && (
-            <div className="mt-2 relative rounded-2xl overflow-hidden border-2 border-emerald-500/50 bg-black shadow-xl">
+            <div
+              style={{
+                marginTop: 10,
+                position: 'relative',
+                borderRadius: 20,
+                overflow: 'hidden',
+                border: '1px solid var(--accent)',
+                background: '#000000',
+                boxShadow: 'var(--shadow-lg)',
+              }}
+            >
               <video
                 ref={videoRef}
                 playsInline
                 autoPlay
                 muted
-                className="w-full h-52 sm:h-64 object-cover"
+                style={{ width: '100%', height: 190, objectFit: 'cover' }}
               />
-              {/* Targeting Reticle & Overlay */}
-              <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-between p-3">
-                {/* HUD Top Badges */}
-                <div className="flex items-center gap-2 bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-mono text-emerald-300 border border-emerald-500/40 shadow">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  <span>Double Détection : Code-Barres &amp; Réf Carton</span>
+              {/* Frosted HUD Overlays */}
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  pointerEvents: 'none',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: 10,
+                }}
+              >
+                <div
+                  style={{
+                    background: 'rgba(0, 0, 0, 0.65)',
+                    backdropFilter: 'blur(8px)',
+                    padding: '4px 12px',
+                    borderRadius: 9999,
+                    fontSize: '0.72rem',
+                    color: '#34d399',
+                    border: '1px solid rgba(16, 185, 129, 0.4)',
+                    fontWeight: 600,
+                  }}
+                >
+                  Double Détection : Code-Barres &amp; Réf Carton
                 </div>
 
-                {/* Target Aiming Box */}
-                <div className="w-52 h-28 sm:w-64 sm:h-36 border-2 border-dashed border-emerald-400/90 rounded-2xl relative flex items-center justify-center bg-emerald-500/5">
-                  <div className="text-[10px] text-emerald-300 font-bold bg-black/60 px-2 py-0.5 rounded font-mono">
+                <div
+                  style={{
+                    width: 200,
+                    height: 90,
+                    borderRadius: 16,
+                    border: '2px dashed rgba(52, 211, 153, 0.85)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(16, 185, 129, 0.04)',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: '0.7rem',
+                      color: '#ffffff',
+                      background: 'rgba(0, 0, 0, 0.6)',
+                      padding: '2px 8px',
+                      borderRadius: 9999,
+                      fontWeight: 600,
+                    }}
+                  >
                     Visez le code ou la référence
-                  </div>
+                  </span>
                 </div>
 
-                {/* Detected SKU Pill */}
                 {detectedBanner ? (
-                  <div className="bg-emerald-600 text-white text-xs font-bold px-3.5 py-1.5 rounded-full shadow-2xl animate-bounce border border-emerald-400">
+                  <div
+                    style={{
+                      background: 'var(--accent)',
+                      color: '#ffffff',
+                      fontSize: '0.75rem',
+                      fontWeight: 800,
+                      padding: '4px 14px',
+                      borderRadius: 9999,
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                    }}
+                  >
                     {detectedBanner}
                   </div>
                 ) : (
-                  <div className="text-[11px] text-zinc-400 bg-black/70 px-3 py-1 rounded-full font-mono">
-                    Scanne en direct...
-                  </div>
+                  <div style={{ height: 18 }} />
                 )}
               </div>
             </div>
           )}
 
-          {/* Search Dropdown (if multiple results found and none yet selected) */}
+          {/* Search Dropdown Results */}
           {searchResults.length > 1 && !selectedProduct && (
-            <div className="absolute top-full left-0 right-0 mt-1.5 bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl shadow-2xl z-20 max-h-56 overflow-y-auto divide-y divide-[var(--border)]">
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                marginTop: 6,
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: 18,
+                boxShadow: 'var(--shadow-xl)',
+                zIndex: 30,
+                maxHeight: 220,
+                overflowY: 'auto',
+              }}
+            >
               {searchResults.map((item) => (
                 <div
                   key={item.reference}
                   onClick={() => handleSelectProduct(item)}
-                  className="p-3 hover:bg-[var(--bg-card)] cursor-pointer transition-colors flex justify-between items-center"
+                  style={{
+                    padding: '10px 14px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderBottom: '1px solid var(--border)',
+                    transition: 'background-color 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'var(--bg-surface)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
                 >
-                  <div className="min-w-0 pr-2">
-                    <div className="font-mono font-bold text-xs text-[var(--accent)]">
+                  <div style={{ minWidth: 0, paddingRight: 8 }}>
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontWeight: 700,
+                        fontSize: '0.75rem',
+                        color: 'var(--accent)',
+                      }}
+                    >
                       {item.reference}
                     </div>
-                    <div className="text-sm font-semibold text-white truncate">
+                    <div
+                      className="truncate"
+                      style={{
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
+                        color: 'var(--text-primary)',
+                      }}
+                    >
                       {item.designation}
                     </div>
                   </div>
-                  <div className="flex-shrink-0 text-right">
+                  <div style={{ flexShrink: 0, textAlign: 'right' }}>
                     {item.currentZone ? (
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[var(--accent-glow)] text-[var(--accent)]">
+                      <span
+                        style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          padding: '3px 8px',
+                          borderRadius: 9999,
+                          background: 'rgba(16, 185, 129, 0.12)',
+                          color: 'var(--accent)',
+                        }}
+                      >
                         {getZoneShortLabel(item.currentZone)}
                       </span>
                     ) : (
-                      <span className="text-[10px] text-[var(--text-muted)] italic">
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
                         Non assigné
                       </span>
                     )}
@@ -625,151 +779,315 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
           )}
         </div>
 
-        {/* Selected Product Card */}
+        {/* Assignment Feedback Toast */}
+        {assignmentToast && (
+          <div
+            className="animate-fade-in"
+            style={{
+              background: 'rgba(16, 185, 129, 0.15)',
+              border: '1px solid rgba(16, 185, 129, 0.35)',
+              color: 'var(--accent)',
+              fontWeight: 800,
+              fontSize: '0.78rem',
+              padding: '7px 14px',
+              borderRadius: 9999,
+              textAlign: 'center',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+            }}
+          >
+            <IconZap size={14} /> {assignmentToast}
+          </div>
+        )}
+
+        {/* Selected Product Card or Empty State */}
         {selectedProduct ? (
-          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-3.5 flex flex-col gap-2">
-            <div className="flex justify-between items-start">
-              <div className="min-w-0">
+          <div
+            style={{
+              padding: '12px 14px',
+              borderRadius: 18,
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+            }}
+          >
+            <div className="flex justify-between items-start gap-2">
+              <div style={{ minWidth: 0 }}>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono font-black text-xs text-[var(--accent)] bg-[var(--accent-glow)] px-2 py-0.5 rounded-md">
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 800,
+                      fontSize: '0.75rem',
+                      padding: '2px 8px',
+                      borderRadius: 9999,
+                      background: 'rgba(16, 185, 129, 0.12)',
+                      color: 'var(--accent)',
+                    }}
+                  >
                     {selectedProduct.reference}
                   </span>
                   {selectedProduct.ean && (
-                    <span className="font-mono text-[11px] text-[var(--text-muted)]">
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                       EAN: {selectedProduct.ean}
                     </span>
                   )}
                 </div>
-                <div className="font-bold text-sm text-white mt-1">
+                <div
+                  className="truncate"
+                  style={{
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    color: 'var(--text-primary)',
+                    marginTop: 3,
+                  }}
+                  title={selectedProduct.designation}
+                >
                   {selectedProduct.designation}
                 </div>
               </div>
-              <div className="text-right flex-shrink-0">
-                <div className="text-[10px] text-[var(--text-muted)] uppercase font-bold">
-                  Emplacement actuel
+
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
+                  Emplacement
                 </div>
-                <div className="font-extrabold text-xs text-[var(--accent)] mt-0.5">
+                <div
+                  style={{
+                    fontSize: '0.78rem',
+                    fontWeight: 800,
+                    color: selectedProduct.currentZone ? 'var(--accent)' : 'var(--text-muted)',
+                    marginTop: 1,
+                  }}
+                >
                   {selectedProduct.currentZone
                     ? getZoneShortLabel(selectedProduct.currentZone)
                     : 'Non assigné'}
                 </div>
               </div>
             </div>
+
+            {selectedProduct.currentZone && (
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleAssignZone(null)}
+                  className="btn btn-ghost btn-xs text-danger flex items-center gap-1"
+                  style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: 9999 }}
+                >
+                  <IconTrash size={12} /> Effacer l&apos;emplacement
+                </button>
+              </div>
+            )}
           </div>
         ) : (
-          <div className="p-4 rounded-2xl bg-[var(--bg-card)]/50 border border-dashed border-[var(--border)] text-center text-xs text-[var(--text-muted)]">
+          <div
+            style={{
+              padding: '12px 14px',
+              borderRadius: 16,
+              background: 'var(--bg-card)',
+              border: '1px dashed var(--border)',
+              textAlign: 'center',
+              fontSize: '0.78rem',
+              color: 'var(--text-muted)',
+            }}
+          >
             Scannez un produit ci-dessus pour activer la grille d&apos;attribution spatiale.
           </div>
         )}
 
-        {/* Zone Selector Tabs */}
-        <div className="flex gap-2 p-1 bg-[var(--bg-card)] rounded-xl border border-[var(--border)]">
+        {/* Category Navigation Tabs (Apple Liquid Glass Pill Control) */}
+        <div
+          className="flex gap-1 p-1"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            borderRadius: 9999,
+          }}
+        >
           <button
             type="button"
+            aria-label="Chambre Principale (Boussole)"
+            className={`btn btn-xs flex-1 ${activeTab === 'chambre' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ fontSize: '0.75rem', padding: '6px 8px', borderRadius: 9999, whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('chambre')}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'chambre'
-                ? 'bg-[var(--accent)] text-slate-900 shadow-sm'
-                : 'text-[var(--text-muted)] hover:text-white'
-            }`}
           >
-            Chambre Principale (Boussole)
+            <span style={{ display: 'none' }}>Chambre Principale (Boussole)</span>
+            <span>Chambre</span>
           </button>
           <button
             type="button"
+            aria-label="Couloir (Salles 1 à 4)"
+            className={`btn btn-xs flex-1 ${activeTab === 'couloir' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ fontSize: '0.75rem', padding: '6px 8px', borderRadius: 9999, whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('couloir')}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'couloir'
-                ? 'bg-[var(--accent)] text-slate-900 shadow-sm'
-                : 'text-[var(--text-muted)] hover:text-white'
-            }`}
           >
-            Couloir (Salles 1 à 4)
+            <span style={{ display: 'none' }}>Couloir (Salles 1 à 4)</span>
+            <span>Couloir (Salles 1–4)</span>
           </button>
           <button
             type="button"
+            aria-label="Personnalisé"
+            className={`btn btn-xs flex-1 ${activeTab === 'custom' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ fontSize: '0.75rem', padding: '6px 8px', borderRadius: 9999, whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('custom')}
-            className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'custom'
-                ? 'bg-[var(--accent)] text-slate-900 shadow-sm'
-                : 'text-[var(--text-muted)] hover:text-white'
-            }`}
           >
-            Personnalisé
+            <span>Personnalisé</span>
           </button>
         </div>
 
-        {/* Tab 1: Chambre Principale (Compass 3x3 Grid) */}
+        {/* Tab 1: Chambre Principale (Apple 3x3 Compass Grid) */}
         {activeTab === 'chambre' && (
-          <div className="space-y-2">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] text-center">
-              Nord (Fond de l’entrepôt)
+          <div>
+            <div className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2 flex justify-between items-center px-1">
+              <span>Chambre Principale</span>
+              <span className="text-[10px] text-muted">Touchez pour assigner</span>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              {chambreZones.map((z) => {
-                const isCurrent = selectedProduct?.currentZone?.includes(z.code);
-                return (
-                  <button
-                    key={z.code}
-                    type="button"
-                    disabled={!selectedProduct}
-                    onClick={() => handleAssignZone(z.code)}
-                    className={`py-3 px-2 rounded-xl text-center border transition-all flex flex-col items-center justify-center gap-1 ${
-                      !selectedProduct
-                        ? 'opacity-40 cursor-not-allowed border-[var(--border)] bg-[var(--bg-card)]'
-                        : isCurrent
-                        ? 'border-[var(--accent)] bg-[var(--accent-glow)] text-white shadow-md'
-                        : 'border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--accent)] hover:bg-[var(--bg-hover)] text-slate-200'
-                    }`}
-                  >
-                    <span className="font-extrabold text-xs">{z.shortLabel.replace('CH • ', '')}</span>
-                    <span className="font-mono text-[10px] text-[var(--text-muted)]">{z.code}</span>
-                    {isCurrent && (
-                      <span className="text-[10px] text-[var(--accent)] font-bold flex items-center gap-0.5">
-                        <IconCheck size={12} /> Actuel
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: 8,
+              }}
+            >
+              {[1, 2, 3].map((r) =>
+                [1, 2, 3].map((c) => {
+                  const z = chambreZones.find((item) => item.compassRow === r && item.compassCol === c);
+                  if (!z) return <div key={`${r}-${c}`} />;
+                  const isCurrent = Boolean(
+                    selectedProduct?.currentZone && selectedProduct.currentZone.includes(z.code)
+                  );
+                  const isEntrance = z.code === 'CH_SW';
+                  const isCouloirAccess = z.code === 'CH_W' || z.code === 'CH_NW';
+
+                  return (
+                    <button
+                      key={z.code}
+                      type="button"
+                      disabled={!selectedProduct}
+                      className="flex flex-col items-center justify-center text-center transition-all"
+                      style={{
+                        minHeight: 64,
+                        padding: '8px 4px',
+                        borderRadius: 16,
+                        background: isCurrent ? 'rgba(16, 185, 129, 0.18)' : 'var(--bg-card)',
+                        border: isCurrent ? '2px solid var(--accent)' : '1px solid var(--border)',
+                        cursor: selectedProduct ? 'pointer' : 'not-allowed',
+                        opacity: selectedProduct ? 1 : 0.45,
+                        position: 'relative',
+                      }}
+                      onClick={() => handleAssignZone(z.code)}
+                    >
+                      <span
+                        className="text-xs font-bold leading-tight"
+                        style={{ color: isCurrent ? 'var(--accent)' : 'var(--text-primary)' }}
+                      >
+                        {z.shortLabel.replace('CH • ', '')}
                       </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] text-center">
-              Sud (Entrée / Quai de chargement)
+                      <span
+                        className="font-mono text-[9px] mt-0.5"
+                        style={{ color: 'var(--text-muted)' }}
+                      >
+                        {z.code}
+                      </span>
+
+                      {isEntrance && (
+                        <span
+                          aria-hidden="true"
+                          className="mt-1 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                          style={{
+                            borderRadius: 9999,
+                            background: 'rgba(59, 130, 246, 0.2)',
+                            color: '#60a5fa',
+                          }}
+                        >
+                          Entrée
+                        </span>
+                      )}
+
+                      {isCouloirAccess && !isEntrance && (
+                        <span
+                          aria-hidden="true"
+                          className="mt-1 px-1.5 py-0.5 text-[9px] text-muted font-semibold"
+                          style={{
+                            borderRadius: 9999,
+                            background: 'rgba(0, 0, 0, 0.05)',
+                          }}
+                        >
+                          Couloir
+                        </span>
+                      )}
+
+                      {isCurrent && (
+                        <span
+                          aria-hidden="true"
+                          className="mt-1 px-1.5 py-0.5 text-[10px] text-accent font-extrabold flex items-center gap-0.5"
+                          style={{ borderRadius: 9999, background: 'rgba(16, 185, 129, 0.15)' }}
+                        >
+                          <IconCheck size={11} /> Actuel
+                        </span>
+                      )}
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
         )}
 
         {/* Tab 2: Couloir (Salles 1 à 4) */}
         {activeTab === 'couloir' && (
-          <div className="grid grid-cols-2 gap-2.5">
-            {couloirZones.map((z) => {
-              const isCurrent = selectedProduct?.currentZone?.includes(z.code);
-              return (
-                <button
-                  key={z.code}
-                  type="button"
-                  disabled={!selectedProduct}
-                  onClick={() => handleAssignZone(z.code)}
-                  className={`p-3.5 rounded-xl text-left border transition-all flex flex-col justify-between gap-1.5 ${
-                    !selectedProduct
-                      ? 'opacity-40 cursor-not-allowed border-[var(--border)] bg-[var(--bg-card)]'
-                      : isCurrent
-                      ? 'border-[var(--accent)] bg-[var(--accent-glow)] text-white shadow-md'
-                      : 'border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--accent)] hover:bg-[var(--bg-hover)] text-slate-200'
-                  }`}
-                >
-                  <div className="font-extrabold text-xs">{z.label}</div>
-                  <div className="flex justify-between items-center text-[10px] text-[var(--text-muted)]">
-                    <span className="font-mono">{z.code}</span>
-                    {isCurrent && (
-                      <span className="text-[var(--accent)] font-bold flex items-center gap-0.5">
-                        <IconCheck size={12} /> Actuel
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
+          <div>
+            <div className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2 flex justify-between items-center px-1">
+              <span>Salles du Couloir</span>
+              <span className="text-[10px] text-muted">Touchez pour assigner</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              {couloirZones.map((z) => {
+                const isCurrent = Boolean(
+                  selectedProduct?.currentZone && selectedProduct.currentZone.includes(z.code)
+                );
+                return (
+                  <button
+                    key={z.code}
+                    type="button"
+                    disabled={!selectedProduct}
+                    onClick={() => handleAssignZone(z.code)}
+                    className="p-3 rounded-2xl text-left transition-all flex flex-col justify-between gap-1"
+                    style={{
+                      minHeight: 64,
+                      background: isCurrent ? 'rgba(16, 185, 129, 0.18)' : 'var(--bg-card)',
+                      border: isCurrent ? '2px solid var(--accent)' : '1px solid var(--border)',
+                      cursor: selectedProduct ? 'pointer' : 'not-allowed',
+                      opacity: selectedProduct ? 1 : 0.45,
+                    }}
+                  >
+                    <div
+                      className="font-extrabold text-xs"
+                      style={{ color: isCurrent ? 'var(--accent)' : 'var(--text-primary)' }}
+                    >
+                      {z.label}
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] text-muted">
+                      <span className="font-mono">{z.code}</span>
+                      {isCurrent && (
+                        <span
+                          className="text-accent font-bold flex items-center gap-0.5"
+                          style={{ color: 'var(--accent)' }}
+                        >
+                          <IconCheck size={12} /> Actuel
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -781,65 +1099,46 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
               value={customZoneInput}
               onChange={(e) => setCustomZoneInput(e.target.value)}
               placeholder="Code zone personnalisé (ex: RACK-B2)..."
-              className="flex-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl px-3 py-2 text-sm text-white font-mono outline-none focus:border-[var(--accent)]"
+              style={{
+                flex: 1,
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: 9999,
+                padding: '8px 16px',
+                fontSize: '0.85rem',
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-mono)',
+                outline: 'none',
+              }}
             />
             <button
               type="button"
               disabled={!selectedProduct || !customZoneInput.trim()}
               onClick={() => handleAssignZone(customZoneInput.trim())}
-              className="px-4 py-2 rounded-xl bg-[var(--accent)] text-slate-900 font-bold text-xs hover:brightness-110 disabled:opacity-40"
+              className="btn btn-primary btn-sm"
+              style={{ borderRadius: 9999, padding: '8px 18px', fontWeight: 700 }}
             >
               Assigner
             </button>
           </div>
         )}
 
-        {/* Unassign Button */}
-        {selectedProduct && selectedProduct.currentZone && (
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => handleAssignZone(null)}
-              className="text-xs text-rose-400 hover:text-rose-300 underline py-1"
-            >
-              Effacer l&apos;emplacement actuel
-            </button>
-          </div>
-        )}
-
-        {/* Toast Alert */}
-        {assignmentToast && (
-          <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-xs py-2 px-3 rounded-xl text-center flex items-center justify-center gap-1.5 animate-fade-in">
-            <IconZap size={14} /> {assignmentToast}
-          </div>
-        )}
-
-        {/* Recent Session History */}
-        {recentAssignments.length > 0 && (
-          <div className="pt-2 border-t border-[var(--border)]">
-            <div className="text-[11px] font-bold text-[var(--text-muted)] mb-2 uppercase tracking-wider">
-              Dernières assignations de la session
-            </div>
-            <div className="space-y-1.5">
-              {recentAssignments.map((rec, idx) => (
-                <div
-                  key={`${rec.reference}-${idx}`}
-                  className="flex justify-between items-center text-xs py-1 px-2.5 rounded-lg bg-[var(--bg-card)]/60"
-                >
-                  <span className="font-mono text-[var(--accent)] font-bold">
-                    {rec.reference}
-                  </span>
-                  <span className="text-[var(--text-muted)] truncate max-w-[200px] text-[11px]">
-                    {rec.designation}
-                  </span>
-                  <span className="font-extrabold text-white text-[11px]">
-                    {rec.zone}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Footer Actions */}
+        <div className="flex justify-between items-center pt-2 border-t border-[var(--border)]">
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn btn-ghost btn-sm"
+            style={{ borderRadius: 9999, color: 'var(--text-muted)' }}
+          >
+            Fermer
+          </button>
+          {recentAssignments.length > 0 && (
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              {recentAssignments.length} article{recentAssignments.length > 1 ? 's' : ''} mis à jour
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
