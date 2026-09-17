@@ -205,6 +205,7 @@ import { StageSignOffModal } from './StageSignOffModal';
 import { CrossBillReallocationModal } from './CrossBillReallocationModal';
 import { TripDispatchModal } from './TripDispatchModal';
 import { WarehouseZoneModal } from './WarehouseZoneModal';
+import { WarehouseZoneAssignmentModal } from './WarehouseZoneAssignmentModal';
 import { LegacyCodeModal } from './LegacyCodeModal';
 import { ResetPhaseModal } from './ResetPhaseModal';
 import {
@@ -1134,6 +1135,7 @@ function HomeScreen({
   const [showStoreDemandModal, setShowStoreDemandModal] = useState(false);
   const [showStaffNavetteModal, setShowStaffNavetteModal] = useState(false);
   const [showDechargementModal, setShowDechargementModal] = useState(false);
+  const [showZoneAssignmentModal, setShowZoneAssignmentModal] = useState(false);
   const [showQuantities, setShowQuantities] = useState(() => localStorage.getItem('pointage_show_quantities') === 'true');
   const [activeOperator, setActiveOperatorState] = useState(() => getActiveOperator());
   const [operators, setOperators] = useState(() => loadOperatorsRoster());
@@ -1149,6 +1151,21 @@ function HomeScreen({
     setOperators(newOperators);
     setActiveOperatorState(newActive);
   };
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.shiftKey && (e.key === 'Z' || e.key === 'z') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const target = e.target as HTMLElement;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+          return;
+        }
+        e.preventDefault();
+        setShowZoneAssignmentModal((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const toggleShowQuantities = () => {
     setShowQuantities(prev => {
@@ -1326,6 +1343,15 @@ function HomeScreen({
           >
             <IconTruck size={16} />
             <span>Déchargement</span>
+          </button>
+          <button
+            type="button"
+            className="apple-quick-btn"
+            onClick={() => setShowZoneAssignmentModal(true)}
+            title="Cartographie & Emplacements Entrepôt"
+          >
+            <IconCompass size={16} />
+            <span>Cartographie</span>
           </button>
         </div>
 
@@ -1695,6 +1721,18 @@ function HomeScreen({
           isOpen={showDechargementModal}
           onClose={() => setShowDechargementModal(false)}
           onToast={(m) => showToast(m, setToast)}
+        />
+
+        <WarehouseZoneAssignmentModal
+          isOpen={showZoneAssignmentModal}
+          onClose={() => setShowZoneAssignmentModal(false)}
+          activeOperator={activeOperator}
+          onZoneAssigned={(ref, newZone) => {
+            showToast(
+              newZone ? `Zone ${ref} mise à jour : ${getZoneShortLabel(newZone)}` : `Zone ${ref} effacée`,
+              setToast
+            );
+          }}
         />
       </ErrorBoundary>
     </>
@@ -3468,6 +3506,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   }, [productProfiles]);
 
   const [zoneModalLine, setZoneModalLine] = useState<OrderLine | null>(null);
+  const [showZoneAssignmentModal, setShowZoneAssignmentModal] = useState(false);
   const [legacyModalLine, setLegacyModalLine] = useState<OrderLine | null>(null);
   type LineSortMode = 'bl' | 'circuit' | 'recent' | 'family';
   const [sortMode, setSortMode] = useState<LineSortMode>(() => {
@@ -3840,6 +3879,21 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
       nav(`/bill/${billId}/summary?stage=${stage}`);
     },
   });
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.shiftKey && (e.key === 'Z' || e.key === 'z') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const target = e.target as HTMLElement;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+          return;
+        }
+        e.preventDefault();
+        setShowZoneAssignmentModal((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const activeContainers = searchScope === 'all' && entityContainers && entityContainers.length > 0 ? entityContainers : containers;
   const activeEvents = searchScope === 'all' && entityEvents && entityEvents.length > 0 ? entityEvents : events;
@@ -4249,6 +4303,15 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             activeOperator={activeOperator}
             onClick={() => setShowOperatorModal(true)}
           />
+          <button
+            type="button"
+            className="header-icon-btn"
+            onClick={() => setShowZoneAssignmentModal(true)}
+            title="Cartographie & Emplacements Entrepôt"
+            aria-label="Cartographie Entrepôt"
+          >
+            <IconCompass size={18} />
+          </button>
           <button
             type="button"
             className="header-icon-btn"
@@ -5998,6 +6061,18 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           }}
         />
       )}
+
+      <WarehouseZoneAssignmentModal
+        isOpen={showZoneAssignmentModal}
+        onClose={() => setShowZoneAssignmentModal(false)}
+        activeOperator={activeOperator}
+        onZoneAssigned={(ref, newZone) => {
+          showToast(
+            newZone ? `Zone ${ref} mise à jour : ${getZoneShortLabel(newZone)}` : `Zone ${ref} effacée`,
+            setToast
+          );
+        }}
+      />
 
       {legacyModalLine && (
         <LegacyCodeModal

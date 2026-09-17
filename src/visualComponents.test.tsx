@@ -5,6 +5,7 @@ import { WarehouseProcessFlow } from './WarehouseProcessFlow';
 import { TruckLoadingDiagram } from './TruckLoadingDiagram';
 import { StageDistributionBar } from './StageDistributionBar';
 import { EmptyStateIllustration } from './EmptyStateIllustration';
+import { WarehouseZoneAssignmentModal } from './WarehouseZoneAssignmentModal';
 
 describe('Apple Glass Visual Components Test Suite', () => {
   describe('ConcentricStageRings', () => {
@@ -186,6 +187,37 @@ describe('Apple Glass Visual Components Test Suite', () => {
       );
       expect(actionHtml).toContain('empty-state-actions');
       expect(actionHtml).toContain('Créer');
+    });
+  });
+
+  describe('WarehouseZoneAssignmentModal', () => {
+    it('returns null when isOpen is false', () => {
+      const html = renderToString(
+        <WarehouseZoneAssignmentModal
+          isOpen={false}
+          onClose={() => {}}
+        />
+      );
+      expect(html).toBe('');
+    });
+
+    it('renders search input, compass tabs, and spatial zones when open', () => {
+      const html = renderToString(
+        <WarehouseZoneAssignmentModal
+          isOpen={true}
+          onClose={() => {}}
+          activeOperator="Amine"
+        />
+      );
+
+      expect(html).toContain('Cartographie Rapide &amp; Emplacements');
+      expect(html).toContain('Chambre Principale (Boussole)');
+      expect(html).toContain('Couloir (Salles 1 à 4)');
+      expect(html).toContain('Personnalisé');
+      expect(html).toContain('CH_NW');
+      expect(html).toContain('CH_CTR');
+      expect(html).toContain('CH_SE');
+      expect(html).toContain('Scanner code-barres EAN ou taper référence...');
     });
   });
 });
