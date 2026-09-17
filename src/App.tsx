@@ -66,6 +66,7 @@ import {
   BackCameraInfo,
   QRSyncPayload,
 } from './logic';
+import { opticalScannerCoordinator, type CatalogItemLookups } from './opticalScannerEngine';
 import { parseImportJSON, importBills, getOrCreateSession, validateImport } from './importer';
 import {
   findDuplicateBillGroups,
@@ -8977,6 +8978,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
   const [manualEntry, setManualEntry] = useState('');
   const streamRef = useRef<MediaStream | null>(null);
   const scanLockRef = useRef(false);
+  const textDetectIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [associateSearch, setAssociateSearch] = useState('');
   const [selectedLine, setSelectedLine] = useState<OrderLine | null>(null);
 
@@ -9157,6 +9159,27 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
               console.warn('Camera verification failed:', e);
             }
           }
+          // Continuous OCR Reference Detection on carton packaging text
+          if (textDetectIntervalRef.current) clearInterval(textDetectIntervalRef.current);
+          textDetectIntervalRef.current = setInterval(async () => {
+            if (scanLockRef.current || !videoRef.current || videoRef.current.readyState < 2) return;
+            try {
+              const currentCatalog: CatalogItemLookups[] = allLines.map((l) => ({
+                reference: l.reference,
+                designation: l.designation,
+                ean: l.ean,
+                aliases: l.referenceAliases || [],
+              }));
+              const refHit = await opticalScannerCoordinator.detectReferenceTextFromVideo(
+                videoRef.current,
+                currentCatalog
+              );
+              if (refHit && refHit.matchedReference && !scanLockRef.current) {
+                scanLockRef.current = true;
+                handleScanResult(refHit.matchedReference);
+              }
+            } catch (e) {}
+          }, 250);
         }
       } catch (err) {
         console.error('Scanner error:', err);
@@ -9168,6 +9191,10 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
     // Auto-release camera stream when phone is pocketed/locked to conserve battery
     const handleVisibilityChange = () => {
       if (document.hidden) {
+        if (textDetectIntervalRef.current) {
+          clearInterval(textDetectIntervalRef.current);
+          textDetectIntervalRef.current = null;
+        }
         if (streamRef.current) {
           streamRef.current.getTracks().forEach(t => t.stop());
           streamRef.current = null;
@@ -9183,6 +9210,10 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
     return () => {
       cancelled = true;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (textDetectIntervalRef.current) {
+        clearInterval(textDetectIntervalRef.current);
+        textDetectIntervalRef.current = null;
+      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
         streamRef.current = null;
@@ -9380,6 +9411,32 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
         <>
           <video ref={videoRef} className="scanner-video" playsInline muted autoPlay />
           <div className="scanner-target" />
+          <div
+            style={{
+              position: 'absolute',
+              top: 20,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'rgba(0, 0, 0, 0.75)',
+              border: '1px solid rgba(16, 185, 129, 0.4)',
+              color: '#34d399',
+              padding: '4px 14px',
+              borderRadius: 9999,
+              fontSize: 11,
+              fontWeight: 700,
+              fontFamily: 'var(--font-mono)',
+              zIndex: 10,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              backdropFilter: 'blur(8px)',
+              pointerEvents: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#10b981' }} />
+            Double Détection : Code-Barres &amp; Réf Carton
+          </div>
           <div className="scanner-controls-bar">
             {availableCameras.length > 0 && (
               <button

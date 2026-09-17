@@ -14,6 +14,8 @@ import {
   IconZap,
   IconScan,
 } from './icons';
+import { findNormalBackCamera } from './logic';
+import { opticalScannerCoordinator, type CatalogItemLookups } from './opticalScannerEngine';
 import { playSuccessChime, hapticTap } from './audio';
 import type { WarehouseZone } from './types';
 
@@ -49,21 +51,186 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
   const [activeTab, setActiveTab] = useState<'chambre' | 'couloir' | 'custom'>('chambre');
   const [customZoneInput, setCustomZoneInput] = useState('');
 
+  // Dual-mode camera scanner state (Barcode + Printed Reference)
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [detectedBanner, setDetectedBanner] = useState<string | null>(null);
+  const [catalogLookups, setCatalogLookups] = useState<CatalogItemLookups[]>([]);
+
   const inputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isProcessingScanRef = useRef(false);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auto-focus search input on modal open
+  // Preload catalog references for instant offline text & barcode matching
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+
+    const loadLookups = async () => {
+      try {
+        const profiles = await db.productProfiles.toArray();
+        const lines = await db.orderLines.toArray();
+        if (cancelled) return;
+
+        const map = new Map<string, CatalogItemLookups>();
+        for (const p of profiles) {
+          if (p.reference) {
+            map.set(p.reference.toUpperCase(), {
+              reference: p.reference,
+              designation: p.designation || undefined,
+              ean: p.ean || null,
+              aliases: p.legacyCodes || [],
+            });
+          }
+        }
+        for (const l of lines) {
+          if (l.reference) {
+            const key = l.reference.toUpperCase();
+            if (!map.has(key)) {
+              map.set(key, {
+                reference: l.reference,
+                designation: l.designation,
+                ean: l.ean || null,
+                aliases: l.referenceAliases || [],
+              });
+            }
+          }
+        }
+        setCatalogLookups(Array.from(map.values()));
+      } catch (e) {
+        console.warn('Failed to load catalog lookups:', e);
+      }
+    };
+
+    loadLookups();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
+  // Auto-focus search input on modal open and reset state
   useEffect(() => {
     if (isOpen) {
       setSearchQuery('');
       setSelectedProduct(null);
       setSearchResults([]);
+      setDetectedBanner(null);
       const timer = setTimeout(() => {
         inputRef.current?.focus();
       }, 100);
       return () => clearTimeout(timer);
+    } else {
+      setIsCameraActive(false);
     }
   }, [isOpen]);
+
+  // Camera stream lifecycle & continuous dual scan loop
+  useEffect(() => {
+    if (!isCameraActive || !isOpen) {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
+      return;
+    }
+
+    let cancelled = false;
+
+    const startCamera = async () => {
+      try {
+        let normalId: string | null = null;
+        if (navigator.mediaDevices?.enumerateDevices) {
+          try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            normalId = findNormalBackCamera(devices);
+          } catch (e) {}
+        }
+
+        const constraints: MediaStreamConstraints = {
+          audio: false,
+          video: normalId
+            ? { deviceId: { exact: normalId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+            : { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        };
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(() => {});
+        }
+
+        // Start scanning loop: check barcode & printed reference text
+        scanIntervalRef.current = setInterval(async () => {
+          if (isProcessingScanRef.current || !videoRef.current || videoRef.current.readyState < 2) return;
+          isProcessingScanRef.current = true;
+
+          try {
+            // 1. Check Barcode first
+            const barcodeHit = await opticalScannerCoordinator.detectBarcodeFromVideo(videoRef.current);
+            if (barcodeHit && barcodeHit.rawCode) {
+              handleDetectedCode(barcodeHit.rawCode, 'barcode');
+              return;
+            }
+
+            // 2. Check Printed Reference Text on Carton
+            const refHit = await opticalScannerCoordinator.detectReferenceTextFromVideo(
+              videoRef.current,
+              catalogLookups
+            );
+            if (refHit && refHit.matchedReference) {
+              handleDetectedCode(refHit.matchedReference, 'reference');
+              return;
+            }
+          } catch (e) {
+            // Scanner tick error ignored
+          } finally {
+            isProcessingScanRef.current = false;
+          }
+        }, 220);
+      } catch (err) {
+        console.error('Failed to start camera for zone assignment:', err);
+        setIsCameraActive(false);
+      }
+    };
+
+    startCamera();
+
+    return () => {
+      cancelled = true;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
+    };
+  }, [isCameraActive, isOpen, catalogLookups]);
+
+  const handleDetectedCode = async (code: string, type: 'barcode' | 'reference') => {
+    playSuccessChime();
+    hapticTap('medium');
+
+    const bannerMsg = type === 'barcode' ? `✓ Code-barres : ${code}` : `✓ Réf Détectée : ${code}`;
+    setDetectedBanner(bannerMsg);
+    setTimeout(() => setDetectedBanner(null), 3000);
+
+    setSearchQuery(code);
+    await performSearch(code);
+  };
 
   // Search logic across productProfiles and orderLines
   const performSearch = async (query: string) => {
@@ -335,7 +502,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
           </button>
         </div>
 
-        {/* Scan / Search Bar */}
+        {/* Scan / Search Bar with Camera Trigger */}
         <div className="relative">
           <div className="flex items-center gap-2 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl px-3.5 py-2.5 focus-within:border-[var(--accent)] transition-all">
             <IconScan size={22} className="text-[var(--accent)] flex-shrink-0" />
@@ -369,7 +536,60 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
                 <IconX size={16} />
               </button>
             )}
+            {/* Camera Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setIsCameraActive((prev) => !prev)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex-shrink-0 shadow-sm ${
+                isCameraActive
+                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 hover:bg-rose-500/30'
+                  : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30'
+              }`}
+              title="Activer la caméra pour scanner code-barres ou référence imprimée"
+            >
+              <span>📷</span>
+              <span>{isCameraActive ? 'Fermer Cam' : 'Caméra'}</span>
+            </button>
           </div>
+
+          {/* Inline Smartphone Camera Viewfinder (Barcode + Carton Reference OCR) */}
+          {isCameraActive && (
+            <div className="mt-2 relative rounded-2xl overflow-hidden border-2 border-emerald-500/50 bg-black shadow-xl">
+              <video
+                ref={videoRef}
+                playsInline
+                autoPlay
+                muted
+                className="w-full h-52 sm:h-64 object-cover"
+              />
+              {/* Targeting Reticle & Overlay */}
+              <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-between p-3">
+                {/* HUD Top Badges */}
+                <div className="flex items-center gap-2 bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-mono text-emerald-300 border border-emerald-500/40 shadow">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span>Double Détection : Code-Barres &amp; Réf Carton</span>
+                </div>
+
+                {/* Target Aiming Box */}
+                <div className="w-52 h-28 sm:w-64 sm:h-36 border-2 border-dashed border-emerald-400/90 rounded-2xl relative flex items-center justify-center bg-emerald-500/5">
+                  <div className="text-[10px] text-emerald-300 font-bold bg-black/60 px-2 py-0.5 rounded font-mono">
+                    Visez le code ou la référence
+                  </div>
+                </div>
+
+                {/* Detected SKU Pill */}
+                {detectedBanner ? (
+                  <div className="bg-emerald-600 text-white text-xs font-bold px-3.5 py-1.5 rounded-full shadow-2xl animate-bounce border border-emerald-400">
+                    {detectedBanner}
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-zinc-400 bg-black/70 px-3 py-1 rounded-full font-mono">
+                    Scanne en direct...
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Search Dropdown (if multiple results found and none yet selected) */}
           {searchResults.length > 1 && !selectedProduct && (
