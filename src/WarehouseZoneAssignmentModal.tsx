@@ -56,6 +56,13 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [detectedBanner, setDetectedBanner] = useState<string | null>(null);
   const [catalogLookups, setCatalogLookups] = useState<CatalogItemLookups[]>([]);
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth <= 640 : false));
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 640);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -444,7 +451,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 16,
+        padding: isMobile ? 8 : 16,
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -455,16 +462,16 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
         style={{
           width: '100%',
           maxWidth: 480,
-          maxHeight: '90vh',
-          borderRadius: 24,
+          maxHeight: isMobile ? '94vh' : '90vh',
+          borderRadius: isMobile ? 20 : 24,
           overflowY: 'auto',
           backgroundColor: 'var(--bg-surface)',
           border: '1px solid var(--border)',
           boxShadow: 'var(--shadow-xl)',
-          padding: '20px 20px 24px',
+          padding: isMobile ? '16px 14px 20px' : '20px 20px 24px',
           display: 'flex',
           flexDirection: 'column',
-          gap: 14,
+          gap: isMobile ? 12 : 14,
         }}
       >
         {/* Header - Apple Liquid Glass Style */}
@@ -922,20 +929,21 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
             type="button"
             aria-label="Couloir (Salles 1 à 4)"
             className={`btn btn-xs flex-1 ${activeTab === 'couloir' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ fontSize: '0.75rem', padding: '6px 8px', borderRadius: 9999, whiteSpace: 'nowrap' }}
+            style={{ fontSize: '0.74rem', padding: '6px 4px', borderRadius: 9999, whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('couloir')}
           >
             <span style={{ display: 'none' }}>Couloir (Salles 1 à 4)</span>
-            <span>Couloir (Salles 1–4)</span>
+            <span>{isMobile ? 'Couloir' : 'Couloir (Salles 1–4)'}</span>
           </button>
           <button
             type="button"
             aria-label="Personnalisé"
             className={`btn btn-xs flex-1 ${activeTab === 'custom' ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ fontSize: '0.75rem', padding: '6px 8px', borderRadius: 9999, whiteSpace: 'nowrap' }}
+            style={{ fontSize: '0.74rem', padding: '6px 4px', borderRadius: 9999, whiteSpace: 'nowrap' }}
             onClick={() => setActiveTab('custom')}
           >
-            <span>Personnalisé</span>
+            <span style={{ display: 'none' }}>Personnalisé</span>
+            <span>{isMobile ? 'Autre' : 'Personnalisé'}</span>
           </button>
         </div>
 
