@@ -13,7 +13,8 @@ import {
   smartSearchScore,
   calcPackBreakdown,
 } from './logic';
-import type { OrderLine, CountEvent } from './types';
+import { searchLines } from './hooks';
+import type { OrderLine, CountEvent, Bill } from './types';
 
 function makeLine(overrides: Partial<OrderLine> = {}): OrderLine {
   return {
@@ -544,7 +545,89 @@ describe('Workflow 11: Bill Archival Safety, Concurrency & Cross-Search Visibili
     bill.status = 'active';
     expect(bill.status).toBe('active');
   });
+
+  it('searches for products across both active and archived bills and distinguishes status', () => {
+    const activeBill: Bill = {
+      id: 1,
+      sessionId: 1,
+      billNumber: 'BL-ACTIVE-01',
+      client: 'CLIENT A',
+      status: 'active',
+      createdAt: '2026-09-18T00:00:00Z',
+      updatedAt: '2026-09-18T00:00:00Z',
+    };
+
+    const archivedBill: Bill = {
+      id: 2,
+      sessionId: 1,
+      billNumber: 'BL-ARCHIVED-02',
+      client: 'CLIENT B',
+      status: 'completed',
+      createdAt: '2026-09-10T00:00:00Z',
+      updatedAt: '2026-09-10T00:00:00Z',
+    };
+
+    const lines: OrderLine[] = [
+      {
+        id: 101,
+        billId: 1,
+        no: '1',
+        originalNo: '1',
+        page: 1,
+        originalPage: 1,
+        reference: '72950',
+        originalReference: '72950',
+        designation: 'CARTABLE EN CUIR 72950',
+        originalDesignation: 'CARTABLE EN CUIR 72950',
+        orderedQty: 10,
+        originalOrderedQty: 10,
+        status: 'active',
+        outerPackSize: null,
+        innerPackSize: null,
+        warehouseZone: null,
+        packagesRaw: null,
+        createdAt: '2026-09-18T00:00:00Z',
+        updatedAt: '2026-09-18T00:00:00Z',
+      },
+      {
+        id: 102,
+        billId: 2, // Belongs to archived bill!
+        no: '1',
+        originalNo: '1',
+        page: 1,
+        originalPage: 1,
+        reference: '72950',
+        originalReference: '72950',
+        designation: 'CARTABLE EN CUIR 72950 (HISTORIQUE)',
+        originalDesignation: 'CARTABLE EN CUIR 72950 (HISTORIQUE)',
+        orderedQty: 25,
+        originalOrderedQty: 25,
+        status: 'active',
+        outerPackSize: null,
+        innerPackSize: null,
+        warehouseZone: null,
+        packagesRaw: null,
+        createdAt: '2026-09-10T00:00:00Z',
+        updatedAt: '2026-09-10T00:00:00Z',
+      },
+    ];
+
+    const allBills = [activeBill, archivedBill];
+    const matches = searchLines(lines, '72950', 'smart');
+
+    expect(matches.length).toBe(2);
+
+    const activeLine = matches.find((l) => allBills.find((b) => b.id === l.billId)?.status !== 'completed');
+    const archivedLine = matches.find((l) => allBills.find((b) => b.id === l.billId)?.status === 'completed');
+
+    expect(activeLine).toBeDefined();
+    expect(activeLine?.billId).toBe(1);
+
+    expect(archivedLine).toBeDefined();
+    expect(archivedLine?.billId).toBe(2);
+  });
 });
+
 
 
 

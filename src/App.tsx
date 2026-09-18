@@ -1471,7 +1471,17 @@ function HomeScreen({
         {homeSearch.trim() ? (
           <div className="flex flex-col gap-2 mb-4">
             <div className="text-xs text-muted flex justify-between items-center px-1">
-              <span>{matchedBills.length} bon(s) • {matchedGlobalLines.length} article(s) trouvé(s)</span>
+              <span>
+                {matchedBills.length} bon(s) • {matchedGlobalLines.length} article(s) trouvé(s)
+                {matchedGlobalLines.length > 0 && (() => {
+                  const actCount = matchedGlobalLines.filter((l) => bills.find((b) => b.id === l.billId)?.status !== 'completed').length;
+                  const archCount = matchedGlobalLines.filter((l) => bills.find((b) => b.id === l.billId)?.status === 'completed').length;
+                  if (archCount > 0) {
+                    return <span className="ml-1 opacity-75">({actCount} actif{actCount > 1 ? 's' : ''}, {archCount} archivé{archCount > 1 ? 's' : ''})</span>;
+                  }
+                  return null;
+                })()}
+              </span>
               <button className="text-accent text-xs font-bold" onClick={() => setHomeSearch('')}>Voir tous les bons</button>
             </div>
 
@@ -1553,19 +1563,25 @@ function HomeScreen({
             ) : (
               matchedGlobalLines.slice(0, 30).map((line) => {
                 const parentBill = bills.find((b) => b.id === line.billId);
-                const targetStage = sessionStorage.getItem(`pointage_stage_${line.billId}`) || 'preparation';
+                const isArchived = parentBill?.status === 'completed';
+                const targetStage = isArchived ? 'pointage' : (sessionStorage.getItem(`pointage_stage_${line.billId}`) || 'preparation');
                 return (
                   <div
                     key={line.id}
                     className="product-card cursor-pointer"
-                    style={{ borderLeft: '4px solid var(--accent)' }}
+                    style={{ borderLeft: `4px solid ${isArchived ? 'var(--text-muted)' : 'var(--accent)'}` }}
                     onClick={() => nav(`/bill/${line.billId}/line/${line.id}?stage=${targetStage}&from=home`)}
                   >
                     <div className="flex justify-between items-center mb-1">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span
                           className="badge"
-                          style={{ background: 'var(--accent-glow)', color: 'var(--accent)', fontWeight: 800, cursor: 'pointer' }}
+                          style={{
+                            background: isArchived ? 'rgba(255, 255, 255, 0.08)' : 'var(--accent-glow)',
+                            color: isArchived ? 'var(--text-secondary)' : 'var(--accent)',
+                            fontWeight: 800,
+                            cursor: 'pointer'
+                          }}
                           onClick={(e) => {
                             e.stopPropagation();
                             nav(`/bill/${line.billId}`);
@@ -1574,6 +1590,35 @@ function HomeScreen({
                         >
                           {parentBill?.billNumber || `BL #${line.billId}`} ›
                         </span>
+                        {isArchived ? (
+                          <span
+                            className="badge flex items-center gap-1"
+                            style={{
+                              background: 'rgba(255, 255, 255, 0.08)',
+                              color: 'var(--text-muted)',
+                              fontSize: '0.62rem',
+                              fontWeight: 700,
+                              borderRadius: 9999,
+                              padding: '2px 6px',
+                            }}
+                          >
+                            <IconClipboard size={9} /> Historique
+                          </span>
+                        ) : (
+                          <span
+                            className="badge flex items-center gap-1"
+                            style={{
+                              background: 'var(--accent-glow)',
+                              color: 'var(--accent)',
+                              fontSize: '0.62rem',
+                              fontWeight: 700,
+                              borderRadius: 9999,
+                              padding: '2px 6px',
+                            }}
+                          >
+                            <IconBox size={9} /> Actif
+                          </span>
+                        )}
                         <span className="text-xs text-muted font-bold truncate" style={{ maxWidth: 140 }}>
                           {parentBill?.client || ''}
                         </span>
@@ -5745,6 +5790,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             </div>
             {siblingMatches.map((otherLine) => {
               const parentBill = entityBills?.find((b) => b.id === otherLine.billId);
+              const isArchived = parentBill?.status === 'completed';
               const sibEvts = entityEvents?.filter((e) => e.orderLineId === otherLine.id && !e.undone && e.stage === stage) || [];
               const sibStageTotal = sibEvts.reduce((sum, e) => sum + e.quantity, 0);
               const isSibValidated = otherLine.status !== 'active' || sibStageTotal > 0;
@@ -5752,13 +5798,47 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                 <div
                   key={otherLine.id}
                   className="product-card cursor-pointer"
-                  style={{ borderLeft: '4px solid var(--accent)', margin: '0 0 8px 0' }}
-                  onClick={() => nav(`/bill/${otherLine.billId}/line/${otherLine.id}?stage=${stage}`)}
+                  style={{ borderLeft: `4px solid ${isArchived ? 'var(--text-muted)' : 'var(--accent)'}`, margin: '0 0 8px 0' }}
+                  onClick={() => {
+                    const targetStage = isArchived ? 'pointage' : stage;
+                    nav(`/bill/${otherLine.billId}/line/${otherLine.id}?stage=${targetStage}`);
+                  }}
                 >
                   <div className="flex justify-between items-center mb-1">
-                    <span className="badge" style={{ background: 'var(--accent-glow)', color: 'var(--accent)', fontWeight: 800 }}>
-                      {parentBill?.billNumber || `BL #${otherLine.billId}`}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="badge" style={{ background: isArchived ? 'rgba(255, 255, 255, 0.08)' : 'var(--accent-glow)', color: isArchived ? 'var(--text-secondary)' : 'var(--accent)', fontWeight: 800 }}>
+                        {parentBill?.billNumber || `BL #${otherLine.billId}`}
+                      </span>
+                      {isArchived ? (
+                        <span
+                          className="badge flex items-center gap-1"
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.08)',
+                            color: 'var(--text-muted)',
+                            fontSize: '0.62rem',
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: '9999px',
+                          }}
+                        >
+                          <IconClipboard size={9} /> Historique
+                        </span>
+                      ) : (
+                        <span
+                          className="badge flex items-center gap-1"
+                          style={{
+                            background: 'var(--accent-glow)',
+                            color: 'var(--accent)',
+                            fontSize: '0.62rem',
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: '9999px',
+                          }}
+                        >
+                          <IconBox size={9} /> Actif
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1.5">
                       {isSibValidated ? (
                         <span className="badge badge-exact flex items-center gap-1" style={{ fontSize: '0.68rem', borderRadius: 9999 }}>
