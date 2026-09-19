@@ -3531,6 +3531,20 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const nav = useNavigate();
   const { billId: billIdStr } = useParams();
   const billId = Number(billIdStr);
+  const [isBillLoaded, setIsBillLoaded] = useState(false);
+  useEffect(() => {
+    let active = true;
+    if (!isNaN(billId)) {
+      db.bills.get(billId).then(() => {
+        if (active) setIsBillLoaded(true);
+      }).catch(() => {
+        if (active) setIsBillLoaded(true);
+      });
+    } else {
+      setIsBillLoaded(true);
+    }
+    return () => { active = false; };
+  }, [billId]);
   const bill = useBill(billId);
   const lines = useBillLines(billId);
   const events = useBillEvents(billId);
@@ -4274,6 +4288,32 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
     displayLines = [...applySort(unvalidatedList), ...applySort(validatedList)];
   } else {
     displayLines = applySort(displayLines);
+  }
+
+  if (isBillLoaded && !bill) {
+    return (
+      <>
+        <header className="app-header">
+          <button className="back-btn" onClick={() => nav('/')} aria-label="Retour">
+            <IconArrowLeft size={18} />
+          </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="font-semibold truncate">BL introuvable</div>
+            <div className="text-xs text-muted">Ce bon de livraison n'existe pas ou a été supprimé</div>
+          </div>
+        </header>
+        <div className="app-content flex flex-col items-center justify-center p-8 text-center" style={{ minHeight: '50vh' }}>
+          <div className="mb-4 text-muted">
+            <IconAlertTriangle size={48} style={{ color: 'var(--warning)', margin: '0 auto' }} />
+          </div>
+          <h2 className="font-bold text-lg mb-2">Bon de livraison introuvable</h2>
+          <p className="text-sm text-muted mb-6">Le bon N° {billId} n'a pas été trouvé dans la base locale.</p>
+          <button className="btn btn-primary" onClick={() => nav('/')}>
+            <IconArrowLeft size={16} /> Retour à l'accueil
+          </button>
+        </div>
+      </>
+    );
   }
 
   if (!bill) {

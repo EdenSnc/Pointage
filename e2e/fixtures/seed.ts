@@ -45,7 +45,7 @@ export async function clearAndSeedDatabase(page: Page) {
           updatedAt: new Date().toISOString(),
         });
 
-        // 2. Active Customer Order (BL)
+        // 2. Active and Completed Customer Orders (BLs)
         tx.objectStore('bills').put({
           id: 1,
           sessionId: 1,
@@ -57,7 +57,18 @@ export async function clearAndSeedDatabase(page: Page) {
           updatedAt: new Date().toISOString(),
         });
 
-        // 3. Order Lines with Diverse Categories
+        tx.objectStore('bills').put({
+          id: 2,
+          sessionId: 1,
+          billNumber: 'BL-2026-002',
+          client: 'SARL PAPETERIE CENTRALE (ALGER)',
+          date: '2026-09-10',
+          status: 'completed',
+          createdAt: new Date('2026-09-10T10:00:00Z').toISOString(),
+          updatedAt: new Date('2026-09-10T12:00:00Z').toISOString(),
+        });
+
+        // 3. Order Lines with Diverse Categories and Edge Cases
         const lineStore = tx.objectStore('orderLines');
         lineStore.put({
           id: 1,
@@ -134,6 +145,82 @@ export async function clearAndSeedDatabase(page: Page) {
           updatedAt: new Date().toISOString(),
         });
 
+        lineStore.put({
+          id: 4,
+          billId: 1,
+          no: '4',
+          originalNo: '4',
+          page: 1,
+          originalPage: 1,
+          reference: 'SURPLUS-ITEM',
+          originalReference: 'SURPLUS-ITEM',
+          ean: '613999999001',
+          originalEan: '613999999001',
+          designation: 'MARQUEUR PERMANENT NOIR',
+          originalDesignation: 'MARQUEUR PERMANENT NOIR',
+          orderedQty: 5,
+          originalOrderedQty: 5,
+          status: 'active',
+          outerPackSize: 10,
+          innerPackSize: 2,
+          warehouseZone: 'CH_SE',
+          packagesRaw: '10 PCS/CTN',
+          referenceAliases: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+
+        // Archived bill lines for cross-bill & history tests
+        lineStore.put({
+          id: 5,
+          billId: 2,
+          no: '1',
+          originalNo: '1',
+          page: 1,
+          originalPage: 1,
+          reference: 'ART-1012',
+          originalReference: 'ART-1012',
+          ean: '6130000010123',
+          originalEan: '6130000010123',
+          designation: 'Disque à tronçonner 115mm acier (ARCHIVE)',
+          originalDesignation: 'Disque à tronçonner 115mm acier (ARCHIVE)',
+          orderedQty: 30,
+          originalOrderedQty: 30,
+          status: 'active',
+          outerPackSize: 50,
+          innerPackSize: 10,
+          warehouseZone: 'CH_CTR',
+          packagesRaw: '50 PCS/CTN',
+          referenceAliases: [],
+          createdAt: new Date('2026-09-10T10:00:00Z').toISOString(),
+          updatedAt: new Date('2026-09-10T10:00:00Z').toISOString(),
+        });
+
+        lineStore.put({
+          id: 6,
+          billId: 2,
+          no: '2',
+          originalNo: '2',
+          page: 1,
+          originalPage: 1,
+          reference: '72950',
+          originalReference: '72950',
+          ean: '6941782117149',
+          originalEan: '6941782117149',
+          designation: 'CARTABLE EN CUIR 72950',
+          originalDesignation: 'CARTABLE EN CUIR 72950',
+          orderedQty: 15,
+          originalOrderedQty: 15,
+          status: 'active',
+          outerPackSize: 10,
+          innerPackSize: 1,
+          warehouseZone: 'CH_NW',
+          packagesRaw: '10 PCS/CTN',
+          referenceAliases: [],
+          createdAt: new Date('2026-09-10T10:00:00Z').toISOString(),
+          updatedAt: new Date('2026-09-10T10:00:00Z').toISOString(),
+        });
+
         // 4. Product Profiles
         const profileStore = tx.objectStore('productProfiles');
         profileStore.put({
@@ -151,6 +238,15 @@ export async function clearAndSeedDatabase(page: Page) {
           warehouseZone: null,
           outerPackSize: 20,
           innerPackSize: 5,
+          updatedAt: new Date().toISOString(),
+        });
+
+        profileStore.put({
+          reference: '72950',
+          designation: 'CARTABLE EN CUIR 72950',
+          warehouseZone: 'CH_NW',
+          outerPackSize: 10,
+          innerPackSize: 1,
           updatedAt: new Date().toISOString(),
         });
 

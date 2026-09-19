@@ -82,18 +82,18 @@ test.describe('E2E Flow 2: Bill Pointage Workflow & Stage Progression', () => {
   test('2.4: Filters order lines using status pills (Tous, À faire, Validés)', async ({ page }) => {
     await page.goto('/#/bill/1');
 
-    // Verify initial "Tous" filter shows all 3 lines
+    // Verify initial "Tous" filter shows all 4 lines
     const filterAll = page.getByRole('button', { name: /^Tous/i }).first();
     await expect(filterAll).toBeVisible();
-    await expect(page.locator('.product-card')).toHaveCount(3);
+    await expect(page.locator('.product-card')).toHaveCount(4);
 
     // Filter by "À faire"
     const filterTodo = page.getByRole('button', { name: /À faire/i }).first();
     await expect(filterTodo).toBeVisible();
     await filterTodo.click();
 
-    // All 3 items are initially uncounted, so they remain in "À faire"
-    await expect(page.locator('.product-card')).toHaveCount(3);
+    // All 4 items are initially uncounted, so they remain in "À faire"
+    await expect(page.locator('.product-card')).toHaveCount(4);
 
     // Filter by "Validés"
     const filterDone = page.getByRole('button', { name: /Validés/i }).first();
@@ -105,6 +105,6 @@ test.describe('E2E Flow 2: Bill Pointage Workflow & Stage Progression', () => {
 
     // Reset back to "Tous"
     await filterAll.click();
-    await expect(page.locator('.product-card')).toHaveCount(3);
+    await expect(page.locator('.product-card')).toHaveCount(4);
   });
 });
