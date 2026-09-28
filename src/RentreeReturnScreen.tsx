@@ -585,13 +585,13 @@ export const RentreeReturnScreen: React.FC<{ setToast: (msg: string) => void }> 
                         fontWeight: 800,
                       }}
                     >
-                      {isDone ? 'Pointé ✓' : isUnloading ? 'Au Quai ⚡' : 'En Route ⏱'}
+                      {isDone ? 'Pointé ✓' : isUnloading ? 'Au Quai' : 'En Route'}
                     </span>
                   </div>
-                  <div className="text-[11px] font-bold truncate max-w-[140px]">
+                  <div className="text-[11px] font-bold w-full overflow-hidden text-ellipsis whitespace-nowrap">
                     {DEFAULT_WAREHOUSE_SITES.find((s) => s.id === voy.arrivalSite)?.name || voy.arrivalSite}
                   </div>
-                  <div className="text-[10px] text-muted truncate max-w-[140px]">
+                  <div className="text-[10px] text-muted w-full overflow-hidden text-ellipsis whitespace-nowrap">
                     {voy.driverName} • {voy.vehiclePlate}
                   </div>
                 </button>
