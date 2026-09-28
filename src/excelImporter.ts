@@ -107,12 +107,13 @@ function identifyColumnRole(rawHeader: string): string | null {
 /**
  * Extracts metadata (Client, N° BL, Date) from text rows or headers.
  */
-function extractMetadataFromText(text: string): {
+export function extractMetadataFromText(text: string): {
   billNumber?: string;
   client?: string;
   date?: string;
+  driverName?: string;
 } {
-  const result: { billNumber?: string; client?: string; date?: string } = {};
+  const result: { billNumber?: string; client?: string; date?: string; driverName?: string } = {};
 
   const billMatch = text.match(
     /(?:(?:bl|bon\s*de\s*livraison|facture|bc|bon(?:\s*de)?\s*commande)\s*(?:n°?|num(?:ero)?|#)?|(?:n°|num(?:ero)?|#)\s*(?:bl|bon|facture|bc)?)\s*[:#\-]\s*([a-z0-9\/\-_]+)/i
@@ -136,6 +137,31 @@ function extractMetadataFromText(text: string): {
   const dateMatch = text.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/);
   if (dateMatch) {
     result.date = dateMatch[1];
+  }
+
+  // Assigned Driver / Chauffeur (e.g., "Chauffeur : Yassine", "Nom du chauffeur : Djaber", "Livreur: Yassine")
+  const driverMatch = text.match(
+    /(?:(?:nom\s+du\s+)?(?:chauffeur|livreur|conducteur|transporteur))\s*[:#\-]\s*([^\r\n,;:|]{2,30})/i
+  );
+  if (driverMatch && driverMatch[1]) {
+    const rawDriver = driverMatch[1].trim().replace(/[;,\.]$/, '');
+    if (!/^(?:signature|visa|cachet|date|bon|client|observation|observations)$/i.test(rawDriver)) {
+      result.driverName = rawDriver.charAt(0).toUpperCase() + rawDriver.slice(1).toLowerCase();
+    }
+  } else {
+    // Known driver detection (e.g., "Chauffeur Yassine", "Chauffeur Djaber", or standalone known name)
+    const labelMatch = text.match(/\b(?:chauffeur|livreur|conducteur)\s+([a-zÀ-ÿ]{3,20})\b/i);
+    if (labelMatch && labelMatch[1]) {
+      const d = labelMatch[1].trim();
+      result.driverName = d.charAt(0).toUpperCase() + d.slice(1).toLowerCase();
+    } else {
+      // Direct roster match for Algerian fleet
+      const rosterMatch = text.match(/\b(yassine|djaber|mourad|nassim|samir|karim|redouane)\b/i);
+      if (rosterMatch && rosterMatch[1]) {
+        const d = rosterMatch[1].trim();
+        result.driverName = d.charAt(0).toUpperCase() + d.slice(1).toLowerCase();
+      }
+    }
   }
 
   return result;
@@ -183,6 +209,7 @@ export function parseExcelImport(
       let metaClient: string | undefined;
       let metaBillNumber: string | undefined;
       let metaDate: string | undefined;
+      let metaDriver: string | undefined;
 
       const scanLimit = Math.min(25, rawRows.length);
       for (let r = 0; r < scanLimit; r++) {
@@ -194,6 +221,7 @@ export function parseExcelImport(
         if (rowMeta.client && !metaClient) metaClient = rowMeta.client;
         if (rowMeta.billNumber && !metaBillNumber) metaBillNumber = rowMeta.billNumber;
         if (rowMeta.date && !metaDate) metaDate = rowMeta.date;
+        if (rowMeta.driverName && !metaDriver) metaDriver = rowMeta.driverName;
 
         const currentMap: Record<string, number> = {};
         for (let c = 0; c < row.length; c++) {
@@ -326,6 +354,13 @@ export function parseExcelImport(
         ].some((k) => normDesig.startsWith(k) || normDesig.includes(` ${k} `) || normDesig.includes(`${k}:`));
 
         if (isFooterKeyword) {
+          if (normDesig.includes('chauffeur') || normDesig.includes('livreur') || normDesig.includes('conducteur')) {
+            const fullRowText = row.map((c) => String(c || '').trim()).filter(Boolean).join(' ');
+            const rowDriver = extractMetadataFromText(fullRowText).driverName;
+            if (rowDriver && !metaDriver) {
+              metaDriver = rowDriver;
+            }
+          }
           continue;
         }
 
@@ -402,6 +437,7 @@ export function parseExcelImport(
           billNumber: finalBillNumber,
           client: finalClient,
           date: metaDate || new Date().toISOString().split('T')[0],
+          driverName: metaDriver || null,
           lines,
         });
       }

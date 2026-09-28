@@ -33,8 +33,15 @@ import {
   normalizeDesignation,
   areDesignationsMatching,
   smartSearchScore,
+  sortLinesByEmplacementPriority,
+  normalizeClientEntityKey,
+  isSameClientEntity,
 } from './logic';
 import { importBills } from './importer';
+import { detectWilaya } from './wilayas';
+import { checkReferenceInBill } from './rangeShortcuts';
+import { resolveDocumentType } from './excelExport';
+import { addCountEvent } from './hooks';
 import type { OrderLine, CountEvent } from './types';
 
 function makeLine(overrides: Partial<OrderLine> = {}): OrderLine {
@@ -532,6 +539,191 @@ describe('Edge Case: Product Historically Had a Code and Now Does Not', () => {
     await linkLegacyReference(lineId, null);
     updated = await db.orderLines.get(lineId);
     expect(updated?.historicalReference).toBeNull();
+  });
+});
+
+describe('User Ergonomic Fixes & HQ Revision Tests', () => {
+  it('normalizes client entity names to group multiple bills under a single card', () => {
+    const key1 = normalizeClientEntityKey('BLEU BLANC NAKHIL');
+    const key2 = normalizeClientEntityKey('BLEU  BLANC   NAKHIL');
+    const key3 = normalizeClientEntityKey('BLEU BLANC NAKHIL (ORAN)');
+    const key4 = normalizeClientEntityKey('BLEU BLANC NAKHIL\u00a0');
+    const key5 = normalizeClientEntityKey('bleu blanc nakhil');
+
+    expect(key1).toBe('BLEU BLANC NAKHIL');
+    expect(key2).toBe('BLEU BLANC NAKHIL');
+    expect(key3).toBe('BLEU BLANC NAKHIL');
+    expect(key4).toBe('BLEU BLANC NAKHIL');
+    expect(key5).toBe('BLEU BLANC NAKHIL');
+    expect(normalizeClientEntityKey(null)).toBe('CLIENT DIVERS');
+
+    // Legal prefix stripping & matching
+    expect(normalizeClientEntityKey('SARL BLEU BLANC NAKHIL')).toBe('BLEU BLANC NAKHIL');
+    expect(normalizeClientEntityKey('ETS MOHAMED BENALI')).toBe('MOHAMED BENALI');
+    expect(normalizeClientEntityKey('KRAL MARKET (GHELIZANE)')).toBe('KRAL MARKET');
+
+    // isSameClientEntity verification
+    expect(isSameClientEntity('BLEU BLANC NAKHIL', 'SARL BLEU BLANC NAKHIL')).toBe(true);
+    expect(isSameClientEntity('ETS MOHAMED BENALI', 'MOHAMED BENALI')).toBe(true);
+    expect(isSameClientEntity('KRAL MARKET (GHELIZANE)', 'KRAL MARKET')).toBe(true);
+    expect(isSameClientEntity('CLIENT DIVERS', 'BLEU BLANC NAKHIL')).toBe(false);
+    expect(isSameClientEntity('CLIENT DIVERS', 'CLIENT DIVERS')).toBe(true);
+    expect(isSameClientEntity('MOHAMED BENALI', 'FATIMA ZOHRA')).toBe(false);
+  });
+
+  it('prioritizes products with known warehouse zones above unassigned ones', () => {
+    const lines: OrderLine[] = [
+      makeLine({ id: 1, no: '1', warehouseZone: null }),
+      makeLine({ id: 2, no: '2', warehouseZone: 'CH_NW' }),
+      makeLine({ id: 3, no: '3', warehouseZone: null, reference: 'REF-PROFILE-ZONE' }),
+      makeLine({ id: 4, no: '4', warehouseZone: null }),
+    ];
+
+    const profileMap = new Map<string, { warehouseZone?: string | null }>([
+      ['REF-PROFILE-ZONE', { warehouseZone: 'CO_R2' }],
+    ]);
+
+    const sorted = sortLinesByEmplacementPriority(lines, profileMap);
+    // Lines 2 and 3 have zones (direct or profile), so they should appear before lines 1 and 4
+    expect(sorted.map((l) => l.id)).toEqual([2, 3, 1, 4]);
+  });
+
+  it('supports bon de transfert document type and detects TR/ and BT/ documents', async () => {
+    // 1. Export resolution
+    expect(resolveDocumentType('TR/ALG26/00075', 'TRANSFERT ALGER VERS ORAN')).toBe('bon_transfert');
+    expect(resolveDocumentType('BT/2026/012', 'Navette Dépôt')).toBe('bon_transfert');
+
+    // 2. Import detection
+    const result = await importBills({
+      bills: [
+        {
+          billNumber: 'TR/ALG26/00075',
+          client: 'ORAN MESSERGHINE DEPOT',
+          lines: [
+            {
+              no: '1',
+              reference: '70518',
+              designation: 'TROUSSE DOUBLE 2 COMPARTIMENTS',
+              quantity: 50,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.bills.length).toBe(1);
+    expect(result.bills[0].documentType).toBe('bon_transfert');
+  });
+
+  it('detects Relizane (48) for KRAL MARKET (GHELIZANE) without false positive on 08 or postal codes', () => {
+    // City name Ghelizane / Relizane
+    const resRelizane = detectWilaya('KRAL MARKET (GHELIZANE)');
+    expect(resRelizane?.code).toBe('48');
+    expect(resRelizane?.name).toBe('Relizane');
+
+    // Explicit code with parens
+    const resTiaret = detectWilaya('ETB TIARET 14 - TIARET');
+    expect(resTiaret?.code).toBe('14');
+    expect(resTiaret?.name).toBe('Tiaret');
+
+    // Numbers in BC or BL like "04366" or "08123" without wilaya context should NOT trigger Wilaya 04 or 08
+    const resOrderNum = detectWilaya('COMMANDE N° 04366 GROS');
+    expect(resOrderNum).toBeNull();
+
+    const resRefNum = detectWilaya('REF 08123 STYLO BILLE');
+    expect(resRefNum).toBeNull();
+  });
+
+  it('does not trigger Skip-Guide as absent when query is a partial match of an existing reference', () => {
+    const line = makeLine({
+      no: '1',
+      reference: '70518',
+      designation: 'TROUSSE DOUBLE COMPARTIMENT',
+    });
+
+    // Partial match '518' is part of '70518'
+    const partialCheck = checkReferenceInBill('518', [line]);
+    expect(partialCheck.isSkipped).toBe(false);
+    expect(partialCheck.matchingLine?.reference).toBe('70518');
+
+    // Exact match
+    const exactCheck = checkReferenceInBill('70518', [line]);
+    expect(exactCheck.isSkipped).toBe(false);
+    expect(exactCheck.matchingLine?.reference).toBe('70518');
+
+    // Completely absent reference
+    const absentCheck = checkReferenceInBill('99999', [line]);
+    expect(absentCheck.isSkipped).toBe(true);
+    expect(absentCheck.matchingLine).toBeNull();
+  });
+
+  it('tracks HQ revision diff and alerts warehouse liaison when an in-progress bill is modified by HQ', async () => {
+    // 1. Initial import of bill
+    const initialImport = await importBills({
+      bills: [
+        {
+          billNumber: 'BL-HQ-TEST-01',
+          client: 'CLIENT REVISION TEST',
+          lines: [
+            { no: '1', reference: 'REF-A', designation: 'Article A', quantity: 10 },
+            { no: '2', reference: 'REF-B', designation: 'Article B', quantity: 5 },
+          ],
+        },
+      ],
+    });
+
+    const bill = initialImport.bills[0];
+    const initialLines = await db.orderLines.where('billId').equals(bill.id!).toArray();
+    const lineA = initialLines.find((l) => l.reference === 'REF-A')!;
+
+    // 2. Worker performs preparation count on Line A
+    await addCountEvent(bill.id!, lineA.id!, 'preparation', 10);
+
+    // 3. HQ modifies the bill:
+    // - REF-A quantity decreased from 10 to 4 (-6)
+    // - REF-B removed
+    // - REF-C added with quantity 15
+    const reimportResult = await importBills({
+      bills: [
+        {
+          billNumber: 'BL-HQ-TEST-01',
+          client: 'CLIENT REVISION TEST',
+          lines: [
+            { no: '1', reference: 'REF-A', designation: 'Article A', quantity: 4 },
+            { no: '3', reference: 'REF-C', designation: 'Article C', quantity: 15 },
+          ],
+        },
+      ],
+    });
+
+    expect(reimportResult.bills.length).toBe(1);
+    const updatedBill = await db.bills.get(bill.id!);
+    expect(updatedBill).toBeDefined();
+    expect(updatedBill?.hqRevision).toBeDefined();
+    expect(updatedBill?.hqRevision?.acknowledged).toBe(false);
+
+    const changes = updatedBill?.hqRevision?.changes || [];
+    expect(changes.length).toBe(3);
+
+    // Quantity changed for REF-A
+    const changeA = changes.find((c) => c.reference === 'REF-A');
+    expect(changeA).toBeDefined();
+    expect(changeA?.type).toBe('quantity_changed');
+    expect(changeA?.oldQty).toBe(10);
+    expect(changeA?.newQty).toBe(4);
+    expect(changeA?.delta).toBe(-6);
+
+    // Removed REF-B
+    const changeB = changes.find((c) => c.reference === 'REF-B');
+    expect(changeB).toBeDefined();
+    expect(changeB?.type).toBe('removed');
+    expect(changeB?.oldQty).toBe(5);
+
+    // Added REF-C
+    const changeC = changes.find((c) => c.reference === 'REF-C');
+    expect(changeC).toBeDefined();
+    expect(changeC?.type).toBe('added');
+    expect(changeC?.newQty).toBe(15);
   });
 });
 

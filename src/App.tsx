@@ -45,6 +45,7 @@ import {
   saveProductProfile,
   searchLines,
   useBillTrips,
+  batchExpressValidateBill,
 } from './hooks';
 import { useHardwareScanner } from './useHardwareScanner';
 import {
@@ -63,6 +64,9 @@ import {
   planQRMerge,
   findNormalBackCamera,
   getAvailableBackCameras,
+  sortLinesByEmplacementPriority,
+  normalizeClientEntityKey,
+  isSameClientEntity,
   BackCameraInfo,
   QRSyncPayload,
 } from './logic';
@@ -106,6 +110,7 @@ import {
   IconBan,
   IconUndo,
   IconPlus,
+  IconDownload,
   IconChart,
   IconShare,
   IconFolder,
@@ -123,6 +128,9 @@ import {
   IconSettings,
   IconSend,
   IconBuilding,
+  IconChevronDown,
+  IconChevronRight,
+  IconClipboardCheck,
   IconMail,
   IconFileSpreadsheet,
   IconTable,
@@ -131,6 +139,8 @@ import {
   IconTrash,
   IconBag,
   IconRotate,
+  IconShield,
+  IconLock,
   IconTag,
   IconTransfer,
   IconWifiOff,
@@ -209,6 +219,11 @@ import { WarehouseZoneModal } from './WarehouseZoneModal';
 import { WarehouseZoneAssignmentModal } from './WarehouseZoneAssignmentModal';
 import { LegacyCodeModal } from './LegacyCodeModal';
 import { ResetPhaseModal } from './ResetPhaseModal';
+import { HqRevisionModal } from './HqRevisionModal';
+import { RenameClientModal } from './RenameClientModal';
+import { HoldToConfirmModal } from './HoldToConfirmModal';
+import { assertBillNotSealed, checkDoubleScanBounce } from './errorGuardrails';
+import { WarehouseSiteSelectorModal, getCustomWarehouseSites } from './WarehouseSiteSelectorModal';
 import {
   getZoneLabel,
   getZoneShortLabel,
@@ -216,6 +231,8 @@ import {
   getWarehouseCircuitDescription,
   findSimilarProductLocations,
   updateProductWarehouseZone,
+  formatLocationWithNote,
+  DEFAULT_WAREHOUSE_SITES,
   type SimilarLocationSuggestion,
 } from './warehouseZones';
 import {
@@ -247,7 +264,19 @@ import { SettingsModal } from './SettingsModal';
 import { StoreDemandModal } from './StoreDemandModal';
 import { StaffNavetteModal } from './StaffNavetteModal';
 import { DechargementModal } from './DechargementModal';
+import { AssignDriverModal } from './AssignDriverModal';
+import { WarehouseReceptionModal } from './WarehouseReceptionModal';
+import { AgentTourneeModal } from './AgentTourneeModal';
+import { B2BWholesaleScreen } from './B2BWholesaleScreen';
+import { CommercialFieldScreen } from './CommercialFieldScreen';
+import { B2CRetailScreen } from './B2CRetailScreen';
+import { WarehouseFinanceCockpit } from './WarehouseFinanceCockpit';
+import { NewProductIntakeModal } from './NewProductIntakeModal';
+import { AppModuleSwitcher } from './AppModuleSwitcher';
+import { WavePickingModal } from './WavePickingModal';
+import { KeyboardShortcutsHelperModal } from './KeyboardShortcutsHelperModal';
 import { FastScanQuantityCard } from './FastScanQuantityCard';
+import { LiveProductOcrModal } from './LiveProductOcrModal';
 import { ConformityDonutChart } from './ConformityDonutChart';
 import { ConcentricStageRings } from './ConcentricStageRings';
 import { WarehouseProcessFlow } from './WarehouseProcessFlow';
@@ -500,6 +529,12 @@ export default function App() {
           />
           <Route path="/history" element={<HistoryScreen />} />
           <Route path="/bill/:billId/extras" element={<ExtrasScreen setToast={setToast} />} />
+          <Route path="/client-bills/:clientKey" element={<ClientBillsScreen setToast={setToast} />} />
+          <Route path="/gate-check" element={<GateCheckScreen setToast={setToast} />} />
+          <Route path="/gros" element={<B2BWholesaleScreen setToast={setToast} />} />
+          <Route path="/commercial" element={<CommercialFieldScreen setToast={setToast} />} />
+          <Route path="/detail" element={<B2CRetailScreen setToast={setToast} />} />
+          <Route path="/cockpit" element={<WarehouseFinanceCockpit setToast={setToast} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </ErrorBoundary>
@@ -1130,17 +1165,38 @@ function HomeScreen({
   const bills = useSessionBills(session?.id);
   const allLines = useAllSessionLines(session?.id);
   const [homeSearch, setHomeSearch] = useState('');
+  const deferredHomeSearch = React.useDeferredValue(homeSearch);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [showManualBillModal, setShowManualBillModal] = useState(false);
   const [showStoreDemandModal, setShowStoreDemandModal] = useState(false);
   const [showStaffNavetteModal, setShowStaffNavetteModal] = useState(false);
   const [showDechargementModal, setShowDechargementModal] = useState(false);
+  const [showReceptionModal, setShowReceptionModal] = useState(false);
+  const [showAgentTourneeModal, setShowAgentTourneeModal] = useState(false);
   const [showZoneAssignmentModal, setShowZoneAssignmentModal] = useState(false);
+  const [showProductIntakeModal, setShowProductIntakeModal] = useState(false);
+  const [isRushMode, setIsRushMode] = useState<boolean>(() => {
+    return typeof localStorage !== 'undefined' && localStorage.getItem('pointage_rush_mode') === 'true';
+  });
+  const [showWaveModal, setShowWaveModal] = useState(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [showMoreToolsDrawer, setShowMoreToolsDrawer] = useState(false);
   const [showQuantities, setShowQuantities] = useState(() => localStorage.getItem('pointage_show_quantities') === 'true');
   const [activeOperator, setActiveOperatorState] = useState(() => getActiveOperator());
   const [operators, setOperators] = useState(() => loadOperatorsRoster());
   const [showOperatorModal, setShowOperatorModal] = useState(false);
+
+  const toggleRushMode = () => {
+    setIsRushMode((prev) => {
+      const next = !prev;
+      localStorage.setItem('pointage_rush_mode', String(next));
+      hapticTap('selection');
+      playSuccessChime();
+      showToast(next ? '⚡ Mode Rush Activé (Haute Cadence & Vue Compacte)' : 'Mode Standard restauré', setToast);
+      return next;
+    });
+  };
 
   const handleSelectOperator = (op: string) => {
     setActiveOperator(op);
@@ -1155,11 +1211,23 @@ function HomeScreen({
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.shiftKey && (e.key === 'Z' || e.key === 'z') && !e.ctrlKey && !e.altKey && !e.metaKey) {
-        const target = e.target as HTMLElement;
-        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
-          return;
-        }
+      const target = e.target as HTMLElement;
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || (target as any).isContentEditable);
+
+      if (e.altKey && (e.key === 'w' || e.key === 'W')) {
+        e.preventDefault();
+        setShowWaveModal((prev) => !prev);
+      } else if (e.altKey && (e.key === 'r' || e.key === 'R')) {
+        e.preventDefault();
+        toggleRushMode();
+      } else if (!isInput && e.key === '?') {
+        e.preventDefault();
+        setShowShortcutsModal(true);
+      } else if (e.key === 'Escape') {
+        setShowWaveModal(false);
+        setShowShortcutsModal(false);
+        setShowMoreToolsDrawer(false);
+      } else if (e.shiftKey && (e.key === 'Z' || e.key === 'z') && !e.ctrlKey && !e.altKey && !e.metaKey && !isInput) {
         e.preventDefault();
         setShowZoneAssignmentModal((prev) => !prev);
       }
@@ -1181,28 +1249,79 @@ function HomeScreen({
     getOrCreateSession();
   }, []);
 
+  const [activeWarehouseSite, setActiveWarehouseSite] = useState<string>(() => {
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem('pointage_active_site') || 'all';
+    }
+    return 'all';
+  });
+  const [showSiteModal, setShowSiteModal] = useState(false);
+
   const [billFilter, setBillFilter] = useState<'active' | 'archived'>('active');
 
-  const activeBills = bills.filter(b => b.status !== 'completed');
-  const archivedBills = bills.filter(b => b.status === 'completed');
+  const siteFilteredBills = React.useMemo(() => {
+    if (activeWarehouseSite === 'all') return bills;
+    return bills.filter((b) => {
+      if (activeWarehouseSite === 'oran_surface') {
+        return b.warehouseSite === 'oran_surface' || !b.warehouseSite;
+      }
+      return b.warehouseSite === activeWarehouseSite;
+    });
+  }, [bills, activeWarehouseSite]);
+
+  const activeBills = siteFilteredBills.filter((b) => b.status !== 'completed');
+  const archivedBills = siteFilteredBills.filter((b) => b.status === 'completed');
   const displayBills = billFilter === 'active' ? activeBills : archivedBills;
 
   const matchedBills = React.useMemo(() => {
-    if (!homeSearch.trim()) return [];
-    const q = homeSearch.trim().toLowerCase();
-    return bills.filter(
+    if (!deferredHomeSearch.trim()) return [];
+    const q = deferredHomeSearch.trim().toLowerCase();
+    return siteFilteredBills.filter(
       (b) =>
         b.billNumber.toLowerCase().includes(q) ||
         b.client.toLowerCase().includes(q) ||
+        (b.operationalClient && b.operationalClient.toLowerCase().includes(q)) ||
         (b.bcNumber && b.bcNumber.toLowerCase().includes(q)) ||
-        (b.wilaya && b.wilaya.toLowerCase().includes(q))
+        (b.wilaya && b.wilaya.toLowerCase().includes(q)) ||
+        (b.driverName && b.driverName.toLowerCase().includes(q))
     );
-  }, [homeSearch, bills]);
+  }, [deferredHomeSearch, siteFilteredBills]);
+
+  const matchedClientGroups = React.useMemo(() => {
+    if (matchedBills.length === 0) return [];
+    type Group = { client: string; canonicalKey: string; bills: Bill[] };
+    const groups: Group[] = [];
+    for (const b of matchedBills) {
+      const bClient = (b.client || 'CLIENT DIVERS').trim();
+      const existing = groups.find(
+        (g) =>
+          isSameClientEntity(g.client, bClient) ||
+          isSameClientEntity(g.canonicalKey, bClient) ||
+          g.bills.some((gb) => isSameClientEntity(gb.client, bClient))
+      );
+      if (existing) {
+        existing.bills.push(b);
+        const normExisting = normalizeClientEntityKey(existing.client);
+        const normB = normalizeClientEntityKey(bClient);
+        if (normB !== 'CLIENT DIVERS' && (normB.length < normExisting.length || normExisting === 'CLIENT DIVERS')) {
+          existing.client = normB;
+          existing.canonicalKey = normB;
+        }
+      } else {
+        groups.push({
+          client: bClient,
+          canonicalKey: normalizeClientEntityKey(bClient),
+          bills: [b],
+        });
+      }
+    }
+    return groups;
+  }, [matchedBills]);
 
   const matchedGlobalLines = React.useMemo(() => {
-    if (!homeSearch.trim() || !allLines) return [];
-    return searchLines(allLines, homeSearch, 'smart');
-  }, [homeSearch, allLines]);
+    if (!deferredHomeSearch.trim() || !allLines) return [];
+    return searchLines(allLines, deferredHomeSearch, 'smart');
+  }, [deferredHomeSearch, allLines]);
 
   const [billToArchive, setBillToArchive] = useState<Bill | null>(null);
 
@@ -1237,18 +1356,42 @@ function HomeScreen({
     showToast(`Bon ${b?.billNumber || ''} restauré dans les bons actifs`, setToast);
   };
 
-  // Group displayed bills by client entity
+  // Group displayed bills by place / client entity so all bills to the same person form ONE card
   const clientGroups = React.useMemo(() => {
-    const map = new Map<string, Bill[]>();
+    type Group = {
+      client: string;
+      canonicalKey: string;
+      bills: Bill[];
+    };
+    const groups: Group[] = [];
+
     for (const b of displayBills) {
-      const key = (b.client || 'CLIENT DIVERS').trim().toUpperCase();
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(b);
+      const bClient = (b.client || 'CLIENT DIVERS').trim();
+      const existing = groups.find(
+        (g) =>
+          isSameClientEntity(g.client, bClient) ||
+          isSameClientEntity(g.canonicalKey, bClient) ||
+          g.bills.some((gb) => isSameClientEntity(gb.client, bClient))
+      );
+      if (existing) {
+        existing.bills.push(b);
+        // Prefer shorter / cleaner root entity name if non-generic
+        const normExisting = normalizeClientEntityKey(existing.client);
+        const normB = normalizeClientEntityKey(bClient);
+        if (normB !== 'CLIENT DIVERS' && (normB.length < normExisting.length || normExisting === 'CLIENT DIVERS')) {
+          existing.client = normB;
+          existing.canonicalKey = normB;
+        }
+      } else {
+        groups.push({
+          client: bClient,
+          canonicalKey: normalizeClientEntityKey(bClient),
+          bills: [b],
+        });
+      }
     }
-    return Array.from(map.entries()).map(([client, clientBills]) => ({
-      client,
-      bills: clientBills,
-    }));
+
+    return groups;
   }, [displayBills]);
 
   // Detect duplicate BLs / BCs across active bills
@@ -1285,7 +1428,35 @@ function HomeScreen({
   return (
     <>
       <header className="app-header">
-        <BrandWordmark size={25} onClick={() => nav('/')} />
+        <div className="flex items-center gap-2">
+          <BrandWordmark size={25} onClick={() => nav('/')} />
+          {/* Warehouse Site Switcher Pill */}
+          <button
+            type="button"
+            className="btn btn-ghost flex items-center gap-1"
+            style={{
+              padding: '4px 9px',
+              borderRadius: 9999,
+              background: 'rgba(255, 255, 255, 0.06)',
+              border: '1px solid var(--border)',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              color: 'var(--text-primary)',
+            }}
+            onClick={() => setShowSiteModal(true)}
+            title="Changer de site / dépôt actif"
+          >
+            <IconBuilding size={13} style={{ color: 'var(--accent)' }} />
+            <span className="truncate" style={{ maxWidth: 110 }}>
+              {activeWarehouseSite === 'all'
+                ? 'Tous dépôts'
+                : DEFAULT_WAREHOUSE_SITES.find((s) => s.id === activeWarehouseSite)?.name.replace(' — ', ' ') ||
+                  getCustomWarehouseSites().find((s) => s.id === activeWarehouseSite)?.name ||
+                  'Dépôt'}
+            </span>
+            <IconChevronDown size={11} style={{ opacity: 0.6 }} />
+          </button>
+        </div>
 
         <div className="header-meta">
           <OperatorHeaderButton
@@ -1316,45 +1487,170 @@ function HomeScreen({
 
       <div className="app-content">
 
-        {/* Quick Tools: Remontées Magasin, Navette Chauffeurs & Déchargement Quai */}
-        <div className="apple-quick-bar">
+        {/* Executive Module Navigation (Gros B2B, Commercial, Dépôt, Cockpit, Détail) */}
+        <div style={{ marginBottom: 12 }}>
+          <AppModuleSwitcher variant="header_pills" />
+        </div>
+
+        {/* High-Velocity Rush Operations & Shortcuts Bar */}
+        <div className="apple-quick-bar" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+          {/* Rush Mode Toggle */}
           <button
             type="button"
             className="apple-quick-btn"
-            onClick={() => setShowStoreDemandModal(true)}
-            title="Remontées magasins et besoins surface"
+            onClick={toggleRushMode}
+            title="Activer/Désactiver le Mode Rush (Haute cadence, affichage compact & raccourcis Alt+R)"
+            style={{
+              borderColor: isRushMode ? '#f59e0b' : 'transparent',
+              backgroundColor: isRushMode ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+            }}
           >
-            <IconStore size={16} />
-            <span>Demandes</span>
+            <IconZap size={16} style={{ color: isRushMode ? '#f59e0b' : 'var(--text-muted)' }} />
+            <span style={{ color: isRushMode ? '#f59e0b' : 'inherit', fontWeight: isRushMode ? 800 : 600 }}>
+              {isRushMode ? 'Rush ACTIF' : 'Mode Rush'}
+            </span>
           </button>
+
+          {/* Wave Picking Shortcut */}
           <button
             type="button"
             className="apple-quick-btn"
-            onClick={() => setShowStaffNavetteModal(true)}
-            title="Navette & covoiturage chauffeurs"
+            onClick={() => setShowWaveModal(true)}
+            title="Vague de Préparation Consolidée (Raccourci Alt+W) : regroupe les articles par allée"
+            style={{
+              backgroundColor: 'rgba(59, 130, 246, 0.15)',
+              borderColor: 'rgba(59, 130, 246, 0.35)',
+            }}
           >
-            <IconBus size={16} />
-            <span>Navette</span>
+            <IconBox size={16} style={{ color: '#60a5fa' }} />
+            <span style={{ color: '#60a5fa', fontWeight: 800 }}>
+              Vague ({activeBills.length} BLs)
+            </span>
           </button>
+
+          {/* New Product with AI */}
           <button
             type="button"
             className="apple-quick-btn"
-            onClick={() => setShowDechargementModal(true)}
-            title="Déchargement quai et arrivées camions"
+            onClick={() => setShowProductIntakeModal(true)}
+            title="Saisie nouveau produit accélérée par IA avec validation zéro erreur"
           >
-            <IconTruck size={16} />
-            <span>Déchargement</span>
+            <IconSparkles size={16} style={{ color: '#a855f7' }} />
+            <span>Nouv. Produit</span>
           </button>
+
+          {/* Cockpit Cash */}
           <button
             type="button"
             className="apple-quick-btn"
-            onClick={() => setShowZoneAssignmentModal(true)}
-            title="Cartographie & Emplacements Entrepôt"
+            onClick={() => nav('/cockpit')}
+            title="Cockpit de gestion & valorisation financière du stock"
           >
-            <IconCompass size={16} />
-            <span>Cartographie</span>
+            <IconTrendingUp size={16} style={{ color: '#06b6d4' }} />
+            <span>Cockpit Cash</span>
+          </button>
+
+          {/* Keyboard Shortcuts Helper */}
+          <button
+            type="button"
+            className="apple-quick-btn"
+            onClick={() => setShowShortcutsModal(true)}
+            title="Guide des raccourcis clavier & douchette (Touche ?)"
+          >
+            <IconHelp size={16} />
+            <span>Raccourcis (?)</span>
+          </button>
+
+          {/* Expand / Collapse Secondary Tools */}
+          <button
+            type="button"
+            className="apple-quick-btn"
+            onClick={() => setShowMoreToolsDrawer((prev) => !prev)}
+            title="Afficher/Masquer les outils secondaires (Demandes, Navette, Déchargement, Réception...)"
+            style={{
+              backgroundColor: showMoreToolsDrawer ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+            }}
+          >
+            <IconLayers size={16} />
+            <span>{showMoreToolsDrawer ? 'Moins d’outils' : 'Plus d’outils'}</span>
           </button>
         </div>
+
+        {/* Collapsible Secondary Administrative Tools Drawer */}
+        {showMoreToolsDrawer && (
+          <div
+            className="p-2.5 rounded-2xl mb-3 flex items-center gap-2 overflow-x-auto transition-all"
+            style={{
+              backgroundColor: 'rgba(0, 0, 0, 0.4)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              backdropFilter: 'blur(10px)',
+            }}
+          >
+            <button
+              type="button"
+              className="apple-quick-btn shrink-0"
+              onClick={() => setShowStoreDemandModal(true)}
+              title="Remontées magasins et besoins surface"
+            >
+              <IconStore size={15} />
+              <span>Demandes</span>
+            </button>
+            <button
+              type="button"
+              className="apple-quick-btn shrink-0"
+              onClick={() => setShowStaffNavetteModal(true)}
+              title="Navette & covoiturage chauffeurs"
+            >
+              <IconBus size={15} />
+              <span>Navette</span>
+            </button>
+            <button
+              type="button"
+              className="apple-quick-btn shrink-0"
+              onClick={() => setShowDechargementModal(true)}
+              title="Déchargement quai et arrivées camions"
+            >
+              <IconTruck size={15} />
+              <span>Déchargement</span>
+            </button>
+            <button
+              type="button"
+              className="apple-quick-btn shrink-0"
+              onClick={() => setShowReceptionModal(true)}
+              title="Réception conteneurs, fournitures scolaires & réconciliation écarts"
+            >
+              <IconBox size={15} />
+              <span>Réception</span>
+            </button>
+            <button
+              type="button"
+              className="apple-quick-btn shrink-0"
+              onClick={() => setShowAgentTourneeModal(true)}
+              title="Échantillons Showroom, Librairie El Feth & Agents à tourner"
+            >
+              <IconBag size={15} />
+              <span>Échantillons</span>
+            </button>
+            <button
+              type="button"
+              className="apple-quick-btn shrink-0"
+              onClick={() => setShowZoneAssignmentModal(true)}
+              title="Cartographie & Emplacements Entrepôt"
+            >
+              <IconCompass size={15} />
+              <span>Cartographie</span>
+            </button>
+            <button
+              type="button"
+              className="apple-quick-btn shrink-0"
+              onClick={() => nav('/gate-check')}
+              title="Contrôle sortie camion & vérification factures/BLs papier"
+            >
+              <IconClipboardCheck size={15} />
+              <span>Contrôle Sortie</span>
+            </button>
+          </div>
+        )}
 
         {/* BL Filter Tabs — Apple Segmented Control */}
         <div className="apple-segmented-bar">
@@ -1485,71 +1781,152 @@ function HomeScreen({
               <button className="text-accent text-xs font-bold" onClick={() => setHomeSearch('')}>Voir tous les bons</button>
             </div>
 
-            {/* Matched Bills (Active & Archived) */}
-            {matchedBills.length > 0 && (
+            {/* Matched Bills Grouped by Client/Place (Active & Archived) */}
+            {matchedClientGroups.length > 0 && (
               <div className="flex flex-col gap-2 mb-2">
-                {matchedBills.map((b) => (
-                  <div
-                    key={b.id}
-                    className="card p-3 flex items-center justify-between cursor-pointer"
-                    style={{
-                      background: 'var(--bg-surface)',
-                      border: '1px solid var(--glass-border-subtle)',
-                      borderRadius: 16,
-                    }}
-                    onClick={() => nav(`/bill/${b.id}`)}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-sm">{b.billNumber}</span>
-                        <span className="text-xs text-muted truncate">• {b.client}</span>
-                        {b.status === 'completed' && (
-                          <span
-                            className="badge flex items-center gap-1"
-                            style={{
-                              background: 'rgba(255, 255, 255, 0.08)',
-                              color: 'var(--text-muted)',
-                              fontSize: '0.65rem',
-                              fontWeight: 700,
+                {matchedClientGroups.map((group) => {
+                  const isSingle = group.bills.length === 1;
+                  const singleBill = group.bills[0];
+                  const hasArchived = group.bills.some((b) => b.status === 'completed');
+                  const hasActive = group.bills.some((b) => b.status === 'active');
+                  const wilaya = group.bills.find((b) => b.wilaya)?.wilaya;
+
+                  if (isSingle) {
+                    return (
+                      <div
+                        key={singleBill.id}
+                        className="card p-3 flex items-center justify-between cursor-pointer"
+                        style={{
+                          background: 'var(--bg-surface)',
+                          border: '1px solid var(--glass-border-subtle)',
+                          borderRadius: 16,
+                        }}
+                        onClick={() => nav(`/bill/${singleBill.id}`)}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-sm">{singleBill.billNumber}</span>
+                            <span className="text-xs text-muted truncate">• {singleBill.client}</span>
+                            {singleBill.status === 'completed' && (
+                              <span
+                                className="badge flex items-center gap-1"
+                                style={{
+                                  background: 'rgba(255, 255, 255, 0.08)',
+                                  color: 'var(--text-muted)',
+                                  fontSize: '0.65rem',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                <IconClipboard size={10} /> Dans l’Historique
+                              </span>
+                            )}
+                            {singleBill.status === 'active' && (
+                              <span
+                                className="badge flex items-center gap-1"
+                                style={{
+                                  background: 'var(--accent-glow)',
+                                  color: 'var(--accent)',
+                                  fontSize: '0.65rem',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                <IconBox size={10} /> Bon Actif
+                              </span>
+                            )}
+                          </div>
+                          {singleBill.wilaya && (
+                            <span className="text-xs text-muted mt-0.5 block">{singleBill.wilaya}</span>
+                          )}
+                        </div>
+                        {singleBill.status === 'completed' && (
+                          <button
+                            type="button"
+                            className="btn btn-xs btn-primary flex items-center gap-1 ml-2"
+                            style={{ flexShrink: 0 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRestoreBill(singleBill.id!);
                             }}
+                            title="Restaurer dans les bons actifs"
                           >
-                            <IconClipboard size={10} /> Dans l’Historique
-                          </span>
-                        )}
-                        {b.status === 'active' && (
-                          <span
-                            className="badge flex items-center gap-1"
-                            style={{
-                              background: 'var(--accent-glow)',
-                              color: 'var(--accent)',
-                              fontSize: '0.65rem',
-                              fontWeight: 700,
-                            }}
-                          >
-                            <IconBox size={10} /> Bon Actif
-                          </span>
+                            <IconUndo size={11} /> Restaurer
+                          </button>
                         )}
                       </div>
-                      {b.wilaya && (
-                        <span className="text-xs text-muted mt-0.5 block">{b.wilaya}</span>
-                      )}
+                    );
+                  }
+
+                  // Multiple bills from same place matching search -> Single Grouped Card
+                  return (
+                    <div
+                      key={group.client}
+                      className="card p-3 cursor-pointer"
+                      style={{
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--glass-border-subtle)',
+                        borderRadius: 18,
+                        boxShadow: '0 2px 10px rgba(0,0,0,0.18)',
+                      }}
+                      onClick={() => nav(`/client-bills/${encodeURIComponent(group.client)}`)}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
+                              {group.client}
+                            </span>
+                            <span
+                              className="badge flex items-center gap-1"
+                              style={{
+                                background: 'rgba(59, 130, 246, 0.18)',
+                                color: '#3b82f6',
+                                fontSize: '0.68rem',
+                                fontWeight: 800,
+                              }}
+                            >
+                              <IconBox size={11} /> {group.bills.length} Bons groupés
+                            </span>
+                            {hasActive && (
+                              <span
+                                className="badge"
+                                style={{ background: 'var(--accent-glow)', color: 'var(--accent)', fontSize: '0.62rem', fontWeight: 700 }}
+                              >
+                                Actifs
+                              </span>
+                            )}
+                            {hasArchived && (
+                              <span
+                                className="badge"
+                                style={{ background: 'rgba(255, 255, 255, 0.08)', color: 'var(--text-muted)', fontSize: '0.62rem', fontWeight: 700 }}
+                              >
+                                Historique
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted truncate mt-1">
+                            {group.bills.map((b) => (b.billNumber === 'NOTE-MANUSCRITE' ? 'Manuscrit' : b.billNumber)).join(' • ')}
+                            {wilaya && ` — ${wilaya}`}
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: '50%',
+                            background: 'var(--accent-glow)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'var(--accent)',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <IconChevronRight size={16} />
+                        </div>
+                      </div>
                     </div>
-                    {b.status === 'completed' && (
-                      <button
-                        type="button"
-                        className="btn btn-xs btn-primary flex items-center gap-1 ml-2"
-                        style={{ flexShrink: 0 }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRestoreBill(b.id!);
-                        }}
-                        title="Restaurer dans les bons actifs"
-                      >
-                        <IconUndo size={11} /> Restaurer
-                      </button>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -1662,33 +2039,58 @@ function HomeScreen({
               ) : undefined
             }
           />
+        ) : isRushMode && billFilter === 'active' ? (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between px-1 mb-1">
+              <span className="text-xs font-bold text-amber-400 flex items-center gap-1">
+                <IconZap size={14} /> Mode Rush : {activeBills.length} Commandes en cadence
+              </span>
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost text-blue-400 text-[11px] font-bold"
+                onClick={() => setShowWaveModal(true)}
+              >
+                Ouvrir Vague ({activeBills.length}) →
+              </button>
+            </div>
+            {activeBills.map((b) => (
+              <RushBillRow
+                key={b.id}
+                bill={b}
+                onOpen={() => nav(`/bill/${b.id}`)}
+                onExpressValidate={async () => {
+                  if (!b.id) return;
+                  const res = await batchExpressValidateBill(b.id, 'preparation', activeOperator);
+                  playSuccessChime();
+                  hapticTap('medium');
+                  showToast(
+                    {
+                      message: `Bon ${b.billNumber} validé express (${res.unitsCount} pcs)`,
+                      onUndo: async () => {
+                        await resetBillStageCounts(b.id!, 'preparation');
+                        showToast(`Validation express annulée pour ${b.billNumber}`, setToast);
+                      },
+                      undoLabel: 'Annuler (5s)',
+                    },
+                    setToast as any,
+                    5000
+                  );
+                }}
+              />
+            ))}
+          </div>
         ) : (
           <>
-            {clientGroups.map(group => {
-              if (group.bills.length === 1) {
-                return (
-                  <BillCard
-                    key={group.bills[0].id}
-                    bill={group.bills[0]}
-                    onClick={() => nav(`/bill/${group.bills[0].id}`)}
-                    onArchive={() => handleRequestArchiveBill(group.bills[0].id!)}
-                    onRestore={() => handleRestoreBill(group.bills[0].id!)}
-                  />
-                );
-              }
-              return (
-                <ClientGroupCard
-                  key={group.client}
-                  client={group.client}
-                  bills={group.bills}
-                  activeOperator={activeOperator}
-                  onSelectBill={(id) => nav(`/bill/${id}`)}
-                  onArchiveBill={handleRequestArchiveBill}
-                  onRestoreBill={handleRestoreBill}
-                  onBatchAssigned={() => showToast(`Commande de ${group.client} assignée à ${activeOperator}`, setToast)}
-                />
-              );
-            })}
+            {clientGroups.map((group) => (
+              <ClientCard
+                key={group.client}
+                client={group.client}
+                bills={group.bills}
+                isArchived={billFilter === 'archived'}
+                onArchiveSingleBill={handleRequestArchiveBill}
+                onRestoreSingleBill={handleRestoreBill}
+              />
+            ))}
           </>
         )}
 
@@ -1749,6 +2151,24 @@ function HomeScreen({
         onConfirm={handleConfirmArchive}
       />
 
+      <WarehouseSiteSelectorModal
+        isOpen={showSiteModal}
+        onClose={() => setShowSiteModal(false)}
+        activeSite={activeWarehouseSite}
+        onSelectSite={(siteId) => {
+          setActiveWarehouseSite(siteId);
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('pointage_active_site', siteId);
+          }
+          showToast(
+            siteId === 'all'
+              ? 'Affichage de tous les dépôts'
+              : `Site actif : ${DEFAULT_WAREHOUSE_SITES.find((s) => s.id === siteId)?.name || siteId}`,
+            setToast
+          );
+        }}
+      />
+
       <ErrorBoundary fallbackTitle="Erreur d'affichage du module">
         <StoreDemandModal
           isOpen={showStoreDemandModal}
@@ -1769,6 +2189,21 @@ function HomeScreen({
           onToast={(m) => showToast(m, setToast)}
         />
 
+        <WarehouseReceptionModal
+          isOpen={showReceptionModal}
+          onClose={() => setShowReceptionModal(false)}
+          activeOperator={activeOperator}
+          onToast={(m) => showToast(m, setToast)}
+          onOpenProductIntake={() => setShowProductIntakeModal(true)}
+        />
+
+        <AgentTourneeModal
+          isOpen={showAgentTourneeModal}
+          onClose={() => setShowAgentTourneeModal(false)}
+          activeOperator={activeOperator}
+          onToast={(m) => showToast(m, setToast)}
+        />
+
         <WarehouseZoneAssignmentModal
           isOpen={showZoneAssignmentModal}
           onClose={() => setShowZoneAssignmentModal(false)}
@@ -1779,6 +2214,27 @@ function HomeScreen({
               setToast
             );
           }}
+        />
+
+        <NewProductIntakeModal
+          isOpen={showProductIntakeModal}
+          onClose={() => setShowProductIntakeModal(false)}
+          setToast={(m) => showToast(m, setToast)}
+          activeOperator={activeOperator}
+        />
+
+        <WavePickingModal
+          isOpen={showWaveModal}
+          onClose={() => setShowWaveModal(false)}
+          bills={siteFilteredBills}
+          lines={allLines || []}
+          activeOperator={activeOperator}
+          onToast={(m) => showToast(m, setToast)}
+        />
+
+        <KeyboardShortcutsHelperModal
+          isOpen={showShortcutsModal}
+          onClose={() => setShowShortcutsModal(false)}
         />
       </ErrorBoundary>
     </>
@@ -2101,168 +2557,403 @@ function ArchiveConfirmModal({
   );
 }
 
-// ---- Client Group Accordion Card (With Cross-Bill Search) ----
-function ClientGroupCard({
-  client,
-  bills,
-  activeOperator,
-  onSelectBill,
-  onArchiveBill,
-  onRestoreBill,
-  onBatchAssigned,
+// ---- High-Velocity Rush Row (Compact High-Density Card for High Volume) ----
+function RushBillRow({
+  bill,
+  onOpen,
+  onExpressValidate,
 }: {
-  client: string;
-  bills: Bill[];
-  activeOperator?: string;
-  onSelectBill: (id: number) => void;
-  onArchiveBill?: (id: number) => void;
-  onRestoreBill?: (id: number) => void;
-  onBatchAssigned?: () => void;
+  bill: Bill;
+  onOpen: () => void;
+  onExpressValidate: () => void;
 }) {
-  const nav = useNavigate();
-  const [expanded, setExpanded] = useState(true);
-  const [groupSearch, setGroupSearch] = useState('');
-  const entityLines = useEntityLines(client);
+  const lines = useLiveQuery(() => db.orderLines.where('billId').equals(bill.id!).toArray()) || [];
+  const events = useLiveQuery(() => db.countEvents.where('billId').equals(bill.id!).toArray()) || [];
 
-  const matchedLines = React.useMemo(() => {
-    if (!groupSearch.trim() || !entityLines) return [];
-    return searchLines(entityLines, groupSearch, 'smart');
-  }, [groupSearch, entityLines]);
+  const totalOrdered = React.useMemo(() => lines.reduce((s, l) => s + l.orderedQty, 0), [lines]);
+  const prepCount = React.useMemo(() => sumStageEvents(events, 'preparation'), [events]);
+  const percent = totalOrdered > 0 ? Math.min(100, Math.round((prepCount / totalOrdered) * 100)) : 100;
+  const isDone = percent === 100;
 
   return (
-    <div className="client-group-block mb-3">
-      <div
-        className="flex justify-between items-center cursor-pointer py-1 px-1 mb-2"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <div className="flex items-center gap-2">
-          <IconBuilding size={18} style={{ color: 'var(--accent)' }} />
-          <div>
-            <div className="font-bold text-sm" style={{ letterSpacing: '0.3px' }}>{client}</div>
-            <div className="text-xs text-muted">{bills.length} bon{bills.length > 1 ? 's' : ''}</div>
-          </div>
+    <div
+      className="flex items-center justify-between gap-2 p-2.5 rounded-xl cursor-pointer transition-all"
+      style={{
+        backgroundColor: 'var(--bg-surface)',
+        border: '1px solid var(--border)',
+        minHeight: 52,
+      }}
+      onClick={onOpen}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-mono font-extrabold text-xs text-white">
+            {bill.billNumber}
+          </span>
+          <span className="text-xs font-semibold text-muted truncate max-w-[150px]">
+            {bill.client}
+          </span>
+          {bill.wilaya && (
+            <span
+              style={{
+                fontSize: '0.62rem',
+                padding: '1px 6px',
+                borderRadius: 4,
+                backgroundColor: 'rgba(168, 85, 247, 0.15)',
+                color: '#c084fc',
+                fontWeight: 700,
+              }}
+            >
+              {bill.wilaya}
+            </span>
+          )}
         </div>
-        <span
-          className="badge"
-          style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            color: 'var(--text-primary)',
-            fontSize: '0.72rem',
-            cursor: 'pointer',
-          }}
-        >
-          {expanded ? '▲ Replier' : `▼ ${bills.length} BLs`}
-        </span>
+        <div className="flex items-center gap-2 mt-1">
+          <div
+            style={{
+              flex: 1,
+              maxWidth: 110,
+              height: 4,
+              borderRadius: 2,
+              backgroundColor: 'rgba(255,255,255,0.08)',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                width: `${percent}%`,
+                height: '100%',
+                backgroundColor: isDone ? '#10b981' : '#3b82f6',
+              }}
+            />
+          </div>
+          <span className="text-[10px] font-mono text-muted">
+            {prepCount}/{totalOrdered} pcs ({percent}%)
+          </span>
+        </div>
       </div>
 
-      {expanded && (
-        <div className="flex flex-col gap-2">
-          {bills.length > 1 && activeOperator && (
-            <div className="flex items-center justify-between mb-1 px-1 text-xs">
-              <span className="text-muted">Commande ({bills.length} bons)</span>
-              <button
-                type="button"
-                className="btn btn-secondary btn-xs flex items-center gap-1"
-                style={{ fontSize: '0.72rem', padding: '3px 8px' }}
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  const ids = bills.map((b) => b.id!).filter(Boolean);
-                  await assignBatchBillsStageOperator(ids, 'preparation', activeOperator);
-                  if (onBatchAssigned) onBatchAssigned();
-                }}
-                title={`Attribuer les ${bills.length} bons à ${activeOperator}`}
-              >
-                <IconUser size={12} style={{ color: 'var(--accent)' }} />
-                <span>Assigner à {activeOperator}</span>
-              </button>
-            </div>
-          )}
-
-          {bills.length > 1 && (
-            <div className="search-wrapper mb-1" onClick={(e) => e.stopPropagation()}>
-              <input
-                className="search-input"
-                style={{ height: 38, fontSize: '0.82rem', paddingLeft: 12 }}
-                placeholder={`Rechercher un article dans les ${bills.length} bons de ${client}...`}
-                value={groupSearch}
-                onChange={(e) => setGroupSearch(e.target.value)}
-              />
-              {groupSearch && (
-                <button
-                  type="button"
-                  className="search-clear-btn"
-                  onClick={() => setGroupSearch('')}
-                  aria-label="Effacer"
-                >
-                  <IconX size={14} />
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* If searching within this client's bills, display matching lines across bills */}
-          {groupSearch.trim() ? (
-            <div className="flex flex-col gap-2">
-              <div className="text-xs text-muted flex justify-between">
-                <span>{matchedLines.length} article(s) trouvé(s) chez {client}</span>
-                <button className="text-accent text-xs font-bold" onClick={() => setGroupSearch('')}>Voir les bons</button>
-              </div>
-              {matchedLines.length === 0 ? (
-                <div className="card text-center text-xs text-muted py-3">
-                  Aucun article correspondant dans les {bills.length} bons de {client}
-                </div>
-              ) : (
-                matchedLines.map((line) => {
-                  const parentBill = bills.find((b) => b.id === line.billId);
-                  const targetStage = sessionStorage.getItem(`pointage_stage_${line.billId}`) || 'preparation';
-                  return (
-                    <div
-                      key={line.id}
-                      className="product-card cursor-pointer"
-                      style={{ borderLeft: '4px solid var(--accent)' }}
-                      onClick={() => nav(`/bill/${line.billId}/line/${line.id}?stage=${targetStage}&from=home`)}
-                    >
-                      <div className="flex justify-between items-center mb-1">
-                        <span
-                          className="badge"
-                          style={{ background: 'var(--accent-glow)', color: 'var(--accent)', fontWeight: 800, cursor: 'pointer' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectBill(line.billId);
-                          }}
-                          title="Ouvrir ce bon de livraison"
-                        >
-                          {parentBill?.billNumber || `BL #${line.billId}`} ›
-                        </span>
-                        <span className="line-no">N°{line.no}</span>
-                      </div>
-                      <div className="line-designation font-bold text-sm">{line.designation}</div>
-                      <div className="flex justify-between items-center text-xs text-muted mt-1">
-                        <span>RÉF: {line.reference || 'Sans réf'}</span>
-                        <span className="font-bold text-primary">Attendu: {line.orderedQty}</span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          ) : (
-            bills.map((b) => (
-              <BillCard
-                key={b.id}
-                bill={b}
-                onClick={() => onSelectBill(b.id!)}
-                onArchive={onArchiveBill ? () => onArchiveBill(b.id!) : undefined}
-                onRestore={onRestoreBill ? () => onRestoreBill(b.id!) : undefined}
-              />
-            ))
-          )}
-        </div>
-      )}
+      <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+        {!isDone && (
+          <button
+            type="button"
+            className="btn btn-xs"
+            style={{
+              backgroundColor: 'rgba(16, 185, 129, 0.15)',
+              color: '#34d399',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              borderRadius: 8,
+              fontSize: '0.68rem',
+              fontWeight: 800,
+              padding: '4px 8px',
+            }}
+            onClick={onExpressValidate}
+            title="Valider tous les articles conforme en 1 tap (Express)"
+          >
+            <IconCheck size={12} />
+            <span>Express</span>
+          </button>
+        )}
+        <button
+          type="button"
+          className="btn btn-xs btn-primary"
+          style={{ borderRadius: 8, padding: '4px 10px', fontSize: '0.72rem', fontWeight: 800 }}
+          onClick={onOpen}
+        >
+          Ouvrir
+        </button>
+      </div>
     </div>
   );
 }
+
+// ---- Client Card (Unified Single Card per Client on Home Screen) ----
+function ClientCard({
+  client,
+  bills,
+  isArchived = false,
+  onArchiveSingleBill,
+  onRestoreSingleBill,
+}: {
+  client: string;
+  bills: Bill[];
+  isArchived?: boolean;
+  onArchiveSingleBill?: (id: number) => void;
+  onRestoreSingleBill?: (id: number) => void;
+}) {
+  const nav = useNavigate();
+  const billIds = React.useMemo(() => bills.map((b) => b.id!).filter(Boolean), [bills]);
+
+  const groupLines = useLiveQuery(
+    async () => {
+      if (billIds.length === 0) return [];
+      return db.orderLines.where('billId').anyOf(billIds).toArray();
+    },
+    [billIds.join(',')],
+    []
+  );
+
+  const groupEvents = useLiveQuery(
+    async () => {
+      if (billIds.length === 0) return [];
+      return db.countEvents.where('billId').anyOf(billIds).toArray();
+    },
+    [billIds.join(',')],
+    []
+  );
+
+  const eventsByLine = React.useMemo(() => {
+    const map = new Map<number, CountEvent[]>();
+    for (const e of groupEvents) {
+      const arr = map.get(e.orderLineId) || [];
+      arr.push(e);
+      map.set(e.orderLineId, arr);
+    }
+    return map;
+  }, [groupEvents]);
+
+  const prep = React.useMemo(() => calcBillProgress(groupLines, eventsByLine, 'preparation'), [groupLines, eventsByLine]);
+  const load = React.useMemo(() => calcBillProgress(groupLines, eventsByLine, 'chargement'), [groupLines, eventsByLine]);
+  const point = React.useMemo(() => calcBillProgress(groupLines, eventsByLine, 'pointage'), [groupLines, eventsByLine]);
+
+  const wilaya = React.useMemo(() => {
+    return bills.find((b) => b.wilaya)?.wilaya;
+  }, [bills]);
+
+  const hasHqRevision = React.useMemo(() => {
+    return bills.some((b) => b.hqRevision && !b.hqRevision.acknowledged);
+  }, [bills]);
+
+  const isSingle = bills.length === 1;
+  const singleBill = isSingle ? bills[0] : null;
+
+  const operationalClient = React.useMemo(() => {
+    return bills.find((b) => b.operationalClient)?.operationalClient || null;
+  }, [bills]);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+
+  const handleClick = () => {
+    if (isSingle && singleBill?.id) {
+      nav(`/bill/${singleBill.id}`);
+    } else {
+      nav(`/client-bills/${encodeURIComponent(client)}`);
+    }
+  };
+
+  return (
+    <div
+      className="card client-card mb-3 cursor-pointer"
+      style={{
+        padding: '18px 20px',
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border)',
+        borderRadius: 22,
+        transition: 'all 0.2s ease',
+      }}
+      onClick={handleClick}
+    >
+      <div
+        className="card-header"
+        style={{ alignItems: 'flex-start', gap: 14, marginBottom: 6 }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="card-client" style={{ fontSize: '1.08rem', fontWeight: 800 }}>
+              {operationalClient || client}
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs btn-icon"
+              style={{ borderRadius: 9999, padding: '3px 6px', color: 'var(--text-muted)' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowRenameModal(true);
+              }}
+              title="Renommer pour l'entrepôt (Nom d'usage)"
+            >
+              <IconPencil size={13} />
+            </button>
+          </div>
+
+          {operationalClient && operationalClient.toUpperCase() !== client.toUpperCase() && (
+            <div className="text-[11px] text-muted truncate" style={{ marginTop: 1 }}>
+              <span className="opacity-75">Légal : </span>
+              <span className="font-semibold text-slate-400">{client}</span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+            {isSingle ? (
+              <span
+                style={{
+                  fontSize: '0.65rem',
+                  fontWeight: 800,
+                  padding: '2px 8px',
+                  borderRadius: '9999px',
+                  background: 'rgba(16, 185, 129, 0.14)',
+                  color: '#10b981',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <IconFileText size={11} />
+                <span>1 Bon ({singleBill?.billNumber === 'NOTE-MANUSCRITE' ? 'Manuscrit' : singleBill?.billNumber})</span>
+              </span>
+            ) : (
+              <span
+                style={{
+                  fontSize: '0.65rem',
+                  fontWeight: 800,
+                  padding: '2px 8px',
+                  borderRadius: '9999px',
+                  background: 'rgba(59, 130, 246, 0.16)',
+                  color: '#3b82f6',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <IconBox size={11} />
+                <span>{bills.length} Bons groupés</span>
+              </span>
+            )}
+
+            {hasHqRevision && (
+              <span
+                style={{
+                  fontSize: '0.62rem',
+                  fontWeight: 800,
+                  padding: '1px 7px',
+                  borderRadius: '9999px',
+                  background: 'rgba(239, 68, 68, 0.18)',
+                  color: '#ef4444',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                }}
+              >
+                <IconWarning size={10} />
+                <span>Révision Siège</span>
+              </span>
+            )}
+
+            {!isSingle && (
+              <span className="apple-pill-metadata" title={bills.map((b) => b.billNumber).join(', ')}>
+                <IconFileText size={10} />
+                <span>{bills.map((b) => (b.billNumber === 'NOTE-MANUSCRITE' ? 'Manuscrit' : b.billNumber)).join(' • ')}</span>
+              </span>
+            )}
+
+            {wilaya && (
+              <span className="apple-pill-metadata" title={`Wilaya : ${wilaya}`}>
+                <IconMapPin size={10} />
+                <span>{wilaya}</span>
+              </span>
+            )}
+
+            {(() => {
+              const assignedDrivers = Array.from(new Set(bills.map((b) => b.driverName).filter(Boolean)));
+              if (assignedDrivers.length === 0) return null;
+              return (
+                <span
+                  className="apple-pill-metadata"
+                  style={{
+                    background: 'rgba(59, 130, 246, 0.16)',
+                    color: '#60a5fa',
+                  }}
+                  title={`Chauffeur(s) : ${assignedDrivers.join(', ')}`}
+                >
+                  <IconTruck size={10} />
+                  <span>{assignedDrivers.join(', ')}</span>
+                </span>
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* Glanceable Aggregated 3-Stage Activity Rings & Status */}
+        <div className="flex items-center gap-2.5 flex-shrink-0">
+          <ConcentricStageRings
+            prep={prep}
+            load={load}
+            point={point}
+            size="sm"
+            showCenterText={true}
+          />
+          <div className="flex flex-col items-end gap-1">
+            <span className="badge badge-active">
+              {groupLines.length} {groupLines.length > 1 ? 'articles' : 'article'}
+            </span>
+            <div className="flex items-center gap-1">
+              {isSingle && !isArchived && onArchiveSingleBill && singleBill?.id && (
+                <button
+                  type="button"
+                  className="btn btn-xs btn-ghost btn-icon"
+                  title="Archiver ce bon"
+                  style={{ padding: 4, color: 'var(--text-muted)' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onArchiveSingleBill(singleBill.id!);
+                  }}
+                  aria-label="Archiver le bon"
+                >
+                  <IconArchive size={15} />
+                </button>
+              )}
+              {isSingle && isArchived && onRestoreSingleBill && singleBill?.id && (
+                <button
+                  type="button"
+                  className="btn btn-xs btn-ghost btn-icon"
+                  title="Restaurer ce bon"
+                  style={{ padding: 4, color: 'var(--accent)' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRestoreSingleBill(singleBill.id!);
+                  }}
+                  aria-label="Restaurer le bon"
+                >
+                  <IconUndo size={15} />
+                </button>
+              )}
+              <div
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: '50%',
+                  background: 'var(--bg-surface)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--text-secondary)',
+                }}
+                title={isSingle ? 'Ouvrir le bon' : `Ouvrir les ${bills.length} bons`}
+              >
+                <IconChevronRight size={15} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Aggregated Progress Bars */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+        <ProgressRow label="Préparation" progress={prep} color="#10b981" />
+        <ProgressRow label="Chargement" progress={load} color="#3b82f6" />
+        <ProgressRow label="Pointage" progress={point} color="#a855f7" />
+      </div>
+
+      <RenameClientModal
+        isOpen={showRenameModal}
+        onClose={() => setShowRenameModal(false)}
+        legalName={client}
+        currentOperationalName={operationalClient}
+      />
+    </div>
+  );
+}
+
 
 // ---- Bill Card ----
 function BillCard({
@@ -2270,21 +2961,26 @@ function BillCard({
   onClick,
   onArchive,
   onRestore,
+  showEnterAction = false,
 }: {
   bill: Bill;
   onClick: () => void;
   onArchive?: () => void;
   onRestore?: () => void;
+  showEnterAction?: boolean;
 }) {
   const lines = useBillLines(bill.id);
   const events = useBillEvents(bill.id);
 
-  const eventsByLine = new Map<number, CountEvent[]>();
-  for (const e of events) {
-    const arr = eventsByLine.get(e.orderLineId) || [];
-    arr.push(e);
-    eventsByLine.set(e.orderLineId, arr);
-  }
+  const eventsByLine = React.useMemo(() => {
+    const map = new Map<number, CountEvent[]>();
+    for (const e of events) {
+      const arr = map.get(e.orderLineId) || [];
+      arr.push(e);
+      map.set(e.orderLineId, arr);
+    }
+    return map;
+  }, [events]);
 
   const prep = calcBillProgress(lines, eventsByLine, 'preparation');
   const load = calcBillProgress(lines, eventsByLine, 'chargement');
@@ -2292,10 +2988,18 @@ function BillCard({
 
   return (
     <div className="card" onClick={onClick} style={{ cursor: 'pointer', padding: '18px 20px' }}>
-      <div className="card-header" style={{ alignItems: 'flex-start', gap: 14 }}>
+      <div className="card-header" style={{ alignItems: 'flex-start', gap: 14, marginBottom: 6 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="card-client" style={{ fontSize: '1.08rem', fontWeight: 800 }}>{bill.client}</div>
-          <div className="flex items-center gap-1.5 mt-0.5">
+          <div className="card-client" style={{ fontSize: '1.08rem', fontWeight: 800 }}>
+            {bill.operationalClient || bill.client}
+          </div>
+          {bill.operationalClient && bill.operationalClient.toUpperCase() !== bill.client.toUpperCase() && (
+            <div className="text-[11px] text-muted truncate" style={{ marginTop: 1 }}>
+              <span className="opacity-75">Légal : </span>
+              <span className="font-semibold text-slate-400">{bill.client}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
             <span className="font-bold text-xs" style={{ color: 'var(--text-secondary)' }}>
               {bill.billNumber === 'NOTE-MANUSCRITE' ? 'Note manuscrite (Sans N°)' : bill.billNumber}
             </span>
@@ -2306,8 +3010,14 @@ function BillCard({
                   fontWeight: 700,
                   padding: '1px 6px',
                   borderRadius: '9999px',
-                  background: 'var(--accent-dim)',
-                  color: 'var(--accent)',
+                  background:
+                    bill.documentType === 'bon_transfert'
+                      ? 'rgba(59, 130, 246, 0.18)'
+                      : 'var(--accent-dim)',
+                  color:
+                    bill.documentType === 'bon_transfert'
+                      ? '#3b82f6'
+                      : 'var(--accent)',
                   letterSpacing: '0.02em',
                 }}
               >
@@ -2319,74 +3029,47 @@ function BillCard({
                   ? 'BL Officiel'
                   : bill.documentType === 'bl_workshop'
                   ? 'Atelier'
+                  : bill.documentType === 'bon_transfert'
+                  ? 'Transfert'
                   : 'BC'}
               </span>
             )}
-          </div>
-          <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto no-scrollbar mt-1.5 py-0.5">
-            {bill.commercialNote && (
+            {bill.driverName && (
               <span
                 style={{
                   fontSize: '0.62rem',
                   fontWeight: 700,
-                  padding: '1px 6px',
+                  padding: '1px 7px',
                   borderRadius: '9999px',
-                  background: 'rgba(234, 179, 8, 0.16)',
-                  color: '#ca8a04',
+                  background: 'rgba(59, 130, 246, 0.16)',
+                  color: '#60a5fa',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 3,
-                  flexShrink: 0,
                 }}
-                title={bill.commercialNote}
-              >
-                <IconClipboard size={10} />
-                <span>Note</span>
-              </span>
-            )}
-            {bill.bcNumber && (
-              <span className="apple-pill-metadata" title="Numéro Bon de Commande">
-                <IconFileText size={10} />
-                <span>BC:{bill.bcNumber}</span>
-              </span>
-            )}
-            {bill.wilaya && (
-              <span className="apple-pill-metadata" title={`Wilaya : ${bill.wilaya}`}>
-                <IconMapPin size={10} />
-                <span>{bill.wilaya}</span>
-              </span>
-            )}
-            {bill.date && (
-              <span className="apple-pill-metadata">
-                <IconClock size={10} />
-                <span>{bill.date}</span>
-              </span>
-            )}
-            {bill.shippingStatus && (
-              <span
-                style={{
-                  fontSize: '0.62rem',
-                  fontWeight: 700,
-                  padding: '1px 6px',
-                  borderRadius: '9999px',
-                  background:
-                    bill.shippingStatus === 'fully_shipped'
-                      ? 'rgba(16, 185, 129, 0.15)'
-                      : 'rgba(245, 158, 11, 0.15)',
-                  color:
-                    bill.shippingStatus === 'fully_shipped'
-                      ? 'var(--accent)'
-                      : 'var(--warning)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 3,
-                  flexShrink: 0,
-                }}
+                title={`Chauffeur assigné : ${bill.driverName}`}
               >
                 <IconTruck size={10} />
-                {bill.shippingStatus === 'fully_shipped'
-                  ? `Soldé (${bill.tripCount || 1}v)`
-                  : `Voyage ${bill.tripCount || 1} en cours`}
+                <span>{bill.driverName}</span>
+              </span>
+            )}
+            {bill.hqRevision && !bill.hqRevision.acknowledged && (
+              <span
+                style={{
+                  fontSize: '0.62rem',
+                  fontWeight: 800,
+                  padding: '1px 7px',
+                  borderRadius: '9999px',
+                  background: 'rgba(239, 68, 68, 0.18)',
+                  color: '#ef4444',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                }}
+              >
+                <IconWarning size={10} />
+                <span>Révision Siège</span>
               </span>
             )}
           </div>
@@ -2440,7 +3123,76 @@ function BillCard({
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+      {/* Dedicated Badges Row: Full Width, Zero Collision with Ring */}
+      <div className="flex items-center gap-1.5 flex-wrap my-1.5 py-0.5">
+        {bill.commercialNote && (
+          <span
+            style={{
+              fontSize: '0.62rem',
+              fontWeight: 700,
+              padding: '1px 6px',
+              borderRadius: '9999px',
+              background: 'rgba(234, 179, 8, 0.16)',
+              color: '#ca8a04',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+              flexShrink: 0,
+            }}
+            title={bill.commercialNote}
+          >
+            <IconClipboard size={10} />
+            <span>Note</span>
+          </span>
+        )}
+        {bill.bcNumber && (
+          <span className="apple-pill-metadata" title="Numéro Bon de Commande">
+            <IconFileText size={10} />
+            <span>BC:{bill.bcNumber}</span>
+          </span>
+        )}
+        {bill.wilaya && (
+          <span className="apple-pill-metadata" title={`Wilaya : ${bill.wilaya}`}>
+            <IconMapPin size={10} />
+            <span>{bill.wilaya}</span>
+          </span>
+        )}
+        {bill.date && (
+          <span className="apple-pill-metadata">
+            <IconClock size={10} />
+            <span>{bill.date}</span>
+          </span>
+        )}
+        {bill.shippingStatus && (
+          <span
+            style={{
+              fontSize: '0.62rem',
+              fontWeight: 700,
+              padding: '1px 6px',
+              borderRadius: '9999px',
+              background:
+                bill.shippingStatus === 'fully_shipped'
+                  ? 'rgba(16, 185, 129, 0.15)'
+                  : 'rgba(245, 158, 11, 0.15)',
+              color:
+                bill.shippingStatus === 'fully_shipped'
+                  ? 'var(--accent)'
+                  : 'var(--warning)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+              flexShrink: 0,
+            }}
+          >
+            <IconTruck size={10} />
+            {bill.shippingStatus === 'fully_shipped'
+              ? `Soldé (${bill.tripCount || 1}v)`
+              : `Voyage ${bill.tripCount || 1} en cours`}
+          </span>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
         <ProgressRow label="Préparation" progress={prep} color="#10b981" />
         <ProgressRow label="Chargement" progress={load} color="#3b82f6" />
         <ProgressRow label="Pointage" progress={point} color="#a855f7" />
@@ -2453,6 +3205,24 @@ function BillCard({
           {bill.loadedBy && <span>Charge : <strong style={{ color: 'var(--text-primary)' }}>{bill.loadedBy}</strong></span>}
           {bill.checkedBy && <span>Point : <strong style={{ color: 'var(--text-primary)' }}>{bill.checkedBy}</strong></span>}
           {bill.tripCount && <span><strong style={{ color: 'var(--text-primary)' }}>{bill.tripCount} {bill.tripCount > 1 ? 'voyages' : 'voyage'}</strong></span>}
+        </div>
+      )}
+
+      {showEnterAction && (
+        <div className="mt-3 pt-2.5 border-t border-glass">
+          <div
+            className="btn btn-primary flex items-center justify-center gap-2 w-full"
+            style={{
+              height: 42,
+              borderRadius: 14,
+              fontWeight: 700,
+              fontSize: '0.84rem',
+              boxShadow: '0 3px 12px rgba(16, 185, 129, 0.22)',
+            }}
+          >
+            <IconSearch size={16} />
+            <span>Entrer & Chercher dans ce bon ›</span>
+          </div>
         </div>
       )}
     </div>
@@ -2511,8 +3281,837 @@ function ProgressRow({
 }
 
 // ============================================================
-// IMPORT SCREEN
+// CLIENT BILLS SCREEN (Dedicated Multi-Bill Workspace)
 // ============================================================
+function ClientBillsScreen({
+  setToast,
+}: {
+  setToast: (m: string | { message: string; onUndo?: () => Promise<void>; undoLabel?: string }) => void;
+}) {
+  const { clientKey } = useParams<{ clientKey: string }>();
+  const nav = useNavigate();
+  const client = React.useMemo(() => decodeURIComponent(clientKey || ''), [clientKey]);
+  const activeOperator = React.useMemo(() => getActiveOperator(), []);
+  const [billSearch, setBillSearch] = useState('');
+
+  const bills = useEntityBills(client);
+  const entityLines = useEntityLines(client);
+  const entityEvents = useEntityEvents(client);
+
+  const operationalClient = React.useMemo(() => {
+    return bills.find((b) => b.operationalClient)?.operationalClient || null;
+  }, [bills]);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+
+  const activeBills = React.useMemo(() => bills.filter((b) => b.status !== 'completed'), [bills]);
+  const archivedBills = React.useMemo(() => bills.filter((b) => b.status === 'completed'), [bills]);
+  const activeBillIds = React.useMemo(() => activeBills.map((b) => b.id!).filter(Boolean), [activeBills]);
+
+  const eventsByLine = React.useMemo(() => {
+    const map = new Map<number, CountEvent[]>();
+    for (const e of entityEvents) {
+      const arr = map.get(e.orderLineId) || [];
+      arr.push(e);
+      map.set(e.orderLineId, arr);
+    }
+    return map;
+  }, [entityEvents]);
+
+  const prep = React.useMemo(() => calcBillProgress(entityLines, eventsByLine, 'preparation'), [entityLines, eventsByLine]);
+  const load = React.useMemo(() => calcBillProgress(entityLines, eventsByLine, 'chargement'), [entityLines, eventsByLine]);
+  const point = React.useMemo(() => calcBillProgress(entityLines, eventsByLine, 'pointage'), [entityLines, eventsByLine]);
+
+  const wilaya = React.useMemo(() => {
+    return bills.find((b) => b.wilaya)?.wilaya;
+  }, [bills]);
+
+  const hasHqRevision = React.useMemo(() => {
+    return bills.some((b) => b.hqRevision && !b.hqRevision.acknowledged);
+  }, [bills]);
+
+  const matchedLines = React.useMemo(() => {
+    if (!billSearch.trim() || !entityLines) return [];
+    return searchLines(entityLines, billSearch, 'smart');
+  }, [billSearch, entityLines]);
+
+  const handleArchiveBill = async (billId: number) => {
+    const b = bills.find((x) => x.id === billId);
+    await db.bills.update(billId, { status: 'completed' });
+    showToast(
+      {
+        message: `Bon ${b?.billNumber || ''} archivé`,
+        onUndo: async () => {
+          await db.bills.update(billId, { status: 'active' });
+          showToast(`Bon ${b?.billNumber || ''} restauré`, setToast);
+        },
+        undoLabel: 'Annuler (5s)',
+      },
+      setToast,
+      5000
+    );
+  };
+
+  const handleRestoreBill = async (billId: number) => {
+    const b = bills.find((x) => x.id === billId);
+    await db.bills.update(billId, { status: 'active' });
+    showToast(`Bon ${b?.billNumber || ''} restauré dans les bons actifs`, setToast);
+  };
+
+  const handleBatchAssign = async () => {
+    if (!activeOperator || activeBillIds.length === 0) return;
+    await assignBatchBillsStageOperator(activeBillIds, 'preparation', activeOperator);
+    showToast(`Les ${activeBillIds.length} bons de ${client} ont été assignés à ${activeOperator}`, setToast);
+  };
+
+  const matchedBillsInEntity = React.useMemo(() => {
+    if (!billSearch.trim()) return [];
+    const q = billSearch.trim().toLowerCase();
+    return bills.filter(
+      (b) =>
+        b.billNumber.toLowerCase().includes(q) ||
+        (b.bcNumber && b.bcNumber.toLowerCase().includes(q)) ||
+        (b.wilaya && b.wilaya.toLowerCase().includes(q))
+    );
+  }, [billSearch, bills]);
+
+  const [selectedBillFilter, setSelectedBillFilter] = useState<'all' | number>('all');
+
+  const filteredActiveBills = React.useMemo(() => {
+    if (selectedBillFilter === 'all') return activeBills;
+    return activeBills.filter((b) => b.id === selectedBillFilter);
+  }, [activeBills, selectedBillFilter]);
+
+  const filteredArchivedBills = React.useMemo(() => {
+    if (selectedBillFilter === 'all') return archivedBills;
+    return archivedBills.filter((b) => b.id === selectedBillFilter);
+  }, [archivedBills, selectedBillFilter]);
+
+  return (
+    <div className="app-shell">
+      <header className="app-header">
+        <button
+          type="button"
+          className="btn btn-ghost flex items-center gap-1.5"
+          onClick={() => nav('/')}
+          style={{ padding: '6px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}
+        >
+          <IconArrowLeft size={18} />
+          <span>Bons Actifs</span>
+        </button>
+
+        <div className="header-meta">
+          <OperatorHeaderButton
+            activeOperator={activeOperator}
+            onClick={() => {}}
+          />
+        </div>
+      </header>
+
+      <div className="app-content" style={{ paddingBottom: 85 }}>
+        {/* Top Summary Card */}
+        <div
+          className="card mb-3"
+          style={{
+            padding: '18px 20px',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            borderRadius: 22,
+          }}
+        >
+          <div className="flex justify-between items-start gap-3 mb-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>
+                  {operationalClient || client}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs btn-icon"
+                  style={{ borderRadius: 9999, padding: '3px 6px', color: 'var(--text-muted)' }}
+                  onClick={() => setShowRenameModal(true)}
+                  title="Renommer pour l'entrepôt (Nom d'usage)"
+                >
+                  <IconPencil size={14} />
+                </button>
+              </div>
+              {operationalClient && operationalClient.toUpperCase() !== client.toUpperCase() && (
+                <div className="text-xs text-muted" style={{ marginTop: 2 }}>
+                  <span className="opacity-75">Raison sociale fiscale : </span>
+                  <span className="font-semibold text-slate-300">{client}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 800,
+                    padding: '2px 8px',
+                    borderRadius: 9999,
+                    background: 'rgba(59, 130, 246, 0.16)',
+                    color: '#3b82f6',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <IconBox size={12} />
+                  <span>{bills.length} Bons au total ({activeBills.length} actifs)</span>
+                </span>
+                {wilaya && (
+                  <span className="apple-pill-metadata">
+                    <IconMapPin size={11} />
+                    <span>{wilaya}</span>
+                  </span>
+                )}
+                {hasHqRevision && (
+                  <span
+                    style={{
+                      fontSize: '0.65rem',
+                      fontWeight: 800,
+                      padding: '2px 8px',
+                      borderRadius: 9999,
+                      background: 'rgba(239, 68, 68, 0.18)',
+                      color: '#ef4444',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <IconWarning size={11} />
+                    <span>Révision Siège</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <ConcentricStageRings
+              prep={prep}
+              load={load}
+              point={point}
+              size="md"
+              showCenterText={true}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+            <ProgressRow label="Préparation" progress={prep} color="#10b981" />
+            <ProgressRow label="Chargement" progress={load} color="#3b82f6" />
+            <ProgressRow label="Pointage" progress={point} color="#a855f7" />
+          </div>
+
+          {activeOperator && activeBills.length > 1 && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-full flex items-center justify-center gap-2 mt-3"
+              style={{ borderRadius: 'var(--radius-pill)', fontSize: '0.82rem', height: 38 }}
+              onClick={handleBatchAssign}
+            >
+              <IconUser size={15} style={{ color: 'var(--accent)' }} />
+              <span>Assigner les {activeBills.length} bons à {activeOperator}</span>
+            </button>
+          )}
+        </div>
+
+        {/* Quick Bill Filter Pills (Instant Switcher) */}
+        {bills.length > 1 && !billSearch && (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-2 no-scrollbar">
+            <button
+              type="button"
+              className={`badge cursor-pointer ${selectedBillFilter === 'all' ? 'badge-active' : ''}`}
+              style={{ padding: '5px 12px', fontSize: '0.74rem', borderRadius: 9999 }}
+              onClick={() => setSelectedBillFilter('all')}
+            >
+              Tous les bons ({bills.length})
+            </button>
+            {bills.map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                className={`badge cursor-pointer ${selectedBillFilter === b.id ? 'badge-active' : ''}`}
+                style={{ padding: '5px 12px', fontSize: '0.74rem', borderRadius: 9999 }}
+                onClick={() => setSelectedBillFilter(b.id!)}
+              >
+                {b.billNumber === 'NOTE-MANUSCRITE' ? 'Manuscrit' : b.billNumber}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Cross-Bill Search Wrapper */}
+        <div className="search-wrapper mb-3" style={{ position: 'relative' }}>
+          <input
+            className="search-input"
+            style={{ height: 42, fontSize: '0.86rem', paddingLeft: 14 }}
+            placeholder={`Rechercher un article ou N° de bon chez ${client}...`}
+            value={billSearch}
+            onChange={(e) => setBillSearch(e.target.value)}
+          />
+          {billSearch ? (
+            <button
+              type="button"
+              className="search-clear-btn"
+              onClick={() => setBillSearch('')}
+              aria-label="Effacer"
+            >
+              <IconX size={15} />
+            </button>
+          ) : (
+            <span style={{ position: 'absolute', right: 12, top: 13, color: 'var(--text-muted)', pointerEvents: 'none' }}>
+              <IconSearch size={16} />
+            </span>
+          )}
+        </div>
+
+        {/* Display Cross-Bill Search Results OR the List of Bills */}
+        {billSearch.trim() ? (
+          <div className="flex flex-col gap-3">
+            <div className="text-xs text-muted flex justify-between items-center px-1">
+              <span>
+                {matchedBillsInEntity.length > 0 && `${matchedBillsInEntity.length} bon(s) • `}
+                {matchedLines.length} article(s) trouvé(s)
+              </span>
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost text-accent font-bold"
+                onClick={() => setBillSearch('')}
+              >
+                Afficher tous les bons
+              </button>
+            </div>
+
+            {/* Matched Bills in Search */}
+            {matchedBillsInEntity.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <div className="text-xs font-bold text-muted px-1">Bons correspondants :</div>
+                {matchedBillsInEntity.map((b) => (
+                  <BillCard
+                    key={b.id}
+                    bill={b}
+                    onClick={() => nav(`/bill/${b.id}`)}
+                    onArchive={() => handleArchiveBill(b.id!)}
+                    onRestore={() => handleRestoreBill(b.id!)}
+                    showEnterAction={true}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Matched Articles across all Bills */}
+            {matchedLines.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <div className="text-xs font-bold text-muted px-1">Articles trouvés dans les bons :</div>
+                {matchedLines.map((line) => {
+                  const parentBill = bills.find((b) => b.id === line.billId);
+                  const targetStage = sessionStorage.getItem(`pointage_stage_${line.billId}`) || 'preparation';
+                  return (
+                    <div
+                      key={line.id}
+                      className="product-card cursor-pointer"
+                      style={{ borderLeft: '4px solid var(--accent)' }}
+                      onClick={() => nav(`/bill/${line.billId}/line/${line.id}?stage=${targetStage}&from=client-bills`)}
+                    >
+                      <div className="flex justify-between items-center mb-1">
+                        <span
+                          className="badge"
+                          style={{ background: 'var(--accent-glow)', color: 'var(--accent)', fontWeight: 800, cursor: 'pointer' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            nav(`/bill/${line.billId}`);
+                          }}
+                          title="Ouvrir ce bon de livraison"
+                        >
+                          {parentBill?.billNumber || `BL #${line.billId}`} ›
+                        </span>
+                        <span className="line-no">N°{line.no}</span>
+                      </div>
+                      <div className="line-designation font-bold text-sm">{line.designation}</div>
+                      <div className="flex justify-between items-center text-xs text-muted mt-1">
+                        <span>RÉF: {line.reference || 'Sans réf'}</span>
+                        <span className="font-bold text-primary">Attendu: {line.orderedQty}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-glass">
+                        <button
+                          type="button"
+                          className="btn btn-xs btn-primary flex-1 flex items-center justify-center gap-1.5 font-bold"
+                          style={{ height: 32, borderRadius: 10 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            nav(`/bill/${line.billId}/line/${line.id}?stage=${targetStage}&from=client-bills`);
+                          }}
+                        >
+                          <IconCheck size={13} />
+                          <span>Pointer cet article ›</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-xs btn-secondary flex items-center justify-center gap-1.5"
+                          style={{ height: 32, borderRadius: 10 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            nav(`/bill/${line.billId}`);
+                          }}
+                        >
+                          <IconSearch size={13} />
+                          <span>Ouvrir {parentBill?.billNumber} ›</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {matchedBillsInEntity.length === 0 && matchedLines.length === 0 && (
+              <div className="card text-center text-xs text-muted py-5">
+                Aucun article ni bon ne correspond à « {billSearch} » chez ce client
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {filteredActiveBills.length > 0 && (
+              <>
+                <div className="text-xs text-muted font-bold px-1">
+                  Bons actifs ({filteredActiveBills.length}) :
+                </div>
+                {filteredActiveBills.map((b) => (
+                  <BillCard
+                    key={b.id}
+                    bill={b}
+                    onClick={() => nav(`/bill/${b.id}`)}
+                    onArchive={() => handleArchiveBill(b.id!)}
+                    onRestore={() => handleRestoreBill(b.id!)}
+                    showEnterAction={true}
+                  />
+                ))}
+              </>
+            )}
+
+            {filteredArchivedBills.length > 0 && (
+              <>
+                <div className="text-xs text-muted font-bold px-1 mt-2">
+                  Historique clôturé ({filteredArchivedBills.length}) :
+                </div>
+                {filteredArchivedBills.map((b) => (
+                  <BillCard
+                    key={b.id}
+                    bill={b}
+                    onClick={() => nav(`/bill/${b.id}`)}
+                    onArchive={() => handleArchiveBill(b.id!)}
+                    onRestore={() => handleRestoreBill(b.id!)}
+                    showEnterAction={true}
+                  />
+                ))}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="bottom-bar">
+        <button className="btn btn-secondary btn-full flex items-center justify-center gap-2" onClick={() => nav('/')}>
+          <IconArrowLeft size={16} />
+          <span>Retour aux Bons Actifs</span>
+        </button>
+      </div>
+
+      <RenameClientModal
+        isOpen={showRenameModal}
+        onClose={() => setShowRenameModal(false)}
+        legalName={client}
+        currentOperationalName={operationalClient}
+      />
+    </div>
+  );
+}
+
+// ============================================================
+// GATE CHECK SCREEN (Contrôle Sortie Camion & Réconciliation Papier)
+// ============================================================
+function GateCheckScreen({
+  setToast,
+}: {
+  setToast: (m: string) => void;
+}) {
+  const nav = useNavigate();
+  const session = useActiveSession();
+  const bills = useSessionBills(session?.id);
+  const allLines = useAllSessionLines(session?.id);
+  const [gateSearch, setGateSearch] = useState('');
+  const [filterMode, setFilterMode] = useState<'all' | 'unverified' | 'verified'>('all');
+
+  // Active bills to check before truck departure
+  const activeBills = React.useMemo(() => {
+    return bills.filter((b) => b.status !== 'completed');
+  }, [bills]);
+
+  // Map billId to line counts
+  const linesCountByBill = React.useMemo(() => {
+    const map = new Map<number, number>();
+    for (const l of allLines) {
+      map.set(l.billId, (map.get(l.billId) || 0) + 1);
+    }
+    return map;
+  }, [allLines]);
+
+  const verifiedCount = React.useMemo(() => {
+    return activeBills.filter((b) => b.paperworkVerified).length;
+  }, [activeBills]);
+
+  const unverifiedCount = activeBills.length - verifiedCount;
+  const progressPercent = activeBills.length > 0 ? Math.round((verifiedCount / activeBills.length) * 100) : 0;
+
+  const filteredBills = React.useMemo(() => {
+    let list = activeBills;
+    if (filterMode === 'unverified') {
+      list = list.filter((b) => !b.paperworkVerified);
+    } else if (filterMode === 'verified') {
+      list = list.filter((b) => b.paperworkVerified);
+    }
+    if (gateSearch.trim()) {
+      const q = gateSearch.trim().toLowerCase();
+      list = list.filter(
+        (b) =>
+          b.billNumber.toLowerCase().includes(q) ||
+          b.client.toLowerCase().includes(q) ||
+          (b.wilaya && b.wilaya.toLowerCase().includes(q)) ||
+          (b.bcNumber && b.bcNumber.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [activeBills, filterMode, gateSearch]);
+
+  const handleToggleVerified = async (bill: Bill) => {
+    if (!bill.id) return;
+    const nextVal = !bill.paperworkVerified;
+    await db.bills.update(bill.id, {
+      paperworkVerified: nextVal,
+      paperworkVerifiedAt: nextVal ? new Date().toISOString() : null,
+    });
+    showToast(
+      nextVal
+        ? `Facture & BL pour ${bill.client} (${bill.billNumber}) validés !`
+        : `Validation retirée pour ${bill.client}`,
+      setToast
+    );
+  };
+
+  const handleValidateAll = async () => {
+    const unverifiedIds = activeBills.filter((b) => !b.paperworkVerified && b.id).map((b) => b.id!);
+    if (unverifiedIds.length === 0) return;
+    const now = new Date().toISOString();
+    await db.transaction('rw', db.bills, async () => {
+      for (const id of unverifiedIds) {
+        await db.bills.update(id, { paperworkVerified: true, paperworkVerifiedAt: now });
+      }
+    });
+    showToast(`${unverifiedIds.length} bon(s) validés en main`, setToast);
+  };
+
+  const handleResetAll = async () => {
+    const verifiedIds = activeBills.filter((b) => b.paperworkVerified && b.id).map((b) => b.id!);
+    if (verifiedIds.length === 0) return;
+    await db.transaction('rw', db.bills, async () => {
+      for (const id of verifiedIds) {
+        await db.bills.update(id, { paperworkVerified: false, paperworkVerifiedAt: null });
+      }
+    });
+    showToast('Toutes les validations papier réinitialisées', setToast);
+  };
+
+  return (
+    <div className="app-shell">
+      <header className="app-header">
+        <button
+          type="button"
+          className="btn btn-ghost flex items-center gap-1.5"
+          onClick={() => nav('/')}
+          style={{ padding: '6px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}
+        >
+          <IconArrowLeft size={18} />
+          <span>Accueil</span>
+        </button>
+
+        <div className="header-meta">
+          <span
+            style={{
+              fontSize: '0.72rem',
+              fontWeight: 800,
+              padding: '4px 10px',
+              borderRadius: 9999,
+              background: progressPercent === 100 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+              color: progressPercent === 100 ? '#10b981' : '#3b82f6',
+            }}
+          >
+            {verifiedCount} / {activeBills.length} Prêts
+          </span>
+        </div>
+      </header>
+
+      <div className="app-content" style={{ paddingBottom: 90 }}>
+        {/* Title & Guidance */}
+        <div className="mb-3">
+          <h1 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '0 0 4px 0' }}>
+            Contrôle Sortie Camion
+          </h1>
+          <p className="text-xs text-muted" style={{ margin: 0 }}>
+            Vérifiez que chaque facture et bon de livraison ont été physiquement imprimés et remis au chauffeur avant le départ du quai.
+          </p>
+        </div>
+
+        {/* Status Dashboard Card */}
+        <div
+          className="card mb-3"
+          style={{
+            padding: '16px 18px',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            borderRadius: 22,
+          }}
+        >
+          <div className="flex justify-between items-center mb-2">
+            <span style={{ fontWeight: 800, fontSize: '0.92rem' }}>
+              Avancement vérification papier
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 800,
+                fontSize: '0.95rem',
+                color: progressPercent === 100 ? '#10b981' : 'var(--accent)',
+              }}
+            >
+              {progressPercent}%
+            </span>
+          </div>
+
+          <div
+            style={{
+              height: 8,
+              borderRadius: 4,
+              background: 'var(--bg-surface)',
+              overflow: 'hidden',
+              marginBottom: 12,
+            }}
+          >
+            <div
+              style={{
+                width: `${progressPercent}%`,
+                height: '100%',
+                background: progressPercent === 100 ? '#10b981' : 'var(--accent)',
+                transition: 'width 0.3s ease',
+              }}
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            {unverifiedCount > 0 ? (
+              <button
+                type="button"
+                className="btn btn-sm btn-primary flex-1 flex items-center justify-center gap-1.5"
+                style={{ height: 36, fontSize: '0.8rem', borderRadius: 'var(--radius-pill)' }}
+                onClick={handleValidateAll}
+              >
+                <IconCheck size={15} />
+                <span>Tout valider ({unverifiedCount})</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary flex-1 flex items-center justify-center gap-1.5"
+                style={{ height: 36, fontSize: '0.8rem', borderRadius: 'var(--radius-pill)' }}
+                onClick={handleResetAll}
+              >
+                <IconUndo size={14} />
+                <span>Réinitialiser pour prochain camion</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Filter Tabs */}
+        <div className="apple-segmented-bar mb-3">
+          <button
+            type="button"
+            className={`apple-segmented-tab ${filterMode === 'all' ? 'active' : ''}`}
+            onClick={() => setFilterMode('all')}
+          >
+            <span>Tous ({activeBills.length})</span>
+          </button>
+          <button
+            type="button"
+            className={`apple-segmented-tab ${filterMode === 'unverified' ? 'active' : ''}`}
+            onClick={() => setFilterMode('unverified')}
+          >
+            <span>À vérifier ({unverifiedCount})</span>
+          </button>
+          <button
+            type="button"
+            className={`apple-segmented-tab ${filterMode === 'verified' ? 'active' : ''}`}
+            onClick={() => setFilterMode('verified')}
+          >
+            <span>Vérifiés ({verifiedCount})</span>
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="search-wrapper mb-3" style={{ position: 'relative' }}>
+          <input
+            className="search-input"
+            style={{ height: 38, fontSize: '0.84rem', paddingLeft: 14 }}
+            placeholder="Rechercher par client, BL, wilaya..."
+            value={gateSearch}
+            onChange={(e) => setGateSearch(e.target.value)}
+          />
+          {gateSearch ? (
+            <button
+              type="button"
+              className="search-clear-btn"
+              onClick={() => setGateSearch('')}
+              aria-label="Effacer"
+            >
+              <IconX size={14} />
+            </button>
+          ) : (
+            <span style={{ position: 'absolute', right: 12, top: 11, color: 'var(--text-muted)', pointerEvents: 'none' }}>
+              <IconSearch size={15} />
+            </span>
+          )}
+        </div>
+
+        {/* Bills list */}
+        {filteredBills.length === 0 ? (
+          <EmptyStateIllustration
+            type="check"
+            size={140}
+            title={filterMode === 'unverified' ? 'Toutes les impressions sont prêtes !' : 'Aucun bon correspondant'}
+            subtitle={
+              filterMode === 'unverified'
+                ? 'Toutes les factures et BLs papier des bons actifs ont été vérifiés.'
+                : 'Aucun bon actif ne correspond à votre filtre de recherche.'
+            }
+          />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {filteredBills.map((b) => {
+              const linesCount = linesCountByBill.get(b.id!) || 0;
+              const isSingleArticle = linesCount === 1;
+              const isVerified = Boolean(b.paperworkVerified);
+
+              return (
+                <div
+                  key={b.id}
+                  className="card"
+                  style={{
+                    padding: '16px 18px',
+                    borderRadius: 20,
+                    border: isVerified ? '1px solid rgba(16, 185, 129, 0.4)' : isSingleArticle ? '1px solid rgba(239, 68, 68, 0.45)' : '1px solid var(--border)',
+                    background: isVerified ? 'rgba(16, 185, 129, 0.04)' : isSingleArticle ? 'rgba(239, 68, 68, 0.03)' : 'var(--bg-card)',
+                    boxShadow: isSingleArticle && !isVerified ? '0 0 14px rgba(239, 68, 68, 0.12)' : undefined,
+                  }}
+                >
+                  <div className="flex justify-between items-start gap-2 mb-1.5">
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 800 }} className="truncate">
+                        {b.client}
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        <span className="apple-pill-metadata" style={{ fontWeight: 700 }}>
+                          <IconFileText size={10} />
+                          <span>{b.billNumber === 'NOTE-MANUSCRITE' ? 'Manuscrit' : b.billNumber}</span>
+                        </span>
+                        {b.bcNumber && (
+                          <span className="apple-pill-metadata">
+                            <span>BC:{b.bcNumber}</span>
+                          </span>
+                        )}
+                        {b.wilaya && (
+                          <span className="apple-pill-metadata">
+                            <IconMapPin size={10} />
+                            <span>{b.wilaya}</span>
+                          </span>
+                        )}
+                        <span className="badge badge-active" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
+                          {linesCount} {linesCount > 1 ? 'articles' : 'article'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn btn-xs btn-secondary"
+                      style={{ borderRadius: 'var(--radius-pill)', fontSize: '0.72rem', flexShrink: 0 }}
+                      onClick={() => nav(`/bill/${b.id}`)}
+                      title="Inspecter le bon"
+                    >
+                      Détails ›
+                    </button>
+                  </div>
+
+                  {/* Single Article High-Priority Warning */}
+                  {isSingleArticle && !isVerified && (
+                    <div
+                      className="p-2.5 my-2 flex items-center gap-2"
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        color: '#ef4444',
+                        borderRadius: 14,
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                      }}
+                    >
+                      <IconAlertTriangle size={15} style={{ flexShrink: 0 }} />
+                      <span>1 seul article — Ne pas oublier l'impression papier au bureau !</span>
+                    </div>
+                  )}
+
+                  {/* Verification Toggle Button */}
+                  <button
+                    type="button"
+                    className="btn btn-full flex items-center justify-center gap-2 mt-2"
+                    style={{
+                      height: 42,
+                      borderRadius: 'var(--radius-pill)',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      background: isVerified ? 'rgba(16, 185, 129, 0.2)' : 'var(--bg-surface)',
+                      color: isVerified ? '#10b981' : 'var(--text-primary)',
+                      border: isVerified ? '1.5px solid #10b981' : '1px solid var(--border)',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onClick={() => handleToggleVerified(b)}
+                  >
+                    {isVerified ? (
+                      <>
+                        <IconCheck size={18} style={{ color: '#10b981' }} />
+                        <span>Facture & BL vérifiés en main</span>
+                      </>
+                    ) : (
+                      <>
+                        <IconBox size={16} style={{ color: 'var(--text-muted)' }} />
+                        <span>Cocher quand Facture & BL sont en main</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="bottom-bar">
+        <button className="btn btn-secondary btn-full flex items-center justify-center gap-2" onClick={() => nav('/')}>
+          <IconArrowLeft size={16} />
+          <span>Retour à l'Accueil</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ImportScreen({ setToast }: { setToast: (m: string) => void }) {
   const nav = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -3568,6 +5167,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   const [zoneModalLine, setZoneModalLine] = useState<OrderLine | null>(null);
   const [showZoneAssignmentModal, setShowZoneAssignmentModal] = useState(false);
   const [legacyModalLine, setLegacyModalLine] = useState<OrderLine | null>(null);
+  const [showRenameModal, setShowRenameModal] = useState(false);
   type LineSortMode = 'bl' | 'circuit' | 'recent' | 'family';
   const [sortMode, setSortMode] = useState<LineSortMode>(() => {
     const saved = localStorage.getItem('pointage_sort_mode');
@@ -3703,10 +5303,15 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   };
   const [searchMode, setSearchMode] = useState<SearchMode>('smart');
   const [searchScope, setSearchScope] = useState<'current' | 'all'>('current');
-  const [searchQuery, setSearchQuery] = useState(() => sessionStorage.getItem(`pointage_search_${billId}`) || '');
+  const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = React.useDeferredValue(searchQuery);
+  const [showAssignDriverModal, setShowAssignDriverModal] = useState(false);
+  const [showLiveOcrModal, setShowLiveOcrModal] = useState(false);
   const [showProblemsOnly, setShowProblemsOnly] = useState(false);
   const [showQuantities, setShowQuantities] = useState(() => localStorage.getItem('pointage_show_quantities') === 'true');
   const [showQRSync, setShowQRSync] = useState(false);
+  const [showColisDropdown, setShowColisDropdown] = useState(false);
+  const [showHqRevisionModal, setShowHqRevisionModal] = useState(false);
   const [unknownBarcodeModal, setUnknownBarcodeModal] = useState<string | null>(null);
 
   // Mental Shortcuts (Plages & Familles)
@@ -3857,11 +5462,6 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
 
   const handleSearchChange = (q: string) => {
     setSearchQuery(q);
-    if (q) {
-      sessionStorage.setItem(`pointage_search_${billId}`, q);
-    } else {
-      sessionStorage.removeItem(`pointage_search_${billId}`);
-    }
   };
 
   const toggleShowQuantities = () => {
@@ -3957,12 +5557,15 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
 
   const activeContainers = searchScope === 'all' && entityContainers && entityContainers.length > 0 ? entityContainers : containers;
   const activeEvents = searchScope === 'all' && entityEvents && entityEvents.length > 0 ? entityEvents : events;
-  const eventsByLine = new Map<number, CountEvent[]>();
-  for (const e of activeEvents) {
-    const arr = eventsByLine.get(e.orderLineId) || [];
-    arr.push(e);
-    eventsByLine.set(e.orderLineId, arr);
-  }
+  const eventsByLine = React.useMemo(() => {
+    const map = new Map<number, CountEvent[]>();
+    for (const e of activeEvents) {
+      const arr = map.get(e.orderLineId) || [];
+      arr.push(e);
+      map.set(e.orderLineId, arr);
+    }
+    return map;
+  }, [activeEvents]);
 
   // Active lines pool based on scope
   const activeLinesPool = searchScope === 'all' && entityLines && entityLines.length > 0 ? entityLines : lines;
@@ -4262,12 +5865,8 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         return (Number(a.no) || 0) - (Number(b.no) || 0);
       });
     }
-    // Default 'bl': natural document order (active first, then by line number)
-    return [...arr].sort((a, b) => {
-      if (a.status !== 'active' && b.status === 'active') return 1;
-      if (a.status === 'active' && b.status !== 'active') return -1;
-      return (Number(a.no) || 0) - (Number(b.no) || 0);
-    });
+    // Default 'bl': natural document order (active first, items with known emplacement first, then by line number)
+    return sortLinesByEmplacementPriority(arr, profileMap);
   };
 
   // When searching: unvalidated on top, validated below
@@ -4289,6 +5888,29 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
   } else {
     displayLines = applySort(displayLines);
   }
+
+  // Precompute similar locations map in O(N) once, avoiding O(N^2) scans inside render loop
+  const similarLocationsMap = React.useMemo(() => {
+    if (stage !== 'preparation') return new Map<number, SimilarLocationSuggestion>();
+    const map = new Map<number, SimilarLocationSuggestion>();
+    for (const l of displayLines) {
+      if (!l.id) continue;
+      const effectiveZone =
+        l.warehouseZone ||
+        (l.reference
+          ? profileMap.get(l.reference)?.warehouseZone
+          : l.historicalReference
+          ? profileMap.get(l.historicalReference)?.warehouseZone
+          : null);
+      if (!effectiveZone) {
+        const sugg = findSimilarProductLocations(l, displayLines, profileMap);
+        if (sugg) {
+          map.set(l.id, sugg);
+        }
+      }
+    }
+    return map;
+  }, [displayLines, profileMap, stage]);
 
   if (isBillLoaded && !bill) {
     return (
@@ -4341,8 +5963,22 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
       <header className="app-header">
         <button className="back-btn" onClick={() => nav('/')} aria-label="Retour"><IconArrowLeft size={18} /></button>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="font-semibold truncate">{bill.client}</div>
+          <div className="flex items-center gap-1.5">
+            <div className="font-semibold truncate">{bill.operationalClient || bill.client}</div>
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs btn-icon"
+              style={{ borderRadius: 9999, padding: '2px 5px', color: 'var(--text-muted)' }}
+              onClick={() => setShowRenameModal(true)}
+              title="Renommer pour l'entrepôt (Nom d'usage)"
+            >
+              <IconPencil size={12} />
+            </button>
+          </div>
           <div className="text-xs text-muted truncate flex items-center gap-1.5 flex-wrap">
+            {bill.operationalClient && bill.operationalClient.toUpperCase() !== bill.client.toUpperCase() && (
+              <span className="opacity-80">Légal : {bill.client} • </span>
+            )}
             <span>{bill.billNumber}</span>
             {bill.documentType && (
               <span
@@ -4382,6 +6018,27 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                 BC:{bill.bcNumber}
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => setShowAssignDriverModal(true)}
+              style={{
+                fontSize: '0.65rem',
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: '9999px',
+                border: bill.driverName ? '1px solid rgba(59, 130, 246, 0.4)' : '1px dashed var(--border)',
+                background: bill.driverName ? 'rgba(59, 130, 246, 0.12)' : 'transparent',
+                color: bill.driverName ? '#60a5fa' : 'var(--text-muted)',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+              title="Assigner ou modifier le chauffeur de ce bon"
+            >
+              <IconTruck size={11} />
+              <span>{bill.driverName ? `Chauffeur: ${bill.driverName}` : '+ Chauffeur'}</span>
+            </button>
           </div>
         </div>
         <div className="header-meta">
@@ -4447,39 +6104,30 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         )}
 
         {/* Commande-Level Photo Gallery (Modèles demandés / Bons manuscrits) */}
-        <div
-          className="card p-3 mb-3"
-          style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            borderRadius: 16,
-          }}
-        >
-          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-            <div className="flex items-center gap-1.5 font-bold text-xs min-w-0">
-              <IconCamera size={15} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-              <span>Photos Commande & Modèles ({(bill.billPhotos || []).length})</span>
+        {bill.billPhotos && bill.billPhotos.length > 0 ? (
+          <div
+            className="card p-3 mb-3"
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              borderRadius: 16,
+            }}
+          >
+            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+              <div className="flex items-center gap-1.5 font-bold text-xs min-w-0">
+                <IconCamera size={15} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                <span>Photos Commande & Modèles ({bill.billPhotos.length})</span>
+              </div>
+              <button
+                type="button"
+                className="btn btn-xs btn-primary flex items-center gap-1 font-bold flex-shrink-0"
+                style={{ borderRadius: 9999, padding: '4px 11px', minHeight: 30 }}
+                onClick={() => billPhotoInputRef.current?.click()}
+              >
+                <IconPlus size={12} />
+                <span>+ Photo</span>
+              </button>
             </div>
-            <button
-              type="button"
-              className="btn btn-xs btn-primary flex items-center gap-1 font-bold flex-shrink-0"
-              style={{ borderRadius: 9999, padding: '4px 11px', minHeight: 30 }}
-              onClick={() => billPhotoInputRef.current?.click()}
-            >
-              <IconPlus size={12} />
-              <span>+ Photo Modèle</span>
-            </button>
-            <input
-              ref={billPhotoInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              style={{ display: 'none' }}
-              onChange={handleBillPhotoUpload}
-            />
-          </div>
-
-          {bill.billPhotos && bill.billPhotos.length > 0 ? (
             <div className="flex gap-2 overflow-x-auto no-scrollbar pt-1">
               {bill.billPhotos.map((photo, idx) => (
                 <div
@@ -4504,12 +6152,85 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="text-xs text-muted mt-1" style={{ lineHeight: 1.45 }}>
-              Ajoutez des photos des modèles ou motifs pour guider les préparateurs et chauffeurs.
+          </div>
+        ) : (
+          <div
+            className="flex items-center justify-between px-3 py-2 mb-3"
+            style={{
+              background: 'rgba(255, 255, 255, 0.02)',
+              border: '1px dashed var(--border)',
+              borderRadius: 14,
+            }}
+          >
+            <div className="flex items-center gap-2 text-xs text-muted">
+              <IconCamera size={14} style={{ opacity: 0.6 }} />
+              <span style={{ fontSize: '0.74rem' }}>Photos modèles / bon manuscrit (0)</span>
             </div>
-          )}
-        </div>
+            <button
+              type="button"
+              className="btn btn-xs btn-ghost text-xs flex items-center gap-1 font-semibold"
+              style={{ height: 28, padding: '2px 10px', fontSize: '0.72rem', color: 'var(--accent)' }}
+              onClick={() => billPhotoInputRef.current?.click()}
+            >
+              <IconPlus size={11} />
+              <span>+ Photo</span>
+            </button>
+          </div>
+        )}
+        <input
+          ref={billPhotoInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          style={{ display: 'none' }}
+          onChange={handleBillPhotoUpload}
+        />
+
+        {/* Cryptographic Digital Seal Banner (Anti-Vol / Anti-Tamper) */}
+        {bill.isSealed && (
+          <div
+            className="flex items-center justify-between p-2.5 mb-3"
+            style={{
+              background: 'rgba(59, 130, 246, 0.12)',
+              border: '1px solid rgba(59, 130, 246, 0.4)',
+              borderRadius: 16,
+            }}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 10,
+                  background: 'rgba(59, 130, 246, 0.22)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#60a5fa',
+                  flexShrink: 0,
+                }}
+              >
+                <IconShield size={18} />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold" style={{ color: '#93c5fd' }}>
+                    BON SCELLÉ CRYPTOGRAPHIQUEMENT
+                  </span>
+                  <span
+                    className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded"
+                    style={{ background: 'rgba(59, 130, 246, 0.28)', color: '#ffffff' }}
+                  >
+                    {bill.sealHash ? `SEAL-${bill.sealHash.slice(7, 15).toUpperCase()}` : 'SCELLÉ'}
+                  </span>
+                </div>
+                <div className="text-[11px] text-muted truncate">
+                  Expédié avec chauffeur {bill.driverName || 'attribué'}. Intégrité des quantités verrouillée.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Collapsible Overview Header Pill (Compact pill when collapsed, integrated card when expanded) */}
         {!showOverviewDiagrams ? (
@@ -4869,7 +6590,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           >
             <span>Tous</span>
             <span className="status-pill-badge">
-              {filterCounts.all}
+              ({filterCounts.all})
             </span>
           </button>
 
@@ -4884,7 +6605,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           >
             <span>À faire</span>
             <span className="status-pill-badge">
-              {filterCounts.todo}
+              ({filterCounts.todo})
             </span>
           </button>
 
@@ -4902,7 +6623,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               <span>Validés</span>
             </span>
             <span className="status-pill-badge">
-              {filterCounts.done}
+              ({filterCounts.done})
             </span>
           </button>
 
@@ -4921,7 +6642,7 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
             </span>
             {filterCounts.problems > 0 && (
               <span className="status-pill-badge">
-                {filterCounts.problems}
+                ({filterCounts.problems})
               </span>
             )}
           </button>
@@ -4954,12 +6675,18 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               <span style={{ fontSize: '0.62rem', opacity: 0.6 }}>▾</span>
             </button>
 
-            {/* Integrated Colis Filter Dropdown */}
+            {/* Integrated Colis Filter Dropdown (Apple Liquid Glass) */}
             {activeContainers.length > 0 && (
               <div className="relative flex-shrink-0">
                 <button
                   type="button"
                   className={`control-pill ${selectedContainerFilter !== 'all' ? 'control-pill-primary' : 'control-pill-secondary'}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    hapticTap('light');
+                    setShowColisDropdown((prev) => !prev);
+                  }}
+                  title="Filtrer par colis"
                 >
                   <IconBox size={13} />
                   <span>
@@ -4971,34 +6698,50 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                   </span>
                   <span style={{ fontSize: '0.62rem', opacity: 0.6 }}>▾</span>
                 </button>
-                <select
-                  aria-label="Filtrer par colis"
-                  value={String(selectedContainerFilter)}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setSelectedContainerFilter(v === 'all' ? 'all' : v === 'loose' ? 'loose' : Number(v));
-                  }}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    opacity: 0,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <option value="all">Tous les colis ({activeLinesPool.length})</option>
-                  {activeContainers.map((c) => {
-                    const st = containerStats.get(c.id!) || { linesCount: 0 };
-                    return (
-                      <option key={c.id} value={c.id}>
-                        {c.type === 'chouala' ? 'Sac' : 'Carton'}: {c.label} ({st.linesCount})
-                      </option>
-                    );
-                  })}
-                  <option value="loose">Hors Colis (Fraq) ({containerStats.get('loose')?.linesCount || 0})</option>
-                </select>
+
+                {showColisDropdown && (
+                  <div className="apple-glass-dropdown" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      className={`apple-glass-dropdown-item ${selectedContainerFilter === 'all' ? 'active' : ''}`}
+                      onClick={() => {
+                        setSelectedContainerFilter('all');
+                        setShowColisDropdown(false);
+                      }}
+                    >
+                      <span>Tous les colis</span>
+                      <span className="badge" style={{ fontSize: '0.68rem' }}>{activeLinesPool.length}</span>
+                    </button>
+                    {activeContainers.map((c) => {
+                      const st = containerStats.get(c.id!) || { linesCount: 0 };
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className={`apple-glass-dropdown-item ${selectedContainerFilter === c.id ? 'active' : ''}`}
+                          onClick={() => {
+                            setSelectedContainerFilter(c.id!);
+                            setShowColisDropdown(false);
+                          }}
+                        >
+                          <span>{c.type === 'chouala' ? 'Sac' : 'Carton'}: {c.label}</span>
+                          <span className="badge" style={{ fontSize: '0.68rem' }}>{st.linesCount}</span>
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      className={`apple-glass-dropdown-item ${selectedContainerFilter === 'loose' ? 'active' : ''}`}
+                      onClick={() => {
+                        setSelectedContainerFilter('loose');
+                        setShowColisDropdown(false);
+                      }}
+                    >
+                      <span>Hors Colis (Fraq)</span>
+                      <span className="badge" style={{ fontSize: '0.68rem' }}>{containerStats.get('loose')?.linesCount || 0}</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -5135,8 +6878,52 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
           </div>
         )}
 
+        {/* HQ Revision Banner: Changes from Siège after preparation started */}
+        {bill?.hqRevision && !bill.hqRevision.acknowledged && (
+          <div
+            className="p-3 mb-3 flex items-start justify-between gap-3 text-xs"
+            style={{
+              borderRadius: 16,
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1.5px solid rgba(239, 68, 68, 0.45)',
+              boxShadow: '0 4px 16px rgba(239, 68, 68, 0.18)',
+            }}
+          >
+            <div className="flex items-start gap-2.5 min-w-0">
+              <IconWarning size={20} style={{ color: '#ef4444', flexShrink: 0, marginTop: 1 }} />
+              <div className="min-w-0">
+                <div style={{ fontWeight: 800, color: '#ef4444', fontSize: '0.86rem' }}>
+                  COMMANDE MODIFIÉE PAR LE SIÈGE
+                </div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.76rem', marginTop: 2 }}>
+                  {bill.hqRevision.summaryMessage}
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.70rem', marginTop: 3 }}>
+                  Modifié le : {new Date(bill.hqRevision.revisedAt).toLocaleString('fr-FR')}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-xs btn-primary flex-shrink-0"
+              style={{
+                borderRadius: 9999,
+                padding: '6px 12px',
+                fontWeight: 800,
+                fontSize: '0.75rem',
+                background: '#ef4444',
+                borderColor: '#ef4444',
+                color: '#fff',
+              }}
+              onClick={() => setShowHqRevisionModal(true)}
+            >
+              Voir le réajustement ({bill.hqRevision.changes.length})
+            </button>
+          </div>
+        )}
+
         {/* Skip-Guide Alert: Ref is Absent in this Order */}
-        {refCheckResult && refCheckResult.isSkipped && (
+        {searchQuery.trim().length >= 4 && refCheckResult && refCheckResult.isSkipped && displayLines.length === 0 && (
           <div
             className="p-3 mb-2 flex items-start gap-2.5 text-xs"
             style={{
@@ -5618,9 +7405,18 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                         : line.historicalReference
                         ? profileMap.get(line.historicalReference)?.warehouseZone
                         : null);
+                    const effectiveNote =
+                      line.locationNote ||
+                      (line.reference
+                        ? profileMap.get(line.reference)?.locationNote
+                        : line.historicalReference
+                        ? profileMap.get(line.historicalReference)?.locationNote
+                        : null);
                     const zoneShort = getZoneShortLabel(effectiveZone);
+                    const locationDisplay = formatLocationWithNote(zoneShort, effectiveNote);
+
                     if (stage === 'chargement') {
-                      if (!effectiveZone) return null;
+                      if (!effectiveZone && !effectiveNote) return null;
                       return (
                         <div className="flex items-center gap-1.5 mt-1">
                           <span
@@ -5629,27 +7425,27 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
                             title="Emplacement entrepôt (Lecture seule en chargement)"
                           >
                             <IconMapPin size={10} />
-                            <span>{zoneShort}</span>
+                            <span>{locationDisplay}</span>
                           </span>
                         </div>
                       );
                     }
 
-                    const similarLoc = !effectiveZone ? findSimilarProductLocations(line, displayLines, profileMap) : null;
+                    const similarLoc = !effectiveZone && line.id ? similarLocationsMap.get(line.id) : null;
 
                     return (
                       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                         <button
                           type="button"
-                          className={`badge-zone-pill ${effectiveZone ? 'badge-zone-assigned' : 'badge-zone-unassigned'}`}
+                          className={`badge-zone-pill ${effectiveZone || effectiveNote ? 'badge-zone-assigned' : 'badge-zone-unassigned'}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             setZoneModalLine(line);
                           }}
-                          title="Modifier l'emplacement entrepôt"
+                          title="Modifier l'emplacement ou la note de terrain"
                         >
                           <IconMapPin size={10} />
-                          <span>{zoneShort || '+ Emplacement'}</span>
+                          <span>{locationDisplay || '+ Emplacement'}</span>
                         </button>
                         {!effectiveZone && similarLoc && (
                           <button
@@ -5993,10 +7789,25 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         <div className="bottom-bar">
           <button
             className="btn btn-primary"
-            style={{ flex: 2 }}
+            style={{ flex: 1.8 }}
             onClick={() => nav(`/scan?billId=${billId}&stage=${stage}`)}
           >
             <IconScan size={18} /> Scanner
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{
+              flex: 1.4,
+              background: 'rgba(16, 185, 129, 0.15)',
+              border: '1px solid rgba(16, 185, 129, 0.4)',
+              color: '#34d399',
+              fontWeight: 800,
+            }}
+            onClick={() => setShowLiveOcrModal(true)}
+            title="Reconnaissance optique photo (Carton & OCR)"
+          >
+            <IconCamera size={16} /> Photo OCR
           </button>
           <button
             className="btn btn-secondary"
@@ -6209,6 +8020,68 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
         />
       )}
 
+      <RenameClientModal
+        isOpen={showRenameModal}
+        onClose={() => setShowRenameModal(false)}
+        legalName={bill.client}
+        currentOperationalName={bill.operationalClient}
+        setToast={setToast}
+      />
+
+      <AssignDriverModal
+        isOpen={showAssignDriverModal}
+        onClose={() => setShowAssignDriverModal(false)}
+        billId={bill.id!}
+        billNumber={bill.billNumber}
+        client={bill.operationalClient || bill.client}
+        currentDriver={bill.driverName}
+        onAssigned={(driverName) => {
+          showToast(driverName ? `Chauffeur assigné : ${driverName}` : 'Chauffeur retiré', setToast);
+        }}
+      />
+
+      <LiveProductOcrModal
+        isOpen={showLiveOcrModal}
+        onClose={() => setShowLiveOcrModal(false)}
+        activeBillLines={lines}
+        siblingLines={siblingLines}
+        siblingBillNumber={bill.billNumber}
+        catalogProfiles={productProfiles || []}
+        billId={bill.id}
+        stage={stage}
+        onProductAction={async (action, product, qty) => {
+          if (action === 'count_increment' && product.matchedLine) {
+            const addQty = qty || 1;
+            await addCountEvent(product.matchedLine.billId, product.matchedLine.id!, stage, addQty);
+            playSuccessChime();
+            showToast(`+${addQty} pc(s) pointé(s) sur N°${product.matchedLine.no} (${product.reference})`, setToast);
+          } else if (action === 'open_line' && product.matchedLine) {
+            nav(`/bill/${bill.id}/line/${product.matchedLine.id}?stage=${stage}`);
+          } else if (action === 'add_extra') {
+            nav(`/bill/${bill.id}/extras?stage=${stage}&ean=${encodeURIComponent(product.ean || '')}&ref=${encodeURIComponent(product.reference || '')}`);
+          }
+        }}
+      />
+
+      {bill.hqRevision && (
+        <HqRevisionModal
+          isOpen={showHqRevisionModal}
+          onClose={() => setShowHqRevisionModal(false)}
+          bill={bill}
+          onAcknowledge={async () => {
+            if (bill.hqRevision) {
+              await db.bills.update(bill.id, {
+                hqRevision: {
+                  ...bill.hqRevision,
+                  acknowledged: true,
+                },
+              });
+            }
+          }}
+          onToast={(msg) => showToast(msg, setToast)}
+        />
+      )}
+
       {/* Commande Photo Zoom Lightbox Modal */}
       {selectedZoomPhoto && (
         <div
@@ -6234,16 +8107,28 @@ function BillScreen({ setToast }: { setToast: (m: string) => void }) {
               Photo modèle / bon manuscrit ({bill.client})
             </span>
             <div className="flex items-center gap-2">
+              <a
+                href={selectedZoomPhoto}
+                download={`photo_${(bill.billNumber || bill.client || 'modele').replace(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now()}.jpg`}
+                className="btn btn-xs btn-primary font-bold flex items-center gap-1"
+                style={{ borderRadius: 9999, textDecoration: 'none' }}
+                title="Télécharger / Enregistrer dans la galerie"
+              >
+                <IconDownload size={13} />
+                <span>Enregistrer</span>
+              </a>
               <button
                 type="button"
                 className="btn btn-xs btn-danger font-bold"
+                style={{ borderRadius: 9999 }}
                 onClick={() => handleDeleteBillPhoto(selectedZoomPhoto)}
               >
-                Supprimer photo
+                Supprimer
               </button>
               <button
                 type="button"
                 className="btn btn-xs btn-ghost text-white"
+                style={{ borderRadius: 9999 }}
                 onClick={() => setSelectedZoomPhoto(null)}
               >
                 Fermer
@@ -6303,6 +8188,20 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     }
     return null;
   }, [allBillLines, line, lineId]);
+
+  const [holdConfirm, setHoldConfirm] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    confirmLabel?: string;
+    dangerLevel?: 'danger' | 'warning' | 'primary';
+    onConfirm: () => void | Promise<void>;
+  }>({
+    isOpen: false,
+    title: '',
+    description: '',
+    onConfirm: () => {},
+  });
 
   const isSubmittingRef = useRef(false);
   const lastSubmitTimeRef = useRef(0);
@@ -6563,10 +8462,25 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   };
 
   const handleAddCount = async (targetNextLineId?: number) => {
+    if (bill) {
+      const sealCheck = assertBillNotSealed(bill, "Comptage");
+      if (!sealCheck.allowed) {
+        playErrorBeep();
+        showToast(sealCheck.reason || "Ce bon est scellé cryptographiquement", setToast);
+        return;
+      }
+    }
     const now = Date.now();
-    if (now - lastSubmitTimeRef.current < 600) return;
+    if (now - lastSubmitTimeRef.current < 450) return;
     const effectiveTotalBatch = (stage === 'pointage' && isSplitMode) ? (batchQty + splitDamagedQty) : batchQty;
     if (isSubmittingRef.current || effectiveTotalBatch <= 0) return;
+
+    const bounce = checkDoubleScanBounce(lineId, effectiveTotalBatch);
+    if (bounce.isBounce) {
+      showToast(bounce.message || "Double-scan évité", setToast);
+      return;
+    }
+
     isSubmittingRef.current = true;
     lastSubmitTimeRef.current = now;
     setIsSubmitting(true);
@@ -6680,17 +8594,32 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
     }
   };
 
-  const handleResetCount = async () => {
+  const handleResetCount = () => {
     if (stageTotal === 0) return;
-    const stageName = stage === 'pointage' ? 'Pointage' : stage === 'chargement' ? 'Chargement' : 'Préparation';
-    if (!window.confirm(`Remettre le comptage de cet article à zéro pour l'étape "${stageName}" ?`)) {
-      return;
+    if (bill) {
+      const sealCheck = assertBillNotSealed(bill, "Réinitialisation");
+      if (!sealCheck.allowed) {
+        playErrorBeep();
+        showToast(sealCheck.reason || "Ce bon est scellé cryptographiquement", setToast);
+        return;
+      }
     }
-    await resetLineStageCount(lineId, stage);
-    playUndoBeep();
-    hapticTap('medium');
-    showToast('Comptage réinitialisé à 0', setToast);
-    scheduleVaultMirror(300);
+    const stageName = stage === 'pointage' ? 'Pointage' : stage === 'chargement' ? 'Chargement' : 'Préparation';
+    setHoldConfirm({
+      isOpen: true,
+      title: `Remettre à zéro (${stageName})`,
+      description: `Êtes-vous certain de vouloir effacer l'intégralité du comptage pour cet article (${stageTotal} pièces comptées) ? Cette action est irréversible.`,
+      confirmLabel: 'Maintenir pour réinitialiser',
+      dangerLevel: 'danger',
+      onConfirm: async () => {
+        setHoldConfirm((prev) => ({ ...prev, isOpen: false }));
+        await resetLineStageCount(lineId, stage);
+        playUndoBeep();
+        hapticTap('medium');
+        showToast('Comptage réinitialisé à 0', setToast);
+        scheduleVaultMirror(300);
+      },
+    });
   };
 
   const handleClearPackaging = async () => {
@@ -6746,11 +8675,32 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
   };
 
   const handleStatusChange = async (newStatus: LineStatus) => {
-    // Confirm if has count history
-    if (newStatus !== 'active' && events.filter(e => !e.undone).length > 0) {
-      if (!window.confirm('Cette ligne a un historique de comptage. Confirmer le changement de statut ?')) {
+    if (bill) {
+      const sealCheck = assertBillNotSealed(bill, "Changement de statut");
+      if (!sealCheck.allowed) {
+        playErrorBeep();
+        showToast(sealCheck.reason || "Ce bon est scellé cryptographiquement", setToast);
         return;
       }
+    }
+    // Confirm if has count history
+    if (newStatus !== 'active' && events.filter(e => !e.undone).length > 0) {
+      setHoldConfirm({
+        isOpen: true,
+        title: 'Changer le statut de la ligne',
+        description: `Cette ligne comporte un historique de comptage. Le passage en statut "${
+          newStatus === 'cancelled' ? 'Annulé' : 'Introuvable'
+        }" affectera les totaux.`,
+        confirmLabel: 'Maintenir pour valider le statut',
+        dangerLevel: 'warning',
+        onConfirm: async () => {
+          setHoldConfirm((prev) => ({ ...prev, isOpen: false }));
+          await updateLineStatus(lineId, newStatus);
+          showToast(`Statut → ${newStatus === 'cancelled' ? 'Annulé' : 'Introuvable'}`, setToast);
+          scheduleVaultMirror(300);
+        },
+      });
+      return;
     }
     await updateLineStatus(lineId, newStatus);
     showToast(`Statut → ${newStatus === 'cancelled' ? 'Annulé' : newStatus === 'not_found' ? 'Introuvable' : 'Actif'}`, setToast);
@@ -9002,6 +10952,17 @@ function ProductScreen({ setToast }: { setToast: (m: string) => void }) {
             }}
           />
         )}
+
+        {/* Tactile Hold-to-Confirm Error Guardrail Modal */}
+        <HoldToConfirmModal
+          isOpen={holdConfirm.isOpen}
+          title={holdConfirm.title}
+          description={holdConfirm.description}
+          confirmLabel={holdConfirm.confirmLabel}
+          dangerLevel={holdConfirm.dangerLevel}
+          onConfirm={holdConfirm.onConfirm}
+          onCancel={() => setHoldConfirm((prev) => ({ ...prev, isOpen: false }))}
+        />
       </div>
     </ErrorBoundary>
   );
@@ -9109,6 +11070,7 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
   const [availableCameras, setAvailableCameras] = useState<BackCameraInfo[]>([]);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [qrSyncModalPayload, setQrSyncModalPayload] = useState<QRSyncPayload | null>(null);
+  const [showLiveOcrModal, setShowLiveOcrModal] = useState(false);
 
   const handleZoom = async (val: number) => {
     setZoomLevel(val);
@@ -9569,6 +11531,21 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
                 <span>{currentCameraInfo?.cleanName || 'Capteur 2 (Principal 1×)'}</span>
               </button>
             )}
+            <button
+              type="button"
+              className="scanner-cam-switch-btn"
+              onClick={() => setShowLiveOcrModal(true)}
+              style={{
+                background: 'rgba(16, 185, 129, 0.22)',
+                border: '1px solid rgba(16, 185, 129, 0.5)',
+                color: '#34d399',
+                fontWeight: 800,
+              }}
+              title="Ouvrir la reconnaissance photo avancée (OCR & Cartons)"
+            >
+              <IconCamera size={14} />
+              <span>Photo OCR</span>
+            </button>
             <div className="scanner-zoom-bar">
               <button
                 type="button"
@@ -9746,6 +11723,27 @@ function GlobalScanScreen({ setToast }: { setToast: (m: string) => void }) {
           setToast={setToast}
         />
       )}
+
+      <LiveProductOcrModal
+        isOpen={showLiveOcrModal}
+        onClose={() => setShowLiveOcrModal(false)}
+        activeBillLines={allLines}
+        billId={billIdParam ? Number(billIdParam) : undefined}
+        stage={(stageParam as Stage) || 'preparation'}
+        onProductAction={async (action, product, qty) => {
+          if (action === 'count_increment' && product.matchedLine) {
+            const addQty = qty || 1;
+            await addCountEvent(product.matchedLine.billId, product.matchedLine.id!, (stageParam as Stage) || 'preparation', addQty);
+            playSuccessChime();
+            showToast(`+${addQty} pc(s) pointé(s) sur N°${product.matchedLine.no} (${product.reference})`, setToast);
+          } else if (action === 'open_line' && product.matchedLine) {
+            navigateToLine(product.matchedLine);
+          } else if (action === 'add_extra') {
+            const fallbackBillId = product.matchedLine?.billId || billIdParam || (bills[0]?.id ? String(bills[0].id) : '1');
+            nav(`/bill/${fallbackBillId}/extras?stage=${stageParam}&ean=${encodeURIComponent(product.ean || '')}&ref=${encodeURIComponent(product.reference || '')}`);
+          }
+        }}
+      />
     </div>
   );
 }
@@ -9806,6 +11804,7 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
   const [exportDocFormat, setExportDocFormat] = useState<DocumentExportType>('auto');
   const [showExportOptions, setShowExportOptions] = useState(false);
   const [showSummaryResetModal, setShowSummaryResetModal] = useState(false);
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
 
   const summaryStageEvents = React.useMemo(
     () => (events || []).filter((e) => !e.undone && e.stage === stageScope),
@@ -10120,11 +12119,11 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
           onToggleStatus={async () => {
             const nextStatus = bill.status === 'completed' ? 'active' : 'completed';
             if (nextStatus === 'completed') {
-              const ok = window.confirm(`Archiver le bon ${bill.billNumber} ? Il restera accessible dans l'Historique.`);
-              if (!ok) return;
+              setShowArchiveConfirm(true);
+            } else {
+              await db.bills.update(bill.id!, { status: nextStatus });
+              if (setToast) setToast('Bon restauré dans les bons actifs');
             }
-            await db.bills.update(bill.id!, { status: nextStatus });
-            if (setToast) setToast(nextStatus === 'completed' ? 'Bon archivé dans l’historique' : 'Bon restauré dans les bons actifs');
           }}
         />
 
@@ -11091,6 +13090,17 @@ function SummaryScreen({ setToast }: { setToast?: (m: string) => void }) {
         clientName={bill.client}
         billNumber={bill.billNumber}
       />
+
+      <ArchiveConfirmModal
+        bill={bill}
+        isOpen={showArchiveConfirm}
+        onClose={() => setShowArchiveConfirm(false)}
+        onConfirm={async () => {
+          setShowArchiveConfirm(false);
+          await db.bills.update(bill.id!, { status: 'completed' });
+          if (setToast) setToast('Bon archivé dans l’historique');
+        }}
+      />
     </>
   );
 }
@@ -11203,6 +13213,7 @@ function BackupScreen({
 }) {
   const nav = useNavigate();
   const [exporting, setExporting] = useState(false);
+  const [pendingBackup, setPendingBackup] = useState<BackupData | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = async () => {
@@ -11233,10 +13244,7 @@ function BackupScreen({
     try {
       const text = await file.text();
       const data = JSON.parse(text) as BackupData;
-      if (!window.confirm('Cela remplacera TOUTES les données actuelles. Continuer ?')) return;
-      await importBackup(data);
-      showToast('Sauvegarde restaurée', setToast);
-      nav('/');
+      setPendingBackup(data);
     } catch (err) {
       showToast(`Erreur: ${(err as Error).message}`, setToast);
     }
@@ -11305,6 +13313,23 @@ function BackupScreen({
           </div>
         </div>
 
+        {/* Tactile Hold-to-Confirm Full Data Restore Modal */}
+        <HoldToConfirmModal
+          isOpen={pendingBackup !== null}
+          title="Remplacer toutes les données"
+          description="Attention : Cette restauration écrasera l'intégralité des bons, lignes, et comptages actuels par les données du fichier de sauvegarde."
+          confirmLabel="Maintenir pour écraser et restaurer"
+          dangerLevel="danger"
+          onConfirm={async () => {
+            if (!pendingBackup) return;
+            const data = pendingBackup;
+            setPendingBackup(null);
+            await importBackup(data);
+            showToast('Sauvegarde restaurée avec succès', setToast);
+            nav('/');
+          }}
+          onCancel={() => setPendingBackup(null)}
+        />
       </div>
     </>
   );

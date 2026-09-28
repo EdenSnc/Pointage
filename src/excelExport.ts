@@ -21,7 +21,7 @@ import type {
 import { sumStageEvents } from './logic';
 import { formatDzdAmountInWords, numberToWordsFr } from './frenchNumberToWords';
 
-export type DocumentExportType = 'auto' | 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | 'proforma';
+export type DocumentExportType = 'auto' | 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | 'proforma' | 'bon_transfert';
 
 export interface FinalBillOptions {
   stage?: Stage;
@@ -208,35 +208,81 @@ export function compileFinalBillData(
  * Resolves document type based on metadata or heuristic matching.
  */
 export function resolveDocumentType(
-  data: FinalBillExportData,
-  overrideType?: DocumentExportType
-): 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | 'proforma' {
+  dataOrBillNo: FinalBillExportData | string,
+  overrideOrNote?: DocumentExportType | string,
+  explicitOverride?: DocumentExportType
+): 'invoice' | 'bl_official' | 'bl_workshop' | 'bon_commande' | 'proforma' | 'bon_transfert' {
+  let data: Partial<FinalBillExportData> = {};
+  let overrideType: DocumentExportType | undefined;
+
+  const validTypes: DocumentExportType[] = [
+    'auto',
+    'invoice',
+    'bl_official',
+    'bl_workshop',
+    'bon_commande',
+    'proforma',
+    'bon_transfert',
+  ];
+
+  if (typeof dataOrBillNo === 'string') {
+    data = {
+      billNumber: dataOrBillNo,
+      commercialNote: typeof overrideOrNote === 'string' ? overrideOrNote : undefined,
+    };
+    if (explicitOverride && validTypes.includes(explicitOverride)) {
+      overrideType = explicitOverride;
+    } else if (typeof overrideOrNote === 'string' && validTypes.includes(overrideOrNote as DocumentExportType)) {
+      overrideType = overrideOrNote as DocumentExportType;
+    }
+  } else {
+    data = dataOrBillNo;
+    overrideType = overrideOrNote as DocumentExportType | undefined;
+  }
+
   if (overrideType && overrideType !== 'auto') {
     return overrideType;
   }
   if (data.documentType && (data.documentType as string) !== 'auto') {
-    return data.documentType;
+    return data.documentType as any;
   }
 
   const billNo = (data.billNumber || '').toUpperCase().trim();
+  const note = (data.commercialNote || '').toUpperCase().trim();
+  const combined = `${billNo} ${note}`;
+
+  // Bon de Transfert identifiers: TR/, BT/, TRANSFERT, NAVETTE
+  if (
+    billNo.startsWith('TR') ||
+    billNo.startsWith('BT') ||
+    combined.includes('TRANSFERT') ||
+    combined.includes('NAVETTE')
+  ) {
+    return 'bon_transfert';
+  }
 
   // Proforma / Devis identifiers
-  if (billNo.startsWith('PRO') || billNo.includes('PROFORMA') || billNo.includes('DEVIS') || billNo.includes('COTATION')) {
+  if (
+    billNo.startsWith('PRO') ||
+    combined.includes('PROFORMA') ||
+    combined.includes('DEVIS') ||
+    combined.includes('COTATION')
+  ) {
     return 'proforma';
   }
 
   // Invoice identifiers: Invoice, SAJ, FACT, FA
-  if (billNo.startsWith('INV') || billNo.includes('SAJ') || billNo.includes('FACT')) {
+  if (billNo.startsWith('INV') || combined.includes('SAJ') || combined.includes('FACT')) {
     return 'invoice';
   }
 
   // Bon de Commande identifiers: BC
-  if (billNo.startsWith('BC') || billNo.includes('COMMANDE')) {
+  if (billNo.startsWith('BC') || combined.includes('COMMANDE')) {
     return 'bon_commande';
   }
 
   // Delivery Note: check if EAN is available
-  const hasEan = data.rows.some((r) => Boolean(r.ean && r.ean.trim().length >= 8));
+  const hasEan = data.rows ? data.rows.some((r) => Boolean(r.ean && r.ean.trim().length >= 8)) : false;
   if (billNo.startsWith('BL')) {
     return hasEan ? 'bl_official' : 'bl_workshop';
   }

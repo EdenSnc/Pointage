@@ -5,8 +5,26 @@
 import { db } from './db';
 import { saveProductProfile } from './hooks';
 import { scheduleVaultMirror } from './offlineVault';
-import type { OrderLine, ProductProfile, WarehouseZone } from './types';
+import type { OrderLine, ProductProfile, WarehouseZone, WarehouseSite } from './types';
 import { detectProductFamily, extractNumericReference } from './rangeShortcuts';
+
+export const LOCATION_NOTE_PRESETS = [
+  'Sous la bâche',
+  'Au fond à droite',
+  'Au fond à gauche',
+  'Au sol',
+  'En hauteur',
+  'Derrière cartons',
+] as const;
+
+export type LocationNotePreset = (typeof LOCATION_NOTE_PRESETS)[number];
+
+export const DEFAULT_WAREHOUSE_SITES: WarehouseSite[] = [
+  { id: 'oran_surface', name: 'Oran — Surface', wilaya: 'Oran', wilayaCode: '31', isDefault: true },
+  { id: 'oran_usine', name: 'Oran — Usine', wilaya: 'Oran', wilayaCode: '31' },
+  { id: 'alger_hub', name: 'Alger — Hub Centre', wilaya: 'Alger', wilayaCode: '16' },
+  { id: 'constantine_hub', name: 'Constantine — Hub Est', wilaya: 'Constantine', wilayaCode: '25' },
+];
 
 export interface WarehouseZoneOption {
   code: string;
@@ -141,6 +159,8 @@ export const WAREHOUSE_ZONES: WarehouseZoneOption[] = [
   },
 ];
 
+export const DEFAULT_WAREHOUSE_ZONES = WAREHOUSE_ZONES;
+
 // Mapping for legacy or alias codes
 const LEGACY_ZONE_MAP: Record<string, string> = {
   NORTH_WEST: 'CH_NW',
@@ -242,17 +262,24 @@ export async function updateProductWarehouseZone(
   billId: number,
   reference: string | null | undefined,
   newZone: string | null,
-  operatorName?: string
+  operatorName?: string,
+  locationNote?: string | null
 ): Promise<void> {
   const currentLine = await db.orderLines.get(lineId);
   const oldZone = currentLine?.warehouseZone || null;
   const normalizedNewZone = (normalizeZoneCode(newZone) || null) as WarehouseZone | null;
+  const cleanNote = locationNote !== undefined ? (locationNote?.trim() || null) : undefined;
 
-  // 1. Update current line
-  await db.orderLines.update(lineId, {
+  const lineUpdates: Partial<OrderLine> = {
     warehouseZone: normalizedNewZone,
     updatedAt: new Date().toISOString(),
-  });
+  };
+  if (cleanNote !== undefined) {
+    lineUpdates.locationNote = cleanNote;
+  }
+
+  // 1. Update current line
+  await db.orderLines.update(lineId, lineUpdates);
 
   // 2. Update all lines on this bill with same reference
   if (reference) {
@@ -264,17 +291,18 @@ export async function updateProductWarehouseZone(
 
     for (const sib of siblingLines) {
       if (sib.id) {
-        await db.orderLines.update(sib.id, {
-          warehouseZone: normalizedNewZone,
-          updatedAt: new Date().toISOString(),
-        });
+        await db.orderLines.update(sib.id, lineUpdates);
       }
     }
 
     // 3. Persist to master product profile
-    await saveProductProfile(reference, {
+    const profileUpdates: Partial<ProductProfile> = {
       warehouseZone: normalizedNewZone,
-    });
+    };
+    if (cleanNote !== undefined) {
+      profileUpdates.locationNote = cleanNote;
+    }
+    await saveProductProfile(reference, profileUpdates);
   }
 
   // 4. Audit trail
@@ -284,7 +312,7 @@ export async function updateProductWarehouseZone(
     stage: null,
     type: 'warehouse_zone_changed',
     oldValue: oldZone,
-    newValue: normalizedNewZone,
+    newValue: normalizedNewZone ? (cleanNote ? `${normalizedNewZone} (${cleanNote})` : normalizedNewZone) : null,
     reason: operatorName ? `Défini par ${operatorName}` : 'Mise à jour emplacement entrepôt',
     timestamp: new Date().toISOString(),
   });
@@ -292,6 +320,22 @@ export async function updateProductWarehouseZone(
   // Mirror update immediately to offline vault
   scheduleVaultMirror(200);
 }
+
+/**
+ * Formats location and terrain note for display (e.g. "CH • Nord-Ouest — Sous la bâche")
+ */
+export function formatLocationWithNote(
+  zoneLabel: string | null | undefined,
+  locationNote: string | null | undefined
+): string {
+  const cleanZone = zoneLabel?.trim() || '';
+  const cleanNote = locationNote?.trim() || '';
+  if (cleanZone && cleanNote) {
+    return `${cleanZone} — ${cleanNote}`;
+  }
+  return cleanZone || cleanNote || '';
+}
+
 
 /**
  * Sorts lines by warehouse picking path:

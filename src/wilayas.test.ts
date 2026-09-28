@@ -33,6 +33,15 @@ describe('Algerian Wilayas & Temporal Decomposition Engine', () => {
     expect(r4).not.toBeNull();
     expect(r4?.wilayaCode).toBe('44');
     expect(r4?.wilaya).toBe('44 - Aïn Defla');
+
+    // KRAL MARKET Relizane / Ghelizane
+    const r5 = detectWilaya('KRAL MARKET (GHELIZANE)');
+    expect(r5).not.toBeNull();
+    expect(r5?.wilayaCode).toBe('48');
+    expect(r5?.wilaya).toBe('48 - Relizane');
+
+    const r6 = detectWilaya('SUPERETTE KRAL MARKET RELIZANE');
+    expect(r6?.wilayaCode).toBe('48');
   });
 
   it('detects wilaya by numerical code tokens', () => {
@@ -42,6 +51,15 @@ describe('Algerian Wilayas & Temporal Decomposition Engine', () => {
     const r2 = detectWilaya('DESTINATION W09 BLIDA');
     expect(r2?.wilayaCode).toBe('09');
     expect(r2?.wilaya).toBe('09 - Blida');
+
+    const r3 = detectWilaya('CLIENT RELIZANE (48)');
+    expect(r3?.wilayaCode).toBe('48');
+  });
+
+  it('does not falsely trigger wilaya 08 from order references or dates', () => {
+    // Order reference containing 08 or 04366
+    expect(detectWilaya('BC/OU126/04366')).toBeNull();
+    expect(detectWilaya('FACTURE 08-2026')).toBeNull();
   });
 
   it('returns null gracefully for ambiguous or non-geographical text', () => {

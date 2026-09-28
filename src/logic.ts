@@ -1130,6 +1130,184 @@ export function getAvailableBackCameras(
   }];
 }
 
+/**
+ * Sort order lines by prioritizing items with known warehouse zones,
+ * active status first, then by line number.
+ */
+export function sortLinesByEmplacementPriority(
+  lines: OrderLine[],
+  profileMap?: Map<string, { warehouseZone?: string | null }>
+): OrderLine[] {
+  return [...lines].sort((a, b) => {
+    if (a.status !== 'active' && b.status === 'active') return 1;
+    if (a.status === 'active' && b.status !== 'active') return -1;
+
+    // Products with a known warehouse emplacement sort higher than those without
+    const hasZoneA = Boolean(a.warehouseZone || (a.reference && profileMap?.get(a.reference)?.warehouseZone));
+    const hasZoneB = Boolean(b.warehouseZone || (b.reference && profileMap?.get(b.reference)?.warehouseZone));
+    if (hasZoneA && !hasZoneB) return -1;
+    if (!hasZoneA && hasZoneB) return 1;
+
+    return (Number(a.no) || 0) - (Number(b.no) || 0);
+  });
+}
+
+// Comprehensive Algerian Wilayas & Major Cities for tolerant place extraction
+const ALGERIAN_CITIES_LIST = [
+  // Compound / Multi-word cities first
+  'SIDI BEL ABBES', 'BORDJ BOU ARRERIDJ', 'AIN TEMOUCHENT', 'OUM EL BOUAGHI',
+  'AIN DEFLA', 'KHEMIS MILIANA', 'BIR EL DJIR', 'BAB EZZOUAR', 'DAR EL BEIDA',
+  'EL HARRACH', 'EL OUED', 'OUED SOUF', 'SOUK AHRAS', 'TIZI OUZOU', 'BENI ABBES',
+  'HASSI MESSAOUD', 'EL EULMA', 'AIN TURCK', 'ES SENIA', 'EL MGHAIR', 'EL MENIA',
+  'EL GOLEA', 'OULED DJELLAL', 'IN SALAH', 'IN GUEZZAM', 'BOU SAADA',
+  // Single-word cities & wilayas
+  'ADRAR', 'CHLEF', 'ECHELIFF', 'ELASNAM', 'LAGHOUAT', 'OUMELBOUAGHI', 'OEB',
+  'BATNA', 'BEJAIA', 'BOUGIE', 'BISKRA', 'BECHAR', 'BLIDA', 'BOUFARIK',
+  'BOUIRA', 'TAMANRASSET', 'TAMANGHASSET', 'TEBESSA', 'TLEMCEN', 'MAGHNIA',
+  'TIARET', 'TIZIOUZOU', 'TIZI', 'ALGER', 'ALGIERS', 'ALGERIE', 'KOUBA',
+  'HYDRA', 'CHERAGA', 'ZERALDA', 'ROUIBA', 'REGHAIA', 'BARAKI', 'DJELFA',
+  'JIJEL', 'SETIF', 'ELEULMA', 'SAIDA', 'SKIKDA', 'SIDIBELABBES', 'SBA',
+  'ANNABA', 'GUELMA', 'CONSTANTINE', 'KHROUB', 'MEDEA', 'MOSTAGANEM',
+  'MSILA', 'BOUSAADA', 'MASCARA', 'OUARGLA', 'HASSIMESSAOUD', 'ORAN',
+  'ESSENIA', 'SENIA', 'ARZEW', 'ELBAYADH', 'ILLIZI', 'BBA', 'BORDJBOUARRERIDJ',
+  'BORDJ', 'BOUMERDES', 'ELTARF', 'TINDOUF', 'TISSEMSILT', 'ELOUED',
+  'OUEDSOUF', 'KHENCHELA', 'SOUKAHRAS', 'TIPAZA', 'KOLEA', 'MILA',
+  'AINDEFLA', 'KHEMISMILIANA', 'NAAMA', 'AINTEMOUCHENT', 'GHARDAIA',
+  'RELIZANE', 'GHELIZANE', 'OUEDRHIOU', 'ELMGHAIR', 'ELMENIA', 'ELGOLEA',
+  'OULEDDJELLAL', 'TIMIMOUN', 'TOUGGOURT', 'DJANET', 'INSALAH', 'INGUEZZAM',
+  'BENIABBES'
+];
+
+const ALGERIAN_CITIES_SET = new Set(ALGERIAN_CITIES_LIST.map((c) => c.replace(/\s+/g, '')));
+
+/**
+ * Normalizes client/place entity names to aggregate multiple orders
+ * belonging to the same place or customer under a single grouped card.
+ * Strips legal forms (SARL, EURL, ETS...), location parentheses,
+ * accents, and trailing city suffixes.
+ */
+export function normalizeClientEntityKey(client?: string | null): string {
+  if (!client) return 'CLIENT DIVERS';
+  let cleaned = client
+    .replace(/\u00a0/g, ' ')
+    .replace(/[\(\[\{][^\)\]\}]*[\)\]\}]/g, ' ') // Strip parenthesized cities e.g. (ORAN), (GHELIZANE)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove accents
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+
+  if (!cleaned) return 'CLIENT DIVERS';
+
+  // Strip legal forms and commercial prefixes if the remaining name is substantial
+  const withoutLegal = cleaned
+    .replace(/\b(SARL|EURL|SNC|SPA|ETS|ETABLISSEMENT|ETB|STE|SOCIETE|ENTREPRISE|GROUPE|COMPTOIR|COOP|COOPERATIVE)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (withoutLegal.length >= 3) {
+    cleaned = withoutLegal;
+  }
+
+  // Strip common retail / warehouse prefixes if accompanied by a distinctive brand/place name
+  const withoutStorePrefix = cleaned
+    .replace(/\b(MAGASIN|DEPOT|SUPERETTE|SUPERMARCHE|HYPERMARCHE|ALIMENTATION|BOUTIQUE|LIBRAIRIE|PAPETERIE|QUINCAILLERIE|PHARMACIE|GROSSISTE|COMMERCE)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (withoutStorePrefix.length >= 3) {
+    cleaned = withoutStorePrefix;
+  }
+
+  // Strip trailing Algerian cities (checking compound first, then single words)
+  for (const city of ALGERIAN_CITIES_LIST) {
+    if (cleaned.endsWith(' ' + city) && cleaned.length > city.length + 3) {
+      cleaned = cleaned.slice(0, -(city.length + 1)).trim();
+      break;
+    }
+  }
+
+  // Also check single trailing word in the set
+  const words = cleaned.split(' ').filter(Boolean);
+  if (words.length > 1) {
+    const lastWord = words[words.length - 1];
+    if (ALGERIAN_CITIES_SET.has(lastWord)) {
+      const stripped = words.slice(0, -1).join(' ').trim();
+      if (stripped.length >= 3) {
+        cleaned = stripped;
+      }
+    }
+  }
+
+  return cleaned || 'CLIENT DIVERS';
+}
+
+/**
+ * Checks whether two client or place names represent the same customer/place.
+ * Handles spelling variants (MARKT / MARKET), word permutations (MOHAMED BENALI / BENALI MOHAMED),
+ * space stripping (KRALMARKT / KRAL MARKT), and city suffixes (KRAL MARKT BECHAR / KRAL MARKT GHELIZANE).
+ */
+export function isSameClientEntity(c1?: string | null, c2?: string | null): boolean {
+  if (!c1 || !c2) return false;
+  const k1 = normalizeClientEntityKey(c1);
+  const k2 = normalizeClientEntityKey(c2);
+
+  if (k1 === 'CLIENT DIVERS' || k2 === 'CLIENT DIVERS') {
+    return c1.trim().toLowerCase() === c2.trim().toLowerCase();
+  }
+
+  if (k1 === k2) return true;
+
+  // Normalized phonetic/spelling variants (e.g. MARKET vs MARKT, CENTER vs CENTRE)
+  const normSpelling = (s: string) =>
+    s
+      .replace(/\bMARKET\b/g, 'MARKT')
+      .replace(/\bCENTER\b/g, 'CENTRE')
+      .replace(/\bSOCIETE\b/g, '')
+      .trim();
+  const s1 = normSpelling(k1);
+  const s2 = normSpelling(k2);
+  if (s1 === s2) return true;
+
+  // Whitespace-agnostic equality (e.g. "KRALMARKT" vs "KRAL MARKT")
+  const noSpace1 = s1.replace(/\s+/g, '');
+  const noSpace2 = s2.replace(/\s+/g, '');
+  if (noSpace1 === noSpace2) return true;
+  if (noSpace1.length >= 4 && noSpace2.length >= 4) {
+    if (noSpace1.startsWith(noSpace2) || noSpace2.startsWith(noSpace1)) return true;
+  }
+
+  // Substring matching for long entity keys
+  if (s1.length >= 4 && s2.length >= 4) {
+    if (s1.includes(s2) || s2.includes(s1)) return true;
+  }
+
+  // Token set matching (word order invariance, e.g. "MOHAMED BENALI" vs "BENALI MOHAMED")
+  const tokens1 = new Set(s1.split(' ').filter((w) => w.length >= 3));
+  const tokens2 = new Set(s2.split(' ').filter((w) => w.length >= 3));
+
+  if (tokens1.size > 0 && tokens2.size > 0) {
+    let matches = 0;
+    for (const t of tokens1) {
+      if (tokens2.has(t)) matches++;
+    }
+    // If all tokens of one name are contained in the other
+    if (matches === tokens1.size || matches === tokens2.size) {
+      return true;
+    }
+    // If they share at least 2 distinctive multi-letter words (e.g. "KRAL MARKT GHELIZANE" & "KRAL MARKT BECHAR")
+    if (matches >= 2) {
+      return true;
+    }
+    // Jaccard similarity for multi-word place names
+    const unionSize = new Set([...tokens1, ...tokens2]).size;
+    if (unionSize > 0 && matches / unionSize >= 0.5) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+
 
 
 

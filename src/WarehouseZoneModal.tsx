@@ -9,9 +9,10 @@ import {
   parseZoneCodes,
   updateProductWarehouseZone,
   findSimilarProductLocations,
+  LOCATION_NOTE_PRESETS,
   type SimilarLocationSuggestion,
 } from './warehouseZones';
-import { IconCompass, IconMapPin, IconX, IconCheck, IconTrash, IconZap } from './icons';
+import { IconCompass, IconMapPin, IconX, IconCheck, IconTrash, IconZap, IconTag } from './icons';
 import { playSuccessChime, hapticTap } from './audio';
 
 interface WarehouseZoneModalProps {
@@ -87,8 +88,19 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
     const info = getZoneInfo(first);
     return info?.category === 'custom' ? first : '';
   });
+  const [locationNote, setLocationNote] = useState<string>(() => line.locationNote || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth <= 640 : false));
+
+  React.useEffect(() => {
+    if (line.reference && !line.locationNote) {
+      db.productProfiles.where('reference').equals(line.reference).first().then((p) => {
+        if (p?.locationNote) {
+          setLocationNote(p.locationNote);
+        }
+      }).catch(() => {});
+    }
+  }, [line.reference, line.locationNote]);
 
   React.useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 640);
@@ -136,7 +148,8 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
         line.billId,
         line.reference,
         zoneString,
-        activeOperator || undefined
+        activeOperator || undefined,
+        locationNote
       );
       if (onZoneUpdated) {
         onZoneUpdated(zoneString);
@@ -554,6 +567,85 @@ export const WarehouseZoneModal: React.FC<WarehouseZoneModalProps> = ({
             </div>
           </div>
         )}
+
+        {/* Terrain Location Note Section (Note de Terrain sans clavier) */}
+        <div
+          className="mt-3.5 p-3"
+          style={{
+            borderRadius: 18,
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+          }}
+        >
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-1.5 font-bold text-xs" style={{ color: 'var(--accent)' }}>
+              <IconTag size={13} />
+              <span>Précision de Terrain (Note rapide)</span>
+            </div>
+            {locationNote && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs text-danger"
+                style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: 9999 }}
+                onClick={() => setLocationNote('')}
+                title="Effacer la note"
+              >
+                Effacer
+              </button>
+            )}
+          </div>
+
+          {/* Quick Preset Chips (1-Tap zero keyboard) */}
+          <div className="flex flex-wrap gap-1.5 mb-2.5">
+            {LOCATION_NOTE_PRESETS.map((preset) => {
+              const isSelected = locationNote.trim().toLowerCase() === preset.toLowerCase();
+              return (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => {
+                    hapticTap('light');
+                    setLocationNote((prev) => (prev === preset ? '' : preset));
+                  }}
+                  className="transition-all"
+                  style={{
+                    fontSize: '0.74rem',
+                    fontWeight: isSelected ? 800 : 600,
+                    padding: '6px 11px',
+                    borderRadius: 9999,
+                    background: isSelected ? 'rgba(16, 185, 129, 0.22)' : 'rgba(255, 255, 255, 0.05)',
+                    border: isSelected ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+                    color: isSelected ? 'var(--accent)' : 'var(--text-primary)',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  {isSelected && <IconCheck size={11} />}
+                  <span>{preset}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Optional Short Custom Note Input */}
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              className="input input-sm flex-1"
+              style={{
+                borderRadius: 12,
+                fontSize: '0.78rem',
+                padding: '6px 10px',
+                background: 'var(--bg-surface)',
+              }}
+              placeholder="Ou note personnalisée (ex: à côté des scotchs...)"
+              value={locationNote}
+              onChange={(e) => setLocationNote(e.target.value)}
+            />
+          </div>
+        </div>
 
         {/* Actions Footer */}
         <div

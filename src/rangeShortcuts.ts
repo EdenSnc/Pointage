@@ -143,7 +143,8 @@ export interface ReferenceCheckResult {
   query: string;
   numericValue: number | null;
   found: boolean;
-  matchedLine?: OrderLine;
+  matchedLine?: OrderLine | null;
+  matchingLine?: OrderLine | null;
   isSkipped: boolean;
   skipReason?: string;
   familyContext?: string;
@@ -395,6 +396,8 @@ export function checkReferenceInBill(
       query: trimmed,
       numericValue: null,
       found: false,
+      matchedLine: null,
+      matchingLine: null,
       isSkipped: false,
       activeRangesInBill: activeRangeLabels,
       matchType: 'not_numeric',
@@ -415,6 +418,7 @@ export function checkReferenceInBill(
       numericValue: num,
       found: true,
       matchedLine: exact,
+      matchingLine: exact,
       isSkipped: false,
       activeRangesInBill: activeRangeLabels,
       matchType: 'exact_present',
@@ -423,9 +427,31 @@ export function checkReferenceInBill(
     };
   }
 
-  // Reference is absent! Generate the Skip-Guide intelligence
+  // Partial match check: if the query is a substring of an existing line's reference
+  // (e.g. typing '518' when '70518' is present in the bill), do NOT report as absent!
+  const partial = lines.find((l) => {
+    const ref = l.reference || '';
+    const lNum = extractNumericReference(ref);
+    return ref.includes(trimmed) || (num !== null && lNum !== null && String(lNum).includes(String(num)));
+  });
+
+  if (partial) {
+    return {
+      query: trimmed,
+      numericValue: num,
+      found: true,
+      matchedLine: partial,
+      matchingLine: partial,
+      isSkipped: false,
+      activeRangesInBill: activeRangeLabels,
+      matchType: 'exact_present',
+      shouldSkip: false,
+      message: `Article correspondant : N°${partial.no} (${partial.designation})`,
+    };
+  }
+
+  // Reference is truly absent! Generate the Skip-Guide intelligence
   const decadeStart = Math.floor(num / 10) * 10;
-  const decadeEnd = decadeStart + 9;
   const hasDecadeCluster = struct.allClusters.some(
     (c) => Math.floor(c.min / 10) === Math.floor(num / 10) || Math.floor(c.max / 10) === Math.floor(num / 10)
   );
@@ -435,15 +461,22 @@ export function checkReferenceInBill(
     : `Réf ${num} : AUCUN article dans cette commande ! (Zapper directement)`;
 
   let familyContext = '';
-  const trousseFam = struct.families.find((f) => f.id === 'trousses');
-  if (trousseFam && trousseFam.numericRanges.length > 0) {
-    familyContext = `Pour les Trousses, seules les séries : ${trousseFam.numericRanges.map((r) => r.label).join(', ')} sont commandées.`;
+  // Dynamically find relevant family based on numeric proximity
+  const relevantFam = struct.families.find((f) =>
+    f.numericRanges.some((r) => num >= r.min - 50 && num <= r.max + 50)
+  );
+  if (relevantFam && relevantFam.numericRanges.length > 0) {
+    familyContext = `Pour ${relevantFam.name}, seules les séries : ${relevantFam.numericRanges.map((r) => r.label).join(', ')} sont commandées.`;
+  } else if (struct.families.length > 0 && struct.allClusters.length > 0) {
+    familyContext = `Séries commandées : ${struct.allClusters.map((r) => r.label).join(', ')}`;
   }
 
   return {
     query: trimmed,
     numericValue: num,
     found: false,
+    matchedLine: null,
+    matchingLine: null,
     isSkipped: true,
     skipReason,
     familyContext,

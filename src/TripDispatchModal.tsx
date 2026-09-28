@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import type { Bill, OrderLine, TransportContainer, CountEvent, ShipmentTrip } from './types';
 import { createAndDispatchTrip, calculateDockStock } from './shipmentTrips';
-import { IconBox, IconCheck, IconTruck, IconUser, IconX, IconBus } from './icons';
+import { IconBox, IconCheck, IconTruck, IconUser, IconX, IconBus, IconShield } from './icons';
 import { playSuccessChime, hapticTap } from './audio';
 
 interface TripDispatchModalProps {
@@ -715,6 +715,24 @@ export const TripDispatchModal: React.FC<TripDispatchModalProps> = ({
             Ce voyage solde l'expédition (Dernier voyage du bon)
           </span>
         </label>
+
+        {/* Anti-Tamper Security Seal Notice */}
+        <div
+          className="p-2.5 mb-3 flex items-center justify-between text-xs"
+          style={{
+            borderRadius: 14,
+            background: 'rgba(59, 130, 246, 0.08)',
+            border: '1px solid rgba(59, 130, 246, 0.25)',
+          }}
+        >
+          <div className="flex items-center gap-2 font-semibold" style={{ color: '#60a5fa' }}>
+            <IconShield size={16} />
+            <span>Scellé numérique d'intégrité</span>
+          </div>
+          <span className="font-mono text-[11px] opacity-80" style={{ color: '#93c5fd' }}>
+            SHA-256 Anti-Vol / Anti-Fraude
+          </span>
+        </div>
 
         {/* Action Buttons */}
         <div className="flex gap-2">

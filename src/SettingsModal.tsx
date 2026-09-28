@@ -13,6 +13,7 @@ import {
 import { useDailyApiQuota } from './ai/quotaTracker';
 import { detectDeviceProfile, setForcedA54Mode, clearPwaCacheAndReload } from './deviceProfile';
 import { getVaultMeta, restoreFromVault } from './offlineVault';
+import { HoldToConfirmModal } from './HoldToConfirmModal';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -43,6 +44,7 @@ export function SettingsModal({
   );
   const [profile, setProfile] = useState(() => detectDeviceProfile());
   const [isA54Active, setIsA54Active] = useState(() => profile.isSamsungA54);
+  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
 
   if (!isOpen) return null;
 
@@ -279,16 +281,7 @@ export function SettingsModal({
           <button
             type="button"
             className="btn btn-xs btn-secondary btn-full flex items-center justify-center gap-2 font-bold"
-            onClick={async () => {
-              try {
-                if (!window.confirm("Restaurer toutes les données depuis le miroir local d'urgence ?")) return;
-                const res = await restoreFromVault();
-                alert(`Restauré avec succès : ${res.billsCount} bon(s) et ${res.linesCount} article(s).`);
-                window.location.reload();
-              } catch (e) {
-                alert((e as Error).message);
-              }
-            }}
+            onClick={() => setShowRestoreConfirm(true)}
             title="Restaure immédiatement la base de données depuis la copie miroir locale"
           >
             <IconUndo size={13} /> Restaurer depuis le miroir local
@@ -317,6 +310,26 @@ export function SettingsModal({
             <IconHelp size={16} /> Guide d'utilisation
           </button>
         </div>
+
+        {/* Tactile Hold-to-Confirm Emergency Vault Restore Modal */}
+        <HoldToConfirmModal
+          isOpen={showRestoreConfirm}
+          title="Restaurer le miroir local"
+          description="Attention : Cette action réinitialise la base de données active en la restaurant avec la dernière copie de secours miroir enregistrée sur cet appareil."
+          confirmLabel="Maintenir pour restaurer"
+          dangerLevel="warning"
+          onConfirm={async () => {
+            setShowRestoreConfirm(false);
+            try {
+              const res = await restoreFromVault();
+              alert(`Restauré avec succès : ${res.billsCount} bon(s) et ${res.linesCount} article(s).`);
+              window.location.reload();
+            } catch (e) {
+              alert((e as Error).message);
+            }
+          }}
+          onCancel={() => setShowRestoreConfirm(false)}
+        />
       </div>
     </div>
   );

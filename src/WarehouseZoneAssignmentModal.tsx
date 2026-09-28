@@ -4,6 +4,7 @@ import {
   WAREHOUSE_ZONES,
   getZoneShortLabel,
   normalizeZoneCode,
+  LOCATION_NOTE_PRESETS,
 } from './warehouseZones';
 import { saveProductProfile } from './hooks';
 import { scheduleVaultMirror } from './offlineVault';
@@ -14,6 +15,8 @@ import {
   IconZap,
   IconScan,
   IconTrash,
+  IconCamera,
+  IconTag,
 } from './icons';
 import { findNormalBackCamera } from './logic';
 import { opticalScannerCoordinator, type CatalogItemLookups } from './opticalScannerEngine';
@@ -32,6 +35,7 @@ interface ProductMatchItem {
   designation: string;
   ean?: string | null;
   currentZone: string | null;
+  currentLocationNote?: string | null;
   linesCount: number;
 }
 
@@ -51,6 +55,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
   const [assignmentToast, setAssignmentToast] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'chambre' | 'couloir' | 'custom'>('chambre');
   const [customZoneInput, setCustomZoneInput] = useState('');
+  const [selectedLocationNote, setSelectedLocationNote] = useState('');
 
   // Dual-mode camera scanner state (Barcode + Printed Reference)
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -282,6 +287,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
           reference: p.reference,
           designation: p.designation || p.reference,
           currentZone: p.warehouseZone || null,
+          currentLocationNote: p.locationNote || null,
           linesCount: 0,
         });
       }
@@ -295,6 +301,9 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
           if (!existing.currentZone && l.warehouseZone) {
             existing.currentZone = l.warehouseZone;
           }
+          if (!existing.currentLocationNote && l.locationNote) {
+            existing.currentLocationNote = l.locationNote;
+          }
           if (!existing.ean && l.ean) {
             existing.ean = l.ean;
           }
@@ -304,6 +313,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
             designation: l.designation,
             ean: l.ean || null,
             currentZone: l.warehouseZone || null,
+            currentLocationNote: l.locationNote || null,
             linesCount: 1,
           });
         }
@@ -336,6 +346,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
 
   const handleSelectProduct = (product: ProductMatchItem) => {
     setSelectedProduct(product);
+    setSelectedLocationNote(product.currentLocationNote || '');
     hapticTap('light');
     if (product.currentZone) {
       if (product.currentZone.startsWith('CO_')) {
@@ -349,11 +360,15 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
     }
   };
 
-  const handleAssignZone = async (zoneCode: string | null) => {
+  const handleAssignZone = async (zoneCode: string | null, customNote?: string) => {
     if (!selectedProduct) return;
 
     const normZone = (normalizeZoneCode(zoneCode) || null) as WarehouseZone | null;
     const ref = selectedProduct.reference;
+    const effectiveNote =
+      customNote !== undefined
+        ? (customNote.trim() || null)
+        : (selectedLocationNote.trim() || null);
 
     try {
       playSuccessChime();
@@ -363,6 +378,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
       await saveProductProfile(ref, {
         designation: selectedProduct.designation,
         warehouseZone: normZone,
+        locationNote: effectiveNote,
       });
 
       // 2. Update all matching orderLines in Dexie
@@ -374,6 +390,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
         if (line.id) {
           await db.orderLines.update(line.id, {
             warehouseZone: normZone,
+            locationNote: effectiveNote,
             updatedAt: new Date().toISOString(),
           });
 
@@ -384,7 +401,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
             stage: null,
             type: 'warehouse_zone_changed',
             oldValue: selectedProduct.currentZone,
-            newValue: normZone,
+            newValue: normZone ? (effectiveNote ? `${normZone} (${effectiveNote})` : normZone) : null,
             reason: activeOperator
               ? `Cartographie rapide par ${activeOperator}`
               : 'Cartographie rapide entrepôt',
@@ -398,13 +415,14 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
 
       // 4. Update UI state
       const zoneLabel = normZone ? getZoneShortLabel(normZone) : 'Zone effacée';
-      showToast(`✓ ${ref} ➔ ${zoneLabel}`);
+      const feedback = effectiveNote ? `${zoneLabel} • ${effectiveNote}` : zoneLabel;
+      showToast(`✓ ${ref} ➔ ${feedback}`);
 
       setRecentAssignments((prev) => [
         {
           reference: ref,
           designation: selectedProduct.designation,
-          zone: zoneLabel,
+          zone: feedback,
           timestamp: new Date(),
         },
         ...prev.slice(0, 4),
@@ -415,7 +433,10 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
       }
 
       // Update selected product's zone
-      setSelectedProduct((prev) => (prev ? { ...prev, currentZone: normZone } : null));
+      setSelectedProduct((prev) =>
+        prev ? { ...prev, currentZone: normZone, currentLocationNote: effectiveNote } : null
+      );
+      setSelectedLocationNote(effectiveNote || '');
 
       // Re-focus search input for continuous fast scanning!
       setSearchQuery('');
@@ -424,6 +445,13 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
     } catch (err) {
       console.error('Failed to assign warehouse zone:', err);
     }
+  };
+
+  const handleSelectPresetNote = async (preset: string) => {
+    if (!selectedProduct) return;
+    const newNote = selectedLocationNote.trim().toLowerCase() === preset.toLowerCase() ? '' : preset;
+    setSelectedLocationNote(newNote);
+    await handleAssignZone(selectedProduct.currentZone, newNote);
   };
 
   const showToast = (message: string) => {
@@ -494,19 +522,15 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
             </div>
             <div style={{ minWidth: 0 }}>
               <h2
-                className="font-bold text-xs uppercase tracking-wider text-accent"
-                style={{ margin: 0, color: 'var(--accent)' }}
+                className="font-bold text-sm tracking-tight"
+                style={{ margin: 0, color: 'var(--text-primary)' }}
+                aria-label="Cartographie Rapide &amp; Emplacements"
               >
-                Cartographie Rapide &amp; Emplacements
+                <span className="sr-only">Cartographie Rapide &amp; Emplacements</span>
+                <span>Emplacements Rayon</span>
               </h2>
-              <div
-                className="font-semibold text-sm truncate"
-                style={{ color: 'var(--text-primary)', marginTop: 1 }}
-              >
-                Assignation d&apos;Emplacement Rayon
-              </div>
               <div className="text-xs text-muted">
-                Scannez ou recherchez un produit
+                {activeOperator ? `Opérateur : ${activeOperator}` : 'Assigner un article'}
               </div>
             </div>
           </div>
@@ -546,7 +570,8 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
                 performSearch(e.target.value);
               }}
               onKeyDown={handleSearchKeyDown}
-              placeholder="Scanner code-barres EAN ou taper référence..."
+              aria-label="Scanner code-barres EAN ou taper référence..."
+              placeholder="Scanner ou rechercher..."
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -588,7 +613,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
             <button
               type="button"
               onClick={() => setIsCameraActive((prev) => !prev)}
-              className="btn btn-xs flex items-center gap-1"
+              className="btn btn-xs flex items-center gap-1.5"
               style={{
                 borderRadius: 9999,
                 fontSize: '0.75rem',
@@ -599,9 +624,10 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
                 color: isCameraActive ? 'var(--danger)' : 'var(--accent)',
                 border: `1px solid ${isCameraActive ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
               }}
-              title="Activer la caméra pour scanner code-barres ou référence imprimée"
+              title="Activer la caméra"
             >
-              <span>{isCameraActive ? '✕ Fermer Cam' : '📷 Caméra'}</span>
+              {isCameraActive ? <IconX size={13} /> : <IconCamera size={13} />}
+              <span>{isCameraActive ? 'Fermer' : 'Caméra'}</span>
             </button>
           </div>
 
@@ -761,7 +787,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
                     </div>
                   </div>
                   <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                    {item.currentZone ? (
+                    {item.currentZone || item.currentLocationNote ? (
                       <span
                         style={{
                           fontSize: '0.72rem',
@@ -772,7 +798,11 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
                           color: 'var(--accent)',
                         }}
                       >
-                        {getZoneShortLabel(item.currentZone)}
+                        {item.currentZone
+                          ? (item.currentLocationNote
+                              ? `${getZoneShortLabel(item.currentZone)} • ${item.currentLocationNote}`
+                              : getZoneShortLabel(item.currentZone))
+                          : item.currentLocationNote}
                       </span>
                     ) : (
                       <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
@@ -819,7 +849,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
               border: '1px solid var(--border)',
               display: 'flex',
               flexDirection: 'column',
-              gap: 4,
+              gap: 6,
             }}
           >
             <div className="flex justify-between items-start gap-2">
@@ -866,14 +896,68 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
                   style={{
                     fontSize: '0.78rem',
                     fontWeight: 800,
-                    color: selectedProduct.currentZone ? 'var(--accent)' : 'var(--text-muted)',
+                    color: (selectedProduct.currentZone || selectedProduct.currentLocationNote) ? 'var(--accent)' : 'var(--text-muted)',
                     marginTop: 1,
                   }}
                 >
                   {selectedProduct.currentZone
-                    ? getZoneShortLabel(selectedProduct.currentZone)
-                    : 'Non assigné'}
+                    ? (selectedProduct.currentLocationNote
+                        ? `${getZoneShortLabel(selectedProduct.currentZone)} • ${selectedProduct.currentLocationNote}`
+                        : getZoneShortLabel(selectedProduct.currentZone))
+                    : (selectedProduct.currentLocationNote || 'Non assigné')}
                 </div>
+              </div>
+            </div>
+
+            {/* Quick 1-Tap Preset Location Notes */}
+            <div className="pt-2 border-t border-[var(--border)]">
+              <div className="flex items-center justify-between gap-1 mb-1.5">
+                <div className="flex items-center gap-1 text-[11px] font-bold text-accent">
+                  <IconTag size={12} />
+                  <span>Précision rapide :</span>
+                </div>
+                {selectedLocationNote && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedLocationNote('');
+                      handleAssignZone(selectedProduct.currentZone, '');
+                    }}
+                    className="btn btn-ghost btn-xs text-danger"
+                    style={{ fontSize: '0.68rem', padding: '0px 6px', borderRadius: 9999 }}
+                  >
+                    Effacer note
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {LOCATION_NOTE_PRESETS.map((preset) => {
+                  const isSelected = selectedLocationNote.trim().toLowerCase() === preset.toLowerCase();
+                  return (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => handleSelectPresetNote(preset)}
+                      className="transition-all"
+                      style={{
+                        fontSize: '0.72rem',
+                        fontWeight: isSelected ? 800 : 600,
+                        padding: '4px 9px',
+                        borderRadius: 9999,
+                        background: isSelected ? 'rgba(16, 185, 129, 0.22)' : 'rgba(255, 255, 255, 0.05)',
+                        border: isSelected ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+                        color: isSelected ? 'var(--accent)' : 'var(--text-primary)',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                      }}
+                    >
+                      {isSelected && <IconCheck size={10} />}
+                      <span>{preset}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -881,7 +965,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
               <div className="flex justify-end pt-1">
                 <button
                   type="button"
-                  onClick={() => handleAssignZone(null)}
+                  onClick={() => handleAssignZone(null, '')}
                   className="btn btn-ghost btn-xs text-danger flex items-center gap-1"
                   style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: 9999 }}
                 >
@@ -893,8 +977,8 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
         ) : (
           <div
             style={{
-              padding: '12px 14px',
-              borderRadius: 16,
+              padding: '10px 14px',
+              borderRadius: 14,
               background: 'var(--bg-card)',
               border: '1px dashed var(--border)',
               textAlign: 'center',
@@ -902,7 +986,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
               color: 'var(--text-muted)',
             }}
           >
-            Scannez un produit ci-dessus pour activer la grille d&apos;attribution spatiale.
+            Sélectionnez un article pour assigner.
           </div>
         )}
 
@@ -933,7 +1017,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
             onClick={() => setActiveTab('couloir')}
           >
             <span style={{ display: 'none' }}>Couloir (Salles 1 à 4)</span>
-            <span>{isMobile ? 'Couloir' : 'Couloir (Salles 1–4)'}</span>
+            <span>Couloir</span>
           </button>
           <button
             type="button"
@@ -943,16 +1027,15 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
             onClick={() => setActiveTab('custom')}
           >
             <span style={{ display: 'none' }}>Personnalisé</span>
-            <span>{isMobile ? 'Autre' : 'Personnalisé'}</span>
+            <span>Autre</span>
           </button>
         </div>
 
         {/* Tab 1: Chambre Principale (Apple 3x3 Compass Grid) */}
         {activeTab === 'chambre' && (
           <div>
-            <div className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2 flex justify-between items-center px-1">
-              <span>Chambre Principale</span>
-              <span className="text-[10px] text-muted">Touchez pour assigner</span>
+            <div className="text-xs font-bold text-muted mb-2 px-1">
+              Chambre Principale
             </div>
 
             <div
@@ -970,7 +1053,6 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
                     selectedProduct?.currentZone && selectedProduct.currentZone.includes(z.code)
                   );
                   const isEntrance = z.code === 'CH_SW';
-                  const isCouloirAccess = z.code === 'CH_W' || z.code === 'CH_NW';
 
                   return (
                     <button
@@ -979,7 +1061,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
                       disabled={!selectedProduct}
                       className="flex flex-col items-center justify-center text-center transition-all"
                       style={{
-                        minHeight: 64,
+                        minHeight: 56,
                         padding: '8px 4px',
                         borderRadius: 16,
                         background: isCurrent ? 'rgba(16, 185, 129, 0.18)' : 'var(--bg-card)',
@@ -990,26 +1072,21 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
                       }}
                       onClick={() => handleAssignZone(z.code)}
                     >
+                      <span className="sr-only">{z.code}</span>
                       <span
                         className="text-xs font-bold leading-tight"
                         style={{ color: isCurrent ? 'var(--accent)' : 'var(--text-primary)' }}
                       >
                         {z.shortLabel.replace('CH • ', '')}
                       </span>
-                      <span
-                        className="font-mono text-[9px] mt-0.5"
-                        style={{ color: 'var(--text-muted)' }}
-                      >
-                        {z.code}
-                      </span>
 
                       {isEntrance && (
                         <span
                           aria-hidden="true"
-                          className="mt-1 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                          className="mt-1 px-1.5 py-0.5 text-[9px] font-bold"
                           style={{
                             borderRadius: 9999,
-                            background: 'rgba(59, 130, 246, 0.2)',
+                            background: 'rgba(59, 130, 246, 0.15)',
                             color: '#60a5fa',
                           }}
                         >
@@ -1017,26 +1094,13 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
                         </span>
                       )}
 
-                      {isCouloirAccess && !isEntrance && (
-                        <span
-                          aria-hidden="true"
-                          className="mt-1 px-1.5 py-0.5 text-[9px] text-muted font-semibold"
-                          style={{
-                            borderRadius: 9999,
-                            background: 'rgba(0, 0, 0, 0.05)',
-                          }}
-                        >
-                          Couloir
-                        </span>
-                      )}
-
                       {isCurrent && (
                         <span
                           aria-hidden="true"
-                          className="mt-1 px-1.5 py-0.5 text-[10px] text-accent font-extrabold flex items-center gap-0.5"
+                          className="mt-1 px-1.5 py-0.5 text-[9px] text-accent font-extrabold flex items-center gap-0.5"
                           style={{ borderRadius: 9999, background: 'rgba(16, 185, 129, 0.15)' }}
                         >
-                          <IconCheck size={11} /> Actuel
+                          <IconCheck size={10} />
                         </span>
                       )}
                     </button>
@@ -1050,9 +1114,8 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
         {/* Tab 2: Couloir (Salles 1 à 4) */}
         {activeTab === 'couloir' && (
           <div>
-            <div className="text-[11px] font-bold text-muted uppercase tracking-wider mb-2 flex justify-between items-center px-1">
-              <span>Salles du Couloir</span>
-              <span className="text-[10px] text-muted">Touchez pour assigner</span>
+            <div className="text-xs font-bold text-muted mb-2 px-1">
+              Salles du Couloir
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
@@ -1060,38 +1123,42 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
                 const isCurrent = Boolean(
                   selectedProduct?.currentZone && selectedProduct.currentZone.includes(z.code)
                 );
+                const cleanLabel =
+                  z.roomNumber === 1
+                    ? 'Salle 1 (Entrée)'
+                    : z.roomNumber === 4
+                    ? 'Salle 4 (Fond)'
+                    : `Salle ${z.roomNumber || ''}`;
+
                 return (
                   <button
                     key={z.code}
                     type="button"
                     disabled={!selectedProduct}
                     onClick={() => handleAssignZone(z.code)}
-                    className="p-3 rounded-2xl text-left transition-all flex flex-col justify-between gap-1"
+                    className="p-3 rounded-2xl text-left transition-all flex items-center justify-between gap-2"
                     style={{
-                      minHeight: 64,
+                      minHeight: 52,
                       background: isCurrent ? 'rgba(16, 185, 129, 0.18)' : 'var(--bg-card)',
                       border: isCurrent ? '2px solid var(--accent)' : '1px solid var(--border)',
                       cursor: selectedProduct ? 'pointer' : 'not-allowed',
                       opacity: selectedProduct ? 1 : 0.45,
                     }}
                   >
+                    <span className="sr-only">{z.code}</span>
                     <div
-                      className="font-extrabold text-xs"
+                      className="font-bold text-xs"
                       style={{ color: isCurrent ? 'var(--accent)' : 'var(--text-primary)' }}
                     >
-                      {z.label}
+                      {cleanLabel}
                     </div>
-                    <div className="flex justify-between items-center text-[10px] text-muted">
-                      <span className="font-mono">{z.code}</span>
-                      {isCurrent && (
-                        <span
-                          className="text-accent font-bold flex items-center gap-0.5"
-                          style={{ color: 'var(--accent)' }}
-                        >
-                          <IconCheck size={12} /> Actuel
-                        </span>
-                      )}
-                    </div>
+                    {isCurrent && (
+                      <span
+                        className="text-accent text-[10px] font-bold flex items-center gap-0.5"
+                      >
+                        <IconCheck size={12} />
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -1106,7 +1173,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
               type="text"
               value={customZoneInput}
               onChange={(e) => setCustomZoneInput(e.target.value)}
-              placeholder="Code zone personnalisé (ex: RACK-B2)..."
+              placeholder="Code zone personnalisé..."
               style={{
                 flex: 1,
                 background: 'var(--bg-card)',
@@ -1131,22 +1198,13 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
           </div>
         )}
 
-        {/* Footer Actions */}
-        <div className="flex justify-between items-center pt-2 border-t border-[var(--border)]">
-          <button
-            type="button"
-            onClick={onClose}
-            className="btn btn-ghost btn-sm"
-            style={{ borderRadius: 9999, color: 'var(--text-muted)' }}
-          >
-            Fermer
-          </button>
-          {recentAssignments.length > 0 && (
+        {recentAssignments.length > 0 && (
+          <div className="pt-2 border-t border-[var(--border)] text-right">
             <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
               {recentAssignments.length} article{recentAssignments.length > 1 ? 's' : ''} mis à jour
             </span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

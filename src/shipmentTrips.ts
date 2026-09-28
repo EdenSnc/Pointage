@@ -13,6 +13,7 @@ import type {
   AuditEvent,
 } from './types';
 import { sumStageEvents } from './logic';
+import { generateDeliverySeal } from './errorGuardrails';
 
 export interface DockLineStatus {
   line: OrderLine;
@@ -174,6 +175,34 @@ export async function createAndDispatchTrip(params: {
 
   const now = new Date().toISOString();
 
+  // Generate tamper-evident cryptographic seal
+  const billRecord = await db.bills.get(params.billId);
+  const dbLines = await db.orderLines.where('billId').equals(params.billId).toArray();
+  const dbLineMap = new Map<number, OrderLine>();
+  for (const l of dbLines) {
+    if (l.id) dbLineMap.set(l.id, l);
+  }
+
+  const sealLinePayload = resolvedLineQuantities.map((item) => {
+    const l = dbLineMap.get(item.orderLineId);
+    return {
+      reference: l?.reference || `NO-${l?.no || item.orderLineId}`,
+      quantity: item.quantity,
+    };
+  });
+
+  const seal = await generateDeliverySeal({
+    tripNumber,
+    billNumber: billRecord?.billNumber || `BL-${params.billId}`,
+    client: params.client,
+    driverName: params.driverName?.trim() || null,
+    truckPlate: params.truckPlate?.trim() || null,
+    totalUnits,
+    totalContainers,
+    lines: sealLinePayload,
+    timestamp: now,
+  });
+
   const trip: ShipmentTrip = {
     billId: params.billId,
     client: params.client,
@@ -191,6 +220,10 @@ export async function createAndDispatchTrip(params: {
     totalContainers,
     isLastTrip: !!params.isLastTrip,
     notes: params.notes?.trim() || null,
+    isSealed: true,
+    sealHash: seal.sealHash,
+    sealedAt: now,
+    sealedBy: params.operatorName?.trim() || 'Système Quai',
     dispatchedAt: now,
     createdAt: now,
     updatedAt: now,
@@ -201,27 +234,46 @@ export async function createAndDispatchTrip(params: {
   await db.transaction('rw', [db.shipmentTrips, db.bills, db.auditEvents, db.orderLines, db.countEvents], async () => {
     tripId = await db.shipmentTrips.add(trip);
 
-    // Update bill shipping status
-    await db.bills.update(params.billId, {
+    // Update bill shipping status and seal if final shipment
+    const billUpdate: Partial<Bill> = {
       shippingStatus: params.isLastTrip ? 'fully_shipped' : 'partially_shipped',
       tripCount: tripNumber,
       updatedAt: now,
-    });
+    };
+    if (params.isLastTrip) {
+      billUpdate.isSealed = true;
+      billUpdate.sealHash = seal.sealHash;
+      billUpdate.sealedAt = now;
+      billUpdate.sealedBy = params.operatorName?.trim() || 'Système Quai';
+    }
+    await db.bills.update(params.billId, billUpdate);
 
-    // Log audit event
+    // Log audit events
     const audit: AuditEvent = {
       billId: params.billId,
       orderLineId: null,
       stage: 'chargement',
       type: 'trip_dispatched',
       oldValue: null,
-      newValue: `Voyage N°${tripNumber} expédié (${totalUnits} pcs, ${totalContainers} colis)`,
+      newValue: `Voyage N°${tripNumber} expédié (${totalUnits} pcs, ${totalContainers} colis) [${seal.shortCode}]`,
       reason: params.driverName
         ? `Chauffeur: ${params.driverName} (${params.truckPlate || 'Véhicule n/c'})`
         : 'Départ camion validé',
       timestamp: now,
     };
     await db.auditEvents.add(audit);
+
+    const sealAudit: AuditEvent = {
+      billId: params.billId,
+      orderLineId: null,
+      stage: 'chargement',
+      type: 'delivery_sealed',
+      oldValue: null,
+      newValue: seal.shortCode,
+      reason: `Scellé cryptographique émis (${seal.sealHash}) avec chauffeur ${params.driverName || 'Sans chauffeur'}`,
+      timestamp: now,
+    };
+    await db.auditEvents.add(sealAudit);
 
     // Group additional bills in this same vehicle departure
     if (params.groupedBillIds && params.groupedBillIds.length > 0) {

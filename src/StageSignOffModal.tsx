@@ -4,12 +4,13 @@
 // with zero typing, instant tactile selection, and batch support.
 // ============================================================
 
-import { useState } from 'react';
-import { IconUser, IconCheck, IconX, IconLayers, IconSearch } from './icons';
+import { useState, useEffect } from 'react';
+import { IconUser, IconCheck, IconX, IconLayers, IconSearch, IconAlertTriangle, IconShield } from './icons';
 import { db } from './db';
 
 import type { Bill, Stage } from './types';
 import { assignBillStageOperator, assignBatchBillsStageOperator } from './operators';
+import { auditBillIntegrityForStage, type BillStageAuditResult } from './errorGuardrails';
 
 interface StageSignOffModalProps {
   isOpen: boolean;
@@ -35,6 +36,23 @@ export function StageSignOffModal({
   const [selectedOp, setSelectedOp] = useState<string>(activeOperator || operators[0] || 'Opérateur');
   const [applyToBatch, setApplyToBatch] = useState<boolean>(stage !== 'preparation');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [auditResult, setAuditResult] = useState<BillStageAuditResult | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || !bill.id) return;
+    let cancelled = false;
+    Promise.all([
+      db.orderLines.where('billId').equals(bill.id).toArray(),
+      db.countEvents.where('billId').equals(bill.id).toArray(),
+    ]).then(([lines, events]) => {
+      if (!cancelled) {
+        setAuditResult(auditBillIntegrityForStage(lines, events, stage));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, bill.id, stage]);
 
   if (!isOpen) return null;
 
@@ -133,7 +151,71 @@ export function StageSignOffModal({
           Qui a effectué cette phase sur le bon <strong>{bill.billNumber}</strong> ({bill.client}) ?
         </p>
 
-        {stage === 'preparation' && (
+        {/* Pre-Signoff Integrity Audit Card (Poka-Yoke / Bastien-Scapin) */}
+        {auditResult && (
+          <div
+            style={{
+              padding: '10px 14px',
+              borderRadius: '16px',
+              marginBottom: '14px',
+              backgroundColor:
+                auditResult.severity === 'clean'
+                  ? 'rgba(16, 185, 129, 0.1)'
+                  : auditResult.severity === 'warnings'
+                  ? 'rgba(245, 158, 11, 0.12)'
+                  : 'rgba(239, 68, 68, 0.12)',
+              border: `1px solid ${
+                auditResult.severity === 'clean'
+                  ? 'rgba(16, 185, 129, 0.35)'
+                  : auditResult.severity === 'warnings'
+                  ? 'rgba(245, 158, 11, 0.35)'
+                  : 'rgba(239, 68, 68, 0.35)'
+              }`,
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 10,
+            }}
+          >
+            <div
+              style={{
+                color:
+                  auditResult.severity === 'clean'
+                    ? 'var(--accent, #10b981)'
+                    : auditResult.severity === 'warnings'
+                    ? 'var(--warning, #f59e0b)'
+                    : 'var(--danger, #ef4444)',
+                flexShrink: 0,
+                marginTop: 2,
+              }}
+            >
+              {auditResult.severity === 'clean' ? <IconShield size={18} /> : <IconAlertTriangle size={18} />}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: '0.84rem',
+                  fontWeight: 800,
+                  color: 'var(--text-primary)',
+                  letterSpacing: '-0.2px',
+                }}
+              >
+                {auditResult.summaryTitle}
+              </div>
+              <div
+                style={{
+                  fontSize: '0.78rem',
+                  color: 'var(--text-secondary)',
+                  marginTop: 2,
+                  lineHeight: 1.35,
+                }}
+              >
+                {auditResult.summaryDetail}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {stage === 'preparation' && !auditResult && (
           <div
             className="p-3 mb-3 flex items-start gap-2 text-xs"
             style={{

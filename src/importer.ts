@@ -234,7 +234,18 @@ export async function importBills(
         .equals(matchingBill.id)
         .toArray();
 
+      const existingEvents = await db.countEvents
+        .where('billId')
+        .equals(matchingBill.id)
+        .toArray();
+
+      const hasActiveWork =
+        existingEvents.some((e) => !e.undone && e.quantity > 0) ||
+        matchingBill.preparedBy != null;
+
       let addedForThisBill = 0;
+      const addedLinesForRevision: { reference?: string | null; designation: string; quantity: number; warehouseZone?: string | null }[] = [];
+      const changedQuantitiesForRevision: { reference?: string | null; designation: string; oldQty: number; newQty: number; delta: number }[] = [];
 
       for (let i = 0; i < lines.length; i++) {
         const lineData = lines[i];
@@ -265,6 +276,22 @@ export async function importBills(
           if (lineData.commercialNote && !duplicateMatch.commercialNote) {
             duplicateMatch.commercialNote = String(lineData.commercialNote).trim();
             await db.orderLines.update(duplicateMatch.id!, { commercialNote: duplicateMatch.commercialNote });
+          }
+
+          // HQ quantity change detection
+          if (duplicateMatch.orderedQty !== qty) {
+            changedQuantitiesForRevision.push({
+              reference: duplicateMatch.reference,
+              designation: duplicateMatch.designation,
+              oldQty: duplicateMatch.orderedQty,
+              newQty: qty,
+              delta: qty - duplicateMatch.orderedQty,
+            });
+            await db.orderLines.update(duplicateMatch.id!, {
+              orderedQty: qty,
+              updatedAt: now,
+            });
+            duplicateMatch.orderedQty = qty;
           }
         } else {
           const finalNo = cleanNo || String(existingLines.length + addedForThisBill + 1);
@@ -325,8 +352,39 @@ export async function importBills(
           existingLines.push(orderLine);
           addedForThisBill++;
           totalImportedLines++;
+
+          addedLinesForRevision.push({
+            reference: ref,
+            designation,
+            quantity: qty,
+            warehouseZone: matchedProfile?.warehouseZone ?? null,
+          });
         }
       }
+
+      // Detect removed lines: existing active lines not present in the new incoming lines
+      const removedLinesForRevision: OrderLine[] = existingLines.filter(
+        (el) =>
+          el.status !== 'cancelled' &&
+          !lines.some((newLine) => {
+            const rawQty = newLine.quantity !== undefined ? newLine.quantity : (newLine as any).orderedQty;
+            const qty = typeof rawQty === 'number' && !isNaN(rawQty) ? Math.max(0, rawQty) : 1;
+            const ref = newLine.reference != null ? String(newLine.reference).trim() : null;
+            const ean = newLine.ean != null ? String(newLine.ean).trim() : null;
+            const cleanNo = newLine.no ? String(newLine.no).trim() : '';
+            return isDuplicateLine(
+              {
+                no: cleanNo,
+                page: newLine.page,
+                reference: ref,
+                ean,
+                designation: newLine.designation,
+                orderedQty: qty,
+              },
+              el
+            );
+          })
+      );
 
       let updatedBillMeta = false;
       if (billData.bcNumber && !matchingBill.bcNumber) {
@@ -340,6 +398,76 @@ export async function importBills(
       if (billData.commercialNote && !matchingBill.commercialNote) {
         matchingBill.commercialNote = billData.commercialNote;
         updatedBillMeta = true;
+      }
+
+      // If active work was done on this bill and HQ introduced changes, flag HQ revision
+      if (
+        hasActiveWork &&
+        (addedLinesForRevision.length > 0 ||
+          changedQuantitiesForRevision.length > 0 ||
+          removedLinesForRevision.length > 0)
+      ) {
+        const hqChanges = [
+          ...addedLinesForRevision.map((a) => ({
+            type: 'added' as const,
+            reference: a.reference,
+            designation: a.designation,
+            newQty: a.quantity,
+            delta: a.quantity,
+            warehouseZone: a.warehouseZone,
+            resolved: false,
+          })),
+          ...removedLinesForRevision.map((r) => ({
+            type: 'removed' as const,
+            reference: r.reference,
+            designation: r.designation,
+            oldQty: r.orderedQty,
+            delta: -r.orderedQty,
+            warehouseZone: r.warehouseZone,
+            resolved: false,
+          })),
+          ...changedQuantitiesForRevision.map((c) => ({
+            type: 'quantity_changed' as const,
+            reference: c.reference,
+            designation: c.designation,
+            oldQty: c.oldQty,
+            newQty: c.newQty,
+            delta: c.delta,
+            resolved: false,
+          })),
+        ];
+
+        for (const rem of removedLinesForRevision) {
+          await db.orderLines.update(rem.id!, {
+            status: 'cancelled',
+            updatedAt: now,
+          });
+        }
+
+        const summaryParts: string[] = [];
+        if (addedLinesForRevision.length > 0) summaryParts.push(`${addedLinesForRevision.length} ajout(s)`);
+        if (removedLinesForRevision.length > 0) summaryParts.push(`${removedLinesForRevision.length} suppression(s)`);
+        if (changedQuantitiesForRevision.length > 0)
+          summaryParts.push(`${changedQuantitiesForRevision.length} qté(s) modifiée(s)`);
+
+        matchingBill.hqRevision = {
+          revisedAt: now,
+          acknowledged: false,
+          changes: hqChanges,
+          summaryMessage: `Siège: ${hqChanges.length} modification(s) détectée(s) après préparation (${summaryParts.join(', ')}).`,
+        };
+        updatedBillMeta = true;
+
+        await db.auditEvents.add({
+          billId: matchingBill.id,
+          orderLineId: null,
+          stage: null,
+          type: 'status_changed',
+          oldValue: 'standard',
+          newValue: 'hq_revision_detected',
+          reason: matchingBill.hqRevision.summaryMessage,
+          timestamp: now,
+        });
       }
 
       if (addedForThisBill > 0 || updatedBillMeta) {
@@ -371,10 +499,24 @@ export async function importBills(
       const decomposed = decomposeTimestamp(billData.date || now);
       const detectedWilaya = detectWilaya(billData.clientAddress || billData.client);
 
+      const upperNo = defaultBillNumber.toUpperCase();
+      const detectedDocType =
+        billData.documentType ||
+        (upperNo.startsWith('TR') || upperNo.startsWith('BT') || upperNo.includes('TRANSFERT')
+          ? 'bon_transfert'
+          : null);
+
+      // Check for operational client alias (ex: "SARL BLEU BLANC NAKHIL" -> "Kral Markt Béchar")
+      const matchedAlias = await db.clientAliases
+        .filter((a) => a.legalName.toUpperCase() === defaultClient.trim().toUpperCase())
+        .first();
+      const operationalClient = matchedAlias ? matchedAlias.operationalName : null;
+
       const bill: Bill = {
         sessionId,
         billNumber: defaultBillNumber,
         client: defaultClient,
+        operationalClient: operationalClient || null,
         date: billData.date || decomposed.dateStr,
         timestamp: decomposed.timestamp,
         year: decomposed.year,
@@ -388,6 +530,7 @@ export async function importBills(
         status: 'active',
         paymentMode: billData.paymentMode || null,
         agentName: billData.agentName || null,
+        driverName: billData.driverName || null,
         clientAddress: billData.clientAddress || null,
         nif: billData.nif || null,
         nis: billData.nis || null,
@@ -395,7 +538,7 @@ export async function importBills(
         ai: billData.ai || null,
         discountPercent: billData.discountPercent != null ? billData.discountPercent : null,
         bcNumber: billData.bcNumber || null,
-        documentType: billData.documentType || null,
+        documentType: detectedDocType,
         commercialNote: billData.commercialNote || null,
         createdAt: now,
         updatedAt: now,
@@ -457,6 +600,7 @@ export async function importBills(
           outerPackSize: matchedProfile?.outerPackSize ?? null,
           innerPackSize: matchedProfile?.innerPackSize ?? null,
           warehouseZone: matchedProfile?.warehouseZone ?? null,
+          locationNote: matchedProfile?.locationNote ?? null,
           imageUrl: matchedProfile?.imageUrl ?? null,
           packagesRaw: lineData.packagesRaw != null ? String(lineData.packagesRaw) : null,
           commercialNote: lineData.commercialNote ? String(lineData.commercialNote).trim() : null,

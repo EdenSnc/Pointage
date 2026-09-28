@@ -58,7 +58,7 @@ export const ALGERIAN_WILAYAS: WilayaInfo[] = [
   { code: '45', name: 'Naâma', nameAr: 'النعامة', searchTokens: ['naama', 'naâma'] },
   { code: '46', name: 'Aïn Témouchent', nameAr: 'عين تموشنت', searchTokens: ['ain temouchent', 'aïn témouchent'] },
   { code: '47', name: 'Ghardaïa', nameAr: 'غرداية', searchTokens: ['ghardaia', 'ghardaïa'] },
-  { code: '48', name: 'Relizane', nameAr: 'غليزان', searchTokens: ['relizane'] },
+  { code: '48', name: 'Relizane', nameAr: 'غليزان', searchTokens: ['relizane', 'ghelizane', 'rélizane', 'oued rhiou', 'mazouna', 'yellel', 'zemmoura'] },
   { code: '49', name: 'El M\'Ghair', nameAr: 'المغير', searchTokens: ['el mghair', "el m'ghair", 'mghair'] },
   { code: '50', name: 'El Menia', nameAr: 'المنيعة', searchTokens: ['el menia', 'el meniaa', 'el goléa'] },
   { code: '51', name: 'Ouled Djellal', nameAr: 'أولاد جلال', searchTokens: ['ouled djellal'] },
@@ -86,27 +86,15 @@ function normalizeText(text: string): string {
 
 /**
  * Automatically detects an Algerian Wilaya from client name, address, or header text.
+ * Prioritizes city/commune names first, then strictly prefixed/parenthesized numeric codes.
  */
-export function detectWilaya(text?: string | null): { wilaya: string; wilayaCode: string } | null {
+export function detectWilaya(text?: string | null): { wilaya: string; wilayaCode: string; code: string; name: string } | null {
   if (!text) return null;
+  const rawText = text.trim();
   const clean = normalizeText(text);
   if (!clean) return null;
 
-  // 1. Direct wilaya code match (e.g., "16000", "w16", "wilaya 16", "(16)")
-  const codeRegex = /\b(?:w|wilaya\s*)?(0[1-9]|[1-4][0-9]|5[0-8])\b/i;
-  const codeMatch = clean.match(codeRegex);
-  if (codeMatch) {
-    const code = codeMatch[1].padStart(2, '0');
-    const info = ALGERIAN_WILAYAS.find((w) => w.code === code);
-    if (info) {
-      return {
-        wilaya: `${info.code} - ${info.name}`,
-        wilayaCode: info.code,
-      };
-    }
-  }
-
-  // 2. Token match against Wilaya names and known communes
+  // 1. Token match against Wilaya names and known communes FIRST (highest confidence)
   for (const w of ALGERIAN_WILAYAS) {
     for (const token of w.searchTokens) {
       const normToken = normalizeText(token);
@@ -115,8 +103,58 @@ export function detectWilaya(text?: string | null): { wilaya: string; wilayaCode
         return {
           wilaya: `${w.code} - ${w.name}`,
           wilayaCode: w.code,
+          code: w.code,
+          name: w.name,
         };
       }
+    }
+  }
+
+  // 2. Strict wilaya code match:
+  // Requires explicit prefix 'w', 'wilaya', or enclosing parentheses e.g. '(16)', '(48)', 'W09', 'Wilaya 16'
+  // Or explicit postal code marker e.g. 'CP 16000', or major capital postal code (e.g. 16000 Alger, 31000 Oran)
+  // Avoids false-matching arbitrary 5-digit order references (e.g. 04366, 04145) or dates.
+  const rawMatch = rawText.match(/\((0[1-9]|[1-4][0-9]|5[0-8])\)/);
+  if (rawMatch) {
+    const code = rawMatch[1].padStart(2, '0');
+    const info = ALGERIAN_WILAYAS.find((w) => w.code === code);
+    if (info) {
+      return {
+        wilaya: `${info.code} - ${info.name}`,
+        wilayaCode: info.code,
+        code: info.code,
+        name: info.name,
+      };
+    }
+  }
+
+  const codeRegex = /\b(?:w|wilaya\s+)(0[1-9]|[1-4][0-9]|5[0-8])\b/i;
+  const codeMatch = clean.match(codeRegex);
+  if (codeMatch) {
+    const code = codeMatch[1].padStart(2, '0');
+    const info = ALGERIAN_WILAYAS.find((w) => w.code === code);
+    if (info) {
+      return {
+        wilaya: `${info.code} - ${info.name}`,
+        wilayaCode: info.code,
+        code: info.code,
+        name: info.name,
+      };
+    }
+  }
+
+  const postalRegex = /\b(?:cp|code\s*postal)\s*(0[1-9]|[1-4][0-9]|5[0-8])\d{3}\b/i;
+  const postalMatch = clean.match(postalRegex);
+  if (postalMatch) {
+    const code = postalMatch[1].padStart(2, '0');
+    const info = ALGERIAN_WILAYAS.find((w) => w.code === code);
+    if (info) {
+      return {
+        wilaya: `${info.code} - ${info.name}`,
+        wilayaCode: info.code,
+        code: info.code,
+        name: info.name,
+      };
     }
   }
 

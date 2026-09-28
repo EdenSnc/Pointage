@@ -1811,6 +1811,55 @@ svg[fill="none"] path:not([fill*="#"]):not([fill*="url"]):not([fill*="var"]) {
 }
 
 /* Bill Secondary Controls Toolbar */
+.relative {
+  position: relative;
+}
+
+.apple-glass-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 1000;
+  min-width: 230px;
+  background: var(--bg-card);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border-bright);
+  border-radius: 18px;
+  box-shadow: var(--glass-shadow-lg);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.apple-glass-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+  width: 100%;
+}
+
+.apple-glass-dropdown-item:hover,
+.apple-glass-dropdown-item:focus {
+  background: var(--bg-surface-elevated);
+}
+
+.apple-glass-dropdown-item.active {
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
 .bill-controls-row,
 .bill-controls-toolbar {
   display: flex;

@@ -9,6 +9,8 @@ import type { OrderLine, Bill, Stage, PointageOutcome } from './types';
 import { useLineEvents, useBillContainers, addCountEvent, undoLastCount } from './hooks';
 import { sumStageEvents } from './logic';
 import { playSuccessChime, playWarningBeep } from './audio';
+import { checkDoubleScanBounce, inspectOvercount } from './errorGuardrails';
+import { FloatingUndoSnack, type LastCountAction } from './FloatingUndoSnack';
 import {
   IconScan,
   IconBox,
@@ -18,6 +20,8 @@ import {
   IconPencil,
   IconCheck,
   IconWarning,
+  IconAlertTriangle,
+  IconX,
 } from './icons';
 
 interface FastScanQuantityCardProps {
@@ -46,6 +50,12 @@ export function FastScanQuantityCard({
   const [pointageOutcome, setPointageOutcome] = useState<PointageOutcome>('accepted');
   const [recentDelta, setRecentDelta] = useState<number | null>(null);
   const [isPulsing, setIsPulsing] = useState(false);
+  const [lastUndoAction, setLastUndoAction] = useState<LastCountAction | null>(null);
+  const [pendingOvercount, setPendingOvercount] = useState<{
+    addingQty: number;
+    clampedQty: number;
+    excessQty: number;
+  } | null>(null);
 
   // Stepper long-press acceleration refs
   const holdTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -76,10 +86,35 @@ export function FastScanQuantityCard({
   const isSubmittingRef = useRef(false);
   const lastSubmitTimeRef = useRef(0);
 
-  const handleAdd = async (qty: number) => {
+  const handleAdd = async (qty: number, forceOvercount = false) => {
+    if (qty <= 0) return;
+
+    // 1. Hardware double-scan bounce guard
+    const bounce = checkDoubleScanBounce(line.id!, qty);
+    if (bounce.isBounce) {
+      setToast(bounce.message || 'Double-scan évité');
+      return;
+    }
+
+    // 2. Involuntary overcount guard (Poka-Yoke)
+    if (!forceOvercount) {
+      const inspection = inspectOvercount(line, totalCounted, qty);
+      if (inspection.isOvercount && inspection.excessQty > 0) {
+        setPendingOvercount({
+          addingQty: qty,
+          clampedQty: inspection.suggestedClampedQty,
+          excessQty: inspection.excessQty,
+        });
+        playWarningBeep();
+        return;
+      }
+    }
+
+    setPendingOvercount(null);
+
     const now = Date.now();
-    if (now - lastSubmitTimeRef.current < 600) return;
-    if (isSubmittingRef.current || qty <= 0) return;
+    if (now - lastSubmitTimeRef.current < 450) return;
+    if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
     lastSubmitTimeRef.current = now;
 
@@ -103,12 +138,22 @@ export function FastScanQuantityCard({
       setRecentDelta(qty);
       setTimeout(() => setRecentDelta(null), 1600);
       setToast(`+${qty} validé pour N°${line.no}`);
+
+      // Provide non-destructive 4.5s undo cushion
+      setLastUndoAction({
+        lineId: line.id!,
+        lineNo: line.no,
+        designation: line.designation,
+        quantity: qty,
+        stage,
+        timestamp: now,
+      });
     } catch (err) {
       console.error('Erreur lors de l’ajout de quantité:', err);
     } finally {
       setTimeout(() => {
         isSubmittingRef.current = false;
-      }, 500);
+      }, 400);
     }
   };
 
@@ -117,6 +162,7 @@ export function FastScanQuantityCard({
     if (ok) {
       playWarningBeep();
       setToast(`Dernier comptage annulé pour N°${line.no}`);
+      setLastUndoAction(null);
     }
   };
 
@@ -368,6 +414,66 @@ export function FastScanQuantityCard({
       )}
 
       {/* ============================================================ */}
+      {/* POKA-YOKE: OVERCOUNT & CLAMPING GUARD                        */}
+      {/* ============================================================ */}
+      {pendingOvercount && (
+        <div
+          role="alert"
+          style={{
+            backgroundColor: 'rgba(245, 158, 11, 0.12)',
+            border: '1px solid rgba(245, 158, 11, 0.4)',
+            borderRadius: 18,
+            padding: 14,
+            marginBottom: 12,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--warning, #f59e0b)' }}>
+            <IconAlertTriangle size={20} />
+            <span style={{ fontSize: '0.9rem', fontWeight: 800 }}>
+              Dépassement détecté (+{pendingOvercount.excessQty} pièces)
+            </span>
+          </div>
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+            {pendingOvercount.clampedQty > 0
+              ? `Il ne reste que ${pendingOvercount.clampedQty} pièce(s) pour compléter la commande. Ajuster automatiquement ?`
+              : `La commande est déjà complète. Voulez-vous forcer ce surplus ?`}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {pendingOvercount.clampedQty > 0 && (
+              <button
+                type="button"
+                className="btn btn-sm btn-primary font-bold flex-1"
+                onClick={() => handleAdd(pendingOvercount.clampedQty, true)}
+                style={{ minHeight: 44, fontSize: '0.84rem' }}
+              >
+                Ajuster au reste (+{pendingOvercount.clampedQty})
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary font-bold flex-1"
+              onClick={() => handleAdd(pendingOvercount.addingQty, true)}
+              style={{ minHeight: 44, fontSize: '0.84rem', borderColor: 'rgba(245, 158, 11, 0.4)' }}
+            >
+              Forcer surplus (+{pendingOvercount.addingQty})
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              onClick={() => setPendingOvercount(null)}
+              style={{ minHeight: 44, minWidth: 44, padding: 0 }}
+              aria-label="Annuler"
+            >
+              <IconX size={18} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
       {/* TIER 3: THUMB-ZONE QUICK ACTIONS (Fitts's Law: 48dp Bounds)   */}
       {/* ============================================================ */}
       <div className="flex flex-col gap-2 mb-3">
@@ -556,6 +662,13 @@ export function FastScanQuantityCard({
           Détail <IconArrowRight size={15} />
         </button>
       </div>
+
+      {/* Floating Undo Snack (4.5s non-destructive cushion) */}
+      <FloatingUndoSnack
+        action={lastUndoAction}
+        onUndo={handleUndo}
+        onDismiss={() => setLastUndoAction(null)}
+      />
     </div>
   );
 }

@@ -16,7 +16,7 @@ import type {
   BillIdentifierOverride,
   ProductProfile,
 } from './types';
-import { smartSearchScore, normalizeDesignation, areDesignationsMatching } from './logic';
+import { smartSearchScore, normalizeDesignation, areDesignationsMatching, isSameClientEntity } from './logic';
 
 // ---------- Session ----------
 export function useActiveSession() {
@@ -108,11 +108,11 @@ export function useEntityEvents(client: string | undefined) {
   return useLiveQuery(
     async () => {
       if (!client) return [];
-      const trimmed = client.trim().toLowerCase();
       const allBills = await db.bills.toArray();
       const clientBillIds = allBills
-        .filter((b) => b.client && b.client.trim().toLowerCase() === trimmed)
-        .map((b) => b.id!);
+        .filter((b) => isSameClientEntity(b.client, client))
+        .map((b) => b.id!)
+        .filter(Boolean);
       if (clientBillIds.length === 0) return [];
       return db.countEvents.where('billId').anyOf(clientBillIds).toArray();
     },
@@ -132,13 +132,14 @@ export function useBillContainers(billId: number | undefined) {
       // Find all bill IDs belonging to the same client/seller
       let clientBillIds: number[] = [billId];
       if (client) {
-        const siblingBills = await db.bills.where('client').equals(client).toArray();
-        clientBillIds = Array.from(new Set([...clientBillIds, ...siblingBills.map((b) => b.id!)]));
+        const allBills = await db.bills.toArray();
+        const siblingBills = allBills.filter((b) => isSameClientEntity(b.client, client));
+        clientBillIds = Array.from(new Set([...clientBillIds, ...siblingBills.map((b) => b.id!).filter(Boolean)]));
       }
 
       const allContainers = await db.transportContainers.toArray();
       const relevant = allContainers.filter((c) => {
-        if (client && c.client && c.client.trim().toLowerCase() === client.toLowerCase()) return true;
+        if (client && c.client && isSameClientEntity(c.client, client)) return true;
         if (c.billId && clientBillIds.includes(c.billId)) return true;
         return false;
       });
@@ -156,13 +157,13 @@ export function useEntityContainers(client: string | undefined) {
   return useLiveQuery(
     async () => {
       if (!client) return [];
-      const trimmed = client.trim();
-      const siblingBills = await db.bills.where('client').equals(trimmed).toArray();
-      const clientBillIds = siblingBills.map((b) => b.id!);
+      const allBills = await db.bills.toArray();
+      const siblingBills = allBills.filter((b) => isSameClientEntity(b.client, client));
+      const clientBillIds = siblingBills.map((b) => b.id!).filter(Boolean);
 
       const allContainers = await db.transportContainers.toArray();
       const relevant = allContainers.filter((c) => {
-        if (c.client && c.client.trim().toLowerCase() === trimmed.toLowerCase()) return true;
+        if (c.client && isSameClientEntity(c.client, client)) return true;
         if (c.billId && clientBillIds.includes(c.billId)) return true;
         return false;
       });
@@ -180,7 +181,8 @@ export function useEntityBills(client: string | undefined) {
   return useLiveQuery(
     async () => {
       if (!client) return [];
-      return db.bills.where('client').equals(client.trim()).toArray();
+      const allBills = await db.bills.toArray();
+      return allBills.filter((b) => isSameClientEntity(b.client, client));
     },
     [client],
     []
@@ -191,8 +193,9 @@ export function useEntityLines(client: string | undefined) {
   return useLiveQuery(
     async () => {
       if (!client) return [];
-      const bills = await db.bills.where('client').equals(client.trim()).toArray();
-      const billIds = bills.map((b) => b.id!).filter((id) => id != null);
+      const allBills = await db.bills.toArray();
+      const matchingBills = allBills.filter((b) => isSameClientEntity(b.client, client));
+      const billIds = matchingBills.map((b) => b.id!).filter(Boolean);
       if (billIds.length === 0) return [];
       return db.orderLines.where('billId').anyOf(billIds).toArray();
     },
@@ -514,6 +517,36 @@ export async function setLineStageTotalCount(
       note
     );
   }
+}
+
+/**
+ * High-velocity express validation for rush hours.
+ * Sets all active lines of a bill in the specified stage to their ordered quantities.
+ */
+export async function batchExpressValidateBill(
+  billId: number,
+  stage: Stage,
+  operator: string = 'Amine'
+): Promise<{ linesCount: number; unitsCount: number }> {
+  const lines = await db.orderLines.where('billId').equals(billId).toArray();
+  const activeLines = lines.filter((l) => l.status === 'active');
+  let unitsCount = 0;
+
+  for (const line of activeLines) {
+    if (line.id && line.orderedQty > 0) {
+      await setLineStageTotalCount(
+        billId,
+        line.id,
+        stage,
+        line.orderedQty,
+        stage === 'pointage' ? 'accepted' : null,
+        `express_rush_validation_${operator}`
+      );
+      unitsCount += line.orderedQty;
+    }
+  }
+
+  return { linesCount: activeLines.length, unitsCount };
 }
 
 /**
@@ -916,6 +949,8 @@ export async function saveProductProfile(
       outerPackSize: data.outerPackSize ?? null,
       innerPackSize: data.innerPackSize ?? null,
       warehouseZone: data.warehouseZone ?? null,
+      locationNote: data.locationNote ?? null,
+      warehouseSite: data.warehouseSite ?? null,
       imageUrl: data.imageUrl ?? null,
       updatedAt: new Date().toISOString(),
     });

@@ -16,6 +16,7 @@ import {
   IconChat,
   IconStore,
 } from './icons';
+import { HoldToConfirmModal } from './HoldToConfirmModal';
 
 interface StoreDemandModalProps {
   isOpen: boolean;
@@ -46,6 +47,7 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
   const [requestedQty, setRequestedQty] = useState('');
   const [note, setNote] = useState('');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
   const demands = useLiveQuery(() => db.storeDemands.reverse().sortBy('createdAt'), []) || [];
 
@@ -88,11 +90,8 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
     onToast?.(`Statut mis à jour : ${status}`);
   };
 
-  const handleDelete = async (id: number) => {
-    if (window.confirm('Supprimer cette remontée ?')) {
-      await db.storeDemands.delete(id);
-      onToast?.('Remontée supprimée');
-    }
+  const handleDelete = (id: number) => {
+    setPendingDeleteId(id);
   };
 
   const handleImageCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -578,6 +577,23 @@ export const StoreDemandModal: React.FC<StoreDemandModalProps> = ({
             })}
           </div>
         )}
+
+        {/* Tactile Hold-to-Confirm Delete Modal */}
+        <HoldToConfirmModal
+          isOpen={pendingDeleteId !== null}
+          title="Supprimer la remontée magasin"
+          description="Êtes-vous certain de vouloir supprimer cette demande ou anomalie de stock ?"
+          confirmLabel="Maintenir pour supprimer"
+          dangerLevel="danger"
+          onConfirm={async () => {
+            if (!pendingDeleteId) return;
+            const targetId = pendingDeleteId;
+            setPendingDeleteId(null);
+            await db.storeDemands.delete(targetId);
+            onToast?.('Remontée supprimée');
+          }}
+          onCancel={() => setPendingDeleteId(null)}
+        />
       </div>
     </div>
   );

@@ -197,6 +197,8 @@ export function hapticTap(intensity: 'light' | 'medium' | 'heavy' = 'light') {
   }
 }
 
+export const triggerHapticFeedback = hapticTap;
+
 let memoryMuted = false;
 
 /**
