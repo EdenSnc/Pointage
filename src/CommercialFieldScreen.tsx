@@ -148,14 +148,28 @@ export const CommercialFieldScreen: React.FC<CommercialFieldScreenProps> = ({ se
     return simulateOrderMargin(fieldCart, fieldDiscountPercent);
   }, [fieldCart, fieldDiscountPercent]);
 
-  // Record Cash / Check payment
+  // Record Cash / Check payment with strict validation & Poka-Yoke guards
   const handleSavePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedClientForCash) return;
-    const amount = parseFloat(cashAmount);
-    if (!amount || amount <= 0) {
+    const cleanStr = (cashAmount || '').replace(',', '.').trim();
+    const amount = parseFloat(cleanStr);
+    if (isNaN(amount) || amount <= 0) {
       playWarningBeep();
-      setToast('Veuillez saisir un montant valide.');
+      setToast('Veuillez saisir un montant strictement positif.');
+      return;
+    }
+
+    if (paymentMethod === 'cheque' && !checkNumber.trim()) {
+      playWarningBeep();
+      setToast('Le numéro de chèque est obligatoire pour un encaissement par chèque.');
+      return;
+    }
+
+    // Fat-finger zero guard: prevent collecting more than 10x current debt without double check
+    if (selectedClientForCash.currentDebt > 0 && amount > selectedClientForCash.currentDebt * 10) {
+      playWarningBeep();
+      setToast(`Montant exceptionnel (${amount.toLocaleString('fr-DZ')} DA). Vérifiez que vous n'avez pas ajouté de zéro en trop.`);
       return;
     }
 
@@ -179,8 +193,9 @@ export const CommercialFieldScreen: React.FC<CommercialFieldScreenProps> = ({ se
     await refreshData();
   };
 
-  // Add product to on-site cart
+  // Add product to on-site cart with integer clamping
   const handleAddToFieldCart = (prod: ProductProfile, qty = 1) => {
+    const cleanQty = Math.max(1, Math.min(10000, Math.floor(Number(qty) || 1)));
     hapticTap('light');
     playSuccessChime();
     setFieldCart((prev) => {
@@ -188,7 +203,7 @@ export const CommercialFieldScreen: React.FC<CommercialFieldScreenProps> = ({ se
       if (existing) {
         return prev.map((it) =>
           it.reference === prod.reference
-            ? { ...it, quantity: it.quantity + qty, totalPrice: (it.quantity + qty) * it.unitPrice }
+            ? { ...it, quantity: it.quantity + cleanQty, totalPrice: (it.quantity + cleanQty) * it.unitPrice }
             : it
         );
       }
@@ -198,9 +213,9 @@ export const CommercialFieldScreen: React.FC<CommercialFieldScreenProps> = ({ se
           reference: prod.reference,
           designation: prod.designation || prod.reference,
           unitPrice: prod.wholesalePrice || 5000,
-          quantity: qty,
+          quantity: cleanQty,
           packSize: prod.outerPackSize || 20,
-          totalPrice: (prod.wholesalePrice || 5000) * qty,
+          totalPrice: (prod.wholesalePrice || 5000) * cleanQty,
           costPrice: prod.purchasePrice || 3500,
         },
       ];
@@ -699,8 +714,8 @@ export const CommercialFieldScreen: React.FC<CommercialFieldScreenProps> = ({ se
       {/* Cash Collection Modal */}
       {selectedClientForCash && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)' }}
+          className="fixed inset-0 z-[1200] flex items-center justify-center p-4"
+          style={{ zIndex: 1200, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)' }}
         >
           <div
             className="w-full max-w-sm p-4 rounded-2xl flex flex-col gap-3"
@@ -790,7 +805,7 @@ export const CommercialFieldScreen: React.FC<CommercialFieldScreenProps> = ({ se
       )}
 
       {/* Floating Executive Switcher */}
-      <AppModuleSwitcher />
+      {!selectedClientForCash && <AppModuleSwitcher />}
     </div>
   );
 };

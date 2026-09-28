@@ -155,6 +155,11 @@ export const B2BWholesaleScreen: React.FC<B2BWholesaleScreenProps> = ({ setToast
   const deferredSearch = useDeferredValue(searchQuery);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showCartDrawer, setShowCartDrawer] = useState(false);
+  const [creditWarningModal, setCreditWarningModal] = useState<{
+    overdraft: number;
+    totalExposure: number;
+    creditLimit: number;
+  } | null>(null);
 
   // Initialize DB & Seed Data
   useEffect(() => {
@@ -209,8 +214,9 @@ export const B2BWholesaleScreen: React.FC<B2BWholesaleScreenProps> = ({ setToast
     };
   }, [cart, selectedClient, decisionAnalysis]);
 
-  // Add item to wholesale cart
+  // Add item to wholesale cart with non-negative integer sanitization
   const handleAddToCart = (product: ProductProfile, qtyToAdd = 1) => {
+    const cleanQty = Math.max(1, Math.min(10000, Math.floor(Number(qtyToAdd) || 1)));
     hapticTap('light');
     playSuccessChime();
     setCart((prev) => {
@@ -220,8 +226,8 @@ export const B2BWholesaleScreen: React.FC<B2BWholesaleScreenProps> = ({ setToast
           it.reference === product.reference
             ? {
                 ...it,
-                quantity: it.quantity + qtyToAdd,
-                totalPrice: (it.quantity + qtyToAdd) * it.unitPrice,
+                quantity: it.quantity + cleanQty,
+                totalPrice: (it.quantity + cleanQty) * it.unitPrice,
               }
             : it
         );
@@ -232,24 +238,24 @@ export const B2BWholesaleScreen: React.FC<B2BWholesaleScreenProps> = ({ setToast
           reference: product.reference,
           designation: product.designation || product.reference,
           unitPrice: product.wholesalePrice || 5000,
-          quantity: qtyToAdd,
+          quantity: cleanQty,
           packSize: product.outerPackSize || 20,
-          totalPrice: (product.wholesalePrice || 5000) * qtyToAdd,
+          totalPrice: (product.wholesalePrice || 5000) * cleanQty,
           costPrice: product.purchasePrice || 3500,
         },
       ];
     });
-    setToast(`+${qtyToAdd} carton(s) de ${product.reference} ajouté.`);
+    setToast(`+${cleanQty} carton(s) de ${product.reference} ajouté.`);
   };
 
-  // Remove or update cart item
+  // Remove or update cart item with integer clamping
   const handleUpdateCartQty = (reference: string, delta: number) => {
     hapticTap('selection');
     setCart((prev) =>
       prev
         .map((it) => {
           if (it.reference !== reference) return it;
-          const nextQty = it.quantity + delta;
+          const nextQty = Math.max(0, Math.floor(Number(it.quantity + delta) || 0));
           if (nextQty <= 0) return null;
           return {
             ...it,
@@ -295,14 +301,32 @@ export const B2BWholesaleScreen: React.FC<B2BWholesaleScreenProps> = ({ setToast
     return list;
   }, [catalog, selectedCategory, deferredSearch]);
 
-  // Transmit order to warehouse & create draft
-  const handleTransmitOrder = async () => {
+  // Transmit order to warehouse & create draft with credit overdraft guard
+  const handleTransmitOrder = async (bypassCreditCheck?: boolean | React.MouseEvent) => {
     if (cart.length === 0) {
       playWarningBeep();
       setToast('Le panier est vide.');
       return;
     }
 
+    const isBypass = bypassCreditCheck === true;
+
+    // Poka-Yoke: Safeguard against unauthorized credit limit overdraft
+    if (!isBypass && selectedClient && selectedClient.creditLimit > 0) {
+      const currentDebt = (selectedClient as any).currentDebt ?? selectedClient.currentBalance ?? 0;
+      const totalExposure = currentDebt + cartTotals.finalAmountDa;
+      if (totalExposure > selectedClient.creditLimit) {
+        setCreditWarningModal({
+          overdraft: totalExposure - selectedClient.creditLimit,
+          totalExposure,
+          creditLimit: selectedClient.creditLimit,
+        });
+        playWarningBeep();
+        return;
+      }
+    }
+
+    setCreditWarningModal(null);
     const orderNumber = `BC-GROS-${Date.now().toString().slice(-5)}`;
     const orderData: Omit<OrderDraft, 'id' | 'createdAt' | 'updatedAt'> = {
       orderNumber,
@@ -832,7 +856,7 @@ export const B2BWholesaleScreen: React.FC<B2BWholesaleScreenProps> = ({ setToast
                     type="button"
                     className="btn btn-sm btn-primary flex items-center justify-center gap-1"
                     style={{ borderRadius: 12, fontWeight: 800 }}
-                    onClick={handleTransmitOrder}
+                    onClick={() => handleTransmitOrder(false)}
                   >
                     <IconCheck size={14} />
                     <span>Transmettre Quai</span>
@@ -840,6 +864,93 @@ export const B2BWholesaleScreen: React.FC<B2BWholesaleScreenProps> = ({ setToast
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Credit Limit Overdraft Poka-Yoke Modal */}
+      {creditWarningModal && (
+        <div
+          className="modal-backdrop"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+          onClick={() => setCreditWarningModal(null)}
+        >
+          <div
+            className="card p-4 flex flex-col gap-3"
+            style={{
+              maxWidth: 420,
+              width: '100%',
+              backgroundColor: '#16171b',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
+              borderRadius: 20,
+              boxShadow: '0 20px 50px rgba(239, 68, 68, 0.2)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 text-danger">
+              <IconWarning size={22} style={{ color: '#ef4444' }} />
+              <h3 className="font-bold text-base text-white">Dépassement de Plafond Client</h3>
+            </div>
+
+            <p className="text-xs text-muted leading-relaxed">
+              Le montant de cette commande excède le plafond de dette autorisé pour{' '}
+              <strong className="text-white">{selectedClient?.name}</strong>.
+            </p>
+
+            <div
+              className="p-3 rounded-xl flex flex-col gap-1.5"
+              style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)' }}
+            >
+              <div className="flex justify-between text-xs">
+                <span className="text-muted">Encours Actuel :</span>
+                <span className="font-mono text-white font-bold">{(((selectedClient as any)?.currentDebt ?? selectedClient?.currentBalance) || 0).toLocaleString('fr-DZ')} DA</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted">Commande en Cours :</span>
+                <span className="font-mono text-amber-400 font-bold">+{cartTotals.finalAmountDa.toLocaleString('fr-DZ')} DA</span>
+              </div>
+              <div className="flex justify-between text-xs pt-1 border-t border-white/10">
+                <span className="text-muted">Exposition Totale :</span>
+                <span className="font-mono text-danger font-extrabold">{creditWarningModal.totalExposure.toLocaleString('fr-DZ')} DA</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted">Plafond Autorisé :</span>
+                <span className="font-mono text-white">{creditWarningModal.creditLimit.toLocaleString('fr-DZ')} DA</span>
+              </div>
+              <div className="flex justify-between text-xs font-bold text-danger">
+                <span>Dépassement :</span>
+                <span className="font-mono">+{creditWarningModal.overdraft.toLocaleString('fr-DZ')} DA</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mt-1">
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                style={{ borderRadius: 12 }}
+                onClick={() => setCreditWarningModal(null)}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm font-bold"
+                style={{ borderRadius: 12, background: '#ef4444', color: '#fff' }}
+                onClick={() => handleTransmitOrder(true)}
+              >
+                Dérogation Validée
+              </button>
+            </div>
           </div>
         </div>
       )}

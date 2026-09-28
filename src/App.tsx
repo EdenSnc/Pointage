@@ -1550,6 +1550,17 @@ function HomeScreen({
             <span>Cockpit Cash</span>
           </button>
 
+          {/* Cartographie Entrepôt */}
+          <button
+            type="button"
+            className="apple-quick-btn"
+            onClick={() => setShowZoneAssignmentModal(true)}
+            title="Cartographie & Emplacements Entrepôt"
+          >
+            <IconCompass size={16} style={{ color: '#ec4899' }} />
+            <span>Cartographie</span>
+          </button>
+
           {/* Keyboard Shortcuts Helper */}
           <button
             type="button"

@@ -112,6 +112,19 @@ export const NewProductIntakeModal: React.FC<NewProductIntakeModalProps> = ({
     return validateEanBarcode(ean.trim());
   }, [ean]);
 
+  // Keyboard shortcut: Escape to close modal
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   // Real-time Packaging Validation
   const packagingValidation = useMemo(() => {
     return validateIntakePackaging(outerPackSize, innerPackSize);
@@ -361,7 +374,7 @@ export const NewProductIntakeModal: React.FC<NewProductIntakeModalProps> = ({
               <IconSparkles size={24} />
             </div>
             <div>
-              <div className="font-extrabold text-base text-white flex items-center gap-2">
+              <h2 className="font-extrabold text-base text-white flex items-center gap-2">
                 <span>Saisie de Nouveaux Produits</span>
                 <span
                   style={{
@@ -376,7 +389,7 @@ export const NewProductIntakeModal: React.FC<NewProductIntakeModalProps> = ({
                 >
                   Contrôle Zéro-Erreur • Checksum EAN & Marges
                 </span>
-              </div>
+              </h2>
               <div className="text-xs text-muted mt-0.5">
                 Création de fiche article • Reconnaissance optique IA • Colisage & Échantillonnage
               </div>
@@ -387,6 +400,7 @@ export const NewProductIntakeModal: React.FC<NewProductIntakeModalProps> = ({
             type="button"
             className="btn btn-ghost btn-sm btn-circle"
             onClick={onClose}
+            aria-label="Fermer"
             style={{ width: 36, height: 36, borderRadius: 18 }}
           >
             <IconX size={18} />

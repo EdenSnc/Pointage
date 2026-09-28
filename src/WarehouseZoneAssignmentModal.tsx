@@ -526,8 +526,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
                 style={{ margin: 0, color: 'var(--text-primary)' }}
                 aria-label="Cartographie Rapide &amp; Emplacements"
               >
-                <span className="sr-only">Cartographie Rapide &amp; Emplacements</span>
-                <span>Emplacements Rayon</span>
+                <span>Cartographie &amp; Emplacements</span>
               </h2>
               <div className="text-xs text-muted">
                 {activeOperator ? `Opérateur : ${activeOperator}` : 'Assigner un article'}
@@ -571,7 +570,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
               }}
               onKeyDown={handleSearchKeyDown}
               aria-label="Scanner code-barres EAN ou taper référence..."
-              placeholder="Scanner ou rechercher..."
+              placeholder="Scanner code-barres ou taper référence..."
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -627,7 +626,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
               title="Activer la caméra"
             >
               {isCameraActive ? <IconX size={13} /> : <IconCamera size={13} />}
-              <span>{isCameraActive ? 'Fermer' : 'Caméra'}</span>
+              <span>{isCameraActive ? 'Fermer Caméra' : 'Caméra'}</span>
             </button>
           </div>
 
@@ -1007,7 +1006,7 @@ export const WarehouseZoneAssignmentModal: React.FC<WarehouseZoneAssignmentModal
             onClick={() => setActiveTab('chambre')}
           >
             <span style={{ display: 'none' }}>Chambre Principale (Boussole)</span>
-            <span>Chambre</span>
+            <span>Chambre Principale</span>
           </button>
           <button
             type="button"

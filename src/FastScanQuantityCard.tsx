@@ -166,6 +166,34 @@ export function FastScanQuantityCard({
     }
   };
 
+  // Hardware Scanner & Physical Keyboard Accelerators
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || (target as any).isContentEditable);
+      if (isInput) return;
+
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        const step = remaining > 0 ? remaining : (packSize > 0 ? packSize : 1);
+        handleAdd(step);
+      } else if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        const step = packSize > 0 ? packSize : 1;
+        handleAdd(step);
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        handleUndo();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        onNextScan();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [remaining, packSize, line, stage, selectedContainerId, pointageOutcome, onNextScan]);
+
   // Stepper velocity acceleration (Fitts's Law / KLM)
   const stepQuantity = (direction: 'up' | 'down') => {
     setCustomQty((prev) => {
