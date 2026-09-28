@@ -726,6 +726,78 @@ export interface DecisionSupportInsight {
   metadata?: Record<string, any>;
 }
 
+// ============================================================
+// --- Retours de Fin de Rentrée (Post-Rentrée Multi-Voyage Return Logistics) ---
+// ============================================================
+
+export type RentreeReturnStatus = 'scheduled' | 'unloading' | 'pointed' | 'reconciled';
+export type RentreeItemStatus = 'pending' | 'conforme' | 'surplus' | 'shortage' | 'damaged_only';
+
+export interface RentreeReturnCampaign {
+  id?: number;
+  title: string; // e.g. "Retour Fin de Rentrée Scolaire 2026"
+  year: number; // 2026
+  status: 'active' | 'completed' | 'archived';
+  receivingSite: string; // "oran_surface" | "kral_bechar" | "bleu_blanc"
+  clientOrOrigin: string; // "SARL BLEU BLANC NAKHIL (BÉCHAR) / Kral Markt"
+  totalExpectedCartons: number;
+  totalReturnedCartons: number;
+  totalAvarieCartons: number;
+  totalFinancialValueDa: number;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RentreeReturnVoyage {
+  id?: number;
+  campaignId: number;
+  voyageNumber: number; // 1, 2, 3...
+  voyageCode: string; // "VOY-RENTREE-01"
+  vehiclePlate: string; // "Semi Sonacome 08-30129"
+  driverName: string; // "Karim (Chauffeur Sud)"
+  arrivalSite: string; // "kral_bechar" | "oran_surface" | "bleu_blanc"
+  arrivalDate: string; // YYYY-MM-DD
+  status: RentreeReturnStatus;
+  totalExpectedCartons: number;
+  totalReturnedCartons: number;
+  totalAvarieCartons: number;
+  totalFinancialValueDa: number;
+  reconciledBy?: string | null;
+  reconciledAt?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RentreeReturnItem {
+  id?: number;
+  campaignId: number;
+  voyageId: number;
+  reference: string; // "CAH-96P-SBM"
+  ean?: string | null; // "6130000010123"
+  designation: string;
+  category: 'scolaire' | 'bureautique' | 'autre';
+  outerPackSize: number; // 80 pcs/ctn
+  innerPackSize?: number | null; // 10 pcs
+  expectedCartons: number; // e.g. 400 cartons
+  expectedUnits: number; // 400 * 80 = 32,000 pcs
+  returnedCartons: number; // Conforme / Bon état cartons pointés
+  returnedLooseUnits: number; // Pièces en vrac conformes pointées
+  damagedCartons: number; // Cartons avariés / détériorés
+  damagedUnits: number; // Pièces avariées
+  unitPriceDa: number; // Prix de gros / valorisation unitaire (DA)
+  reintegratedZone?: WarehouseZone | string | null; // Emplacement quai/dépôt (ex: "CH_CTR")
+  locationNote?: string | null; // "Allée 2, fond à droite"
+  status: RentreeItemStatus;
+  pointedBy?: string | null;
+  pointedAt?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+
 
 
 

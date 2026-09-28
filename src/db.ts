@@ -26,6 +26,9 @@ import type {
   ClientAccount,
   OrderDraft,
   CommercialPaymentCollection,
+  RentreeReturnCampaign,
+  RentreeReturnVoyage,
+  RentreeReturnItem,
 } from './types';
 import { decomposeTimestamp, detectWilaya } from './wilayas';
 
@@ -50,6 +53,9 @@ export class PointageDB extends Dexie {
   clientAccounts!: Table<ClientAccount, number>;
   orderDrafts!: Table<OrderDraft, number>;
   paymentCollections!: Table<CommercialPaymentCollection, number>;
+  rentreeCampaigns!: Table<RentreeReturnCampaign, number>;
+  rentreeVoyages!: Table<RentreeReturnVoyage, number>;
+  rentreeItems!: Table<RentreeReturnItem, number>;
 
   constructor() {
 
@@ -155,6 +161,13 @@ export class PointageDB extends Dexie {
       clientAccounts: '++id, name, clientType, assignedRep, currentBalance, updatedAt',
       orderDrafts: '++id, orderNumber, channel, clientName, status, paymentStatus, createdAt',
       paymentCollections: '++id, clientName, repName, paymentMethod, collectedAt',
+    });
+
+    // Version 11: Retours de Rentrée (Post-Rentrée Surplus Inventory, Multi-Voyage Reception & Multi-Site Pointage)
+    this.version(11).stores({
+      rentreeCampaigns: '++id, status, year, receivingSite, clientOrOrigin, createdAt',
+      rentreeVoyages: '++id, campaignId, voyageNumber, status, arrivalSite, driverName, createdAt',
+      rentreeItems: '++id, campaignId, voyageId, reference, ean, status, reintegratedZone, createdAt',
     });
   }
 }
@@ -738,6 +751,318 @@ export async function seedInitialBusinessDataIfEmpty(): Promise<void> {
     ]);
   }
 }
+
+// ============================================================
+// --- Retours de Rentrée (Multi-Voyages & Multi-Sites Pointage) ---
+// ============================================================
+
+export async function getAllRentreeCampaigns(): Promise<RentreeReturnCampaign[]> {
+  const list = await db.rentreeCampaigns.toArray();
+  return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export async function getRentreeCampaignById(id: number): Promise<RentreeReturnCampaign | undefined> {
+  return db.rentreeCampaigns.get(id);
+}
+
+export async function saveRentreeCampaign(
+  campaign: Omit<RentreeReturnCampaign, 'id' | 'createdAt' | 'updatedAt'> & { id?: number; createdAt?: string }
+): Promise<number> {
+  const now = new Date().toISOString();
+  if (campaign.id) {
+    await db.rentreeCampaigns.update(campaign.id, {
+      ...campaign,
+      updatedAt: now,
+    });
+    return campaign.id;
+  }
+  return db.rentreeCampaigns.add({
+    ...campaign,
+    createdAt: campaign.createdAt || now,
+    updatedAt: now,
+  });
+}
+
+export async function deleteRentreeCampaign(id: number): Promise<void> {
+  await db.rentreeItems.where('campaignId').equals(id).delete();
+  await db.rentreeVoyages.where('campaignId').equals(id).delete();
+  await db.rentreeCampaigns.delete(id);
+}
+
+export async function getRentreeVoyagesByCampaign(campaignId: number): Promise<RentreeReturnVoyage[]> {
+  const list = await db.rentreeVoyages.where('campaignId').equals(campaignId).toArray();
+  return list.sort((a, b) => a.voyageNumber - b.voyageNumber);
+}
+
+export async function saveRentreeVoyage(
+  voyage: Omit<RentreeReturnVoyage, 'id' | 'createdAt' | 'updatedAt'> & { id?: number; createdAt?: string }
+): Promise<number> {
+  const now = new Date().toISOString();
+  if (voyage.id) {
+    await db.rentreeVoyages.update(voyage.id, {
+      ...voyage,
+      updatedAt: now,
+    });
+    return voyage.id;
+  }
+  return db.rentreeVoyages.add({
+    ...voyage,
+    createdAt: voyage.createdAt || now,
+    updatedAt: now,
+  });
+}
+
+export async function deleteRentreeVoyage(id: number): Promise<void> {
+  await db.rentreeItems.where('voyageId').equals(id).delete();
+  await db.rentreeVoyages.delete(id);
+}
+
+export async function getRentreeItemsByVoyage(voyageId: number): Promise<RentreeReturnItem[]> {
+  return db.rentreeItems.where('voyageId').equals(voyageId).toArray();
+}
+
+export async function getRentreeItemsByCampaign(campaignId: number): Promise<RentreeReturnItem[]> {
+  return db.rentreeItems.where('campaignId').equals(campaignId).toArray();
+}
+
+export async function saveRentreeItem(
+  item: Omit<RentreeReturnItem, 'id' | 'createdAt' | 'updatedAt'> & { id?: number; createdAt?: string }
+): Promise<number> {
+  const now = new Date().toISOString();
+  if (item.id) {
+    await db.rentreeItems.update(item.id, {
+      ...item,
+      updatedAt: now,
+    });
+    return item.id;
+  }
+  return db.rentreeItems.add({
+    ...item,
+    createdAt: item.createdAt || now,
+    updatedAt: now,
+  });
+}
+
+export async function deleteRentreeItem(id: number): Promise<void> {
+  await db.rentreeItems.delete(id);
+}
+
+export async function seedInitialRentreeDataIfEmpty(): Promise<void> {
+  const count = await db.rentreeCampaigns.count();
+  if (count === 0) {
+    const now = new Date().toISOString();
+
+    const campaignId = await db.rentreeCampaigns.add({
+      title: 'Retour Fin de Rentrée Scolaire 2026',
+      year: 2026,
+      status: 'active',
+      receivingSite: 'kral_bechar',
+      clientOrOrigin: 'SARL BLEU BLANC NAKHIL (BÉCHAR) / Kral Markt',
+      totalExpectedCartons: 700,
+      totalReturnedCartons: 475,
+      totalAvarieCartons: 12,
+      totalFinancialValueDa: 3950000,
+      notes: 'Retour des surplus invendus de la rentrée scolaire en 3 voyages programmés.',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Voyage 1: Kral Markt Béchar (Completed & Pointé)
+    const v1Id = await db.rentreeVoyages.add({
+      campaignId,
+      voyageNumber: 1,
+      voyageCode: 'VOY-RENTREE-01',
+      vehiclePlate: 'Semi Sonacome 08-30129',
+      driverName: 'Karim (Chauffeur Sud)',
+      arrivalSite: 'kral_bechar',
+      arrivalDate: '2026-09-25',
+      status: 'reconciled',
+      totalExpectedCartons: 350,
+      totalReturnedCartons: 340,
+      totalAvarieCartons: 10,
+      totalFinancialValueDa: 2450000,
+      reconciledBy: 'Karim',
+      reconciledAt: now,
+      notes: 'Pointé au hub Kral Markt Béchar avec réintégration conforme.',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.rentreeItems.bulkAdd([
+      {
+        campaignId,
+        voyageId: v1Id,
+        reference: 'CAH-96P-SBM',
+        ean: '6130000010123',
+        designation: 'Cahier 96 Pages Seyès SBM Grand Format (Carton de 80 pcs)',
+        category: 'scolaire',
+        outerPackSize: 80,
+        innerPackSize: 10,
+        expectedCartons: 250,
+        expectedUnits: 20000,
+        returnedCartons: 242,
+        returnedLooseUnits: 0,
+        damagedCartons: 8,
+        damagedUnits: 640,
+        unitPriceDa: 85,
+        reintegratedZone: 'CH_CTR',
+        locationNote: 'Rayon Allée Centrale',
+        status: 'conforme',
+        pointedBy: 'Karim',
+        pointedAt: now,
+        notes: 'Cartons intacts rangés en Chambre Centrale.',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        campaignId,
+        voyageId: v1Id,
+        reference: 'STY-BOX-50',
+        ean: '6130000050129',
+        designation: 'Boite 50 Stylos Roller Gel Bleu 0.7mm (Carton de 20 boites)',
+        category: 'scolaire',
+        outerPackSize: 20,
+        innerPackSize: 1,
+        expectedCartons: 100,
+        expectedUnits: 2000,
+        returnedCartons: 98,
+        returnedLooseUnits: 0,
+        damagedCartons: 2,
+        damagedUnits: 40,
+        unitPriceDa: 240,
+        reintegratedZone: 'CH_NW',
+        locationNote: 'Étagère A1',
+        status: 'conforme',
+        pointedBy: 'Karim',
+        pointedAt: now,
+        notes: 'Stock vérifié sans manque.',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+
+    // Voyage 2: Oran Surface (Active / En Déchargement & Pointage)
+    const v2Id = await db.rentreeVoyages.add({
+      campaignId,
+      voyageNumber: 2,
+      voyageCode: 'VOY-RENTREE-02',
+      vehiclePlate: 'Camion Isuzu 31-88412',
+      driverName: 'Mourad',
+      arrivalSite: 'oran_surface',
+      arrivalDate: '2026-09-28',
+      status: 'unloading',
+      totalExpectedCartons: 200,
+      totalReturnedCartons: 135,
+      totalAvarieCartons: 2,
+      totalFinancialValueDa: 1500000,
+      reconciledBy: null,
+      reconciledAt: null,
+      notes: 'Arrivé au quai Oran Surface. Déchargement et pointage en cours.',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.rentreeItems.bulkAdd([
+      {
+        campaignId,
+        voyageId: v2Id,
+        reference: 'TROU-OXF-01',
+        ean: '6130000024018',
+        designation: 'Carton 24 Trousses Oxford Double Compartiment',
+        category: 'scolaire',
+        outerPackSize: 24,
+        innerPackSize: 6,
+        expectedCartons: 80,
+        expectedUnits: 1920,
+        returnedCartons: 60,
+        returnedLooseUnits: 0,
+        damagedCartons: 2,
+        damagedUnits: 48,
+        unitPriceDa: 260,
+        reintegratedZone: 'CH_N',
+        locationNote: 'Rayon Fournitures',
+        status: 'pending',
+        pointedBy: 'Mourad',
+        pointedAt: now,
+        notes: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        campaignId,
+        voyageId: v2Id,
+        reference: 'CALC-SCI-82',
+        ean: '6130000082001',
+        designation: 'Carton 20 Calculatrices Scientifiques FX-82',
+        category: 'scolaire',
+        outerPackSize: 20,
+        innerPackSize: 5,
+        expectedCartons: 40,
+        expectedUnits: 800,
+        returnedCartons: 35,
+        returnedLooseUnits: 0,
+        damagedCartons: 0,
+        damagedUnits: 0,
+        unitPriceDa: 1450,
+        reintegratedZone: 'CH_CTR',
+        locationNote: 'Zone Sécurisée Bureautique',
+        status: 'pending',
+        pointedBy: 'Mourad',
+        pointedAt: now,
+        notes: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        campaignId,
+        voyageId: v2Id,
+        reference: 'CLAS-DOS-80',
+        ean: '6130000080015',
+        designation: 'Carton 15 Classeurs Dos 80mm Plastifiés Renforcés',
+        category: 'bureautique',
+        outerPackSize: 15,
+        innerPackSize: 1,
+        expectedCartons: 80,
+        expectedUnits: 1200,
+        returnedCartons: 40,
+        returnedLooseUnits: 0,
+        damagedCartons: 0,
+        damagedUnits: 0,
+        unitPriceDa: 330,
+        reintegratedZone: 'CH_SE',
+        locationNote: 'Palettes Classeurs',
+        status: 'pending',
+        pointedBy: null,
+        pointedAt: null,
+        notes: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+
+    // Voyage 3: Bleu Blanc Hub (Scheduled / En Route)
+    await db.rentreeVoyages.add({
+      campaignId,
+      voyageNumber: 3,
+      voyageCode: 'VOY-RENTREE-03',
+      vehiclePlate: 'Fourgon Master 31-55219',
+      driverName: 'Yassine',
+      arrivalSite: 'bleu_blanc',
+      arrivalDate: '2026-09-29',
+      status: 'scheduled',
+      totalExpectedCartons: 150,
+      totalReturnedCartons: 0,
+      totalAvarieCartons: 0,
+      totalFinancialValueDa: 980000,
+      reconciledBy: null,
+      reconciledAt: null,
+      notes: 'Dernier voyage prévu pour le dépôt régional Bleu Blanc.',
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+}
+
 
 
 

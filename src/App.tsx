@@ -139,6 +139,7 @@ import {
   IconTrash,
   IconBag,
   IconRotate,
+  IconRotateCcw,
   IconShield,
   IconLock,
   IconTag,
@@ -271,6 +272,7 @@ import { B2BWholesaleScreen } from './B2BWholesaleScreen';
 import { CommercialFieldScreen } from './CommercialFieldScreen';
 import { B2CRetailScreen } from './B2CRetailScreen';
 import { WarehouseFinanceCockpit } from './WarehouseFinanceCockpit';
+import { RentreeReturnScreen } from './RentreeReturnScreen';
 import { NewProductIntakeModal } from './NewProductIntakeModal';
 import { AppModuleSwitcher } from './AppModuleSwitcher';
 import { WavePickingModal } from './WavePickingModal';
@@ -535,6 +537,7 @@ export default function App() {
           <Route path="/commercial" element={<CommercialFieldScreen setToast={setToast} />} />
           <Route path="/detail" element={<B2CRetailScreen setToast={setToast} />} />
           <Route path="/cockpit" element={<WarehouseFinanceCockpit setToast={setToast} />} />
+          <Route path="/retours-rentree" element={<RentreeReturnScreen setToast={setToast} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </ErrorBoundary>
@@ -1550,6 +1553,18 @@ function HomeScreen({
             <span>Cockpit Cash</span>
           </button>
 
+          {/* Retours Rentrée Scolaire (Multi-Voyages Kral, Bleu Blanc, Oran) */}
+          <button
+            type="button"
+            className="apple-quick-btn"
+            onClick={() => nav('/retours-rentree')}
+            title="Retours Rentrée Scolaire Multi-Voyages (Kral Markt, Bleu Blanc, Oran) & Avoirs"
+            style={{ borderColor: 'rgba(168, 85, 247, 0.3)' }}
+          >
+            <IconRotateCcw size={16} style={{ color: '#a855f7' }} />
+            <span>Retours Rentrée</span>
+          </button>
+
           {/* Cartographie Entrepôt */}
           <button
             type="button"
@@ -1659,6 +1674,15 @@ function HomeScreen({
             >
               <IconClipboardCheck size={15} />
               <span>Contrôle Sortie</span>
+            </button>
+            <button
+              type="button"
+              className="apple-quick-btn shrink-0"
+              onClick={() => nav('/retours-rentree')}
+              title="Retours Rentrée Scolaire & Multi-Voyages"
+            >
+              <IconRotateCcw size={15} style={{ color: '#a855f7' }} />
+              <span>Retours Rentrée</span>
             </button>
           </div>
         )}

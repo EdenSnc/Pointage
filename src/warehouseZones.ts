@@ -22,6 +22,8 @@ export type LocationNotePreset = (typeof LOCATION_NOTE_PRESETS)[number];
 export const DEFAULT_WAREHOUSE_SITES: WarehouseSite[] = [
   { id: 'oran_surface', name: 'Oran — Surface', wilaya: 'Oran', wilayaCode: '31', isDefault: true },
   { id: 'oran_usine', name: 'Oran — Usine', wilaya: 'Oran', wilayaCode: '31' },
+  { id: 'kral_bechar', name: 'Kral Markt — Béchar', wilaya: 'Béchar', wilayaCode: '08' },
+  { id: 'bleu_blanc', name: 'Bleu Blanc — Dépôt Régional', wilaya: 'Oran', wilayaCode: '31' },
   { id: 'alger_hub', name: 'Alger — Hub Centre', wilaya: 'Alger', wilayaCode: '16' },
   { id: 'constantine_hub', name: 'Constantine — Hub Est', wilaya: 'Constantine', wilayaCode: '25' },
 ];
